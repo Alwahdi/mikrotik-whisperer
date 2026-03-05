@@ -1,6 +1,6 @@
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { useHotspotProfiles, useUserManagerProfiles, useBatchAction } from "@/hooks/useMikrotik";
+import { useHotspotProfiles, useUserManagerProfiles, useRawBatchAction } from "@/hooks/useMikrotik";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,15 +13,31 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Printer, CreditCard, Plus, Trash2, Download, Home, Upload, Loader2, History, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  Printer, CreditCard, Plus, Trash2, Download, Home, Upload, Loader2,
+  History, ChevronLeft, ChevronRight, Check, X, Save, FolderOpen, GripVertical,
+  Settings2, BarChart3,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 
+// ─── Types ────────────────────────────────────
 interface VoucherCard {
   username: string;
   password: string;
   profile: string;
+  status?: "pending" | "success" | "error";
+  error?: string;
 }
 
 interface VoucherBatch {
@@ -31,61 +47,147 @@ interface VoucherBatch {
   cards: VoucherCard[];
   createdAt: string;
   pushed: boolean;
+  routerHost?: string;
+  pushResults?: { success: number; failed: number };
 }
 
+type CharType = "alphanumeric" | "letters" | "numbers";
+type PasswordMode = "random" | "same" | "empty";
+
+interface PrintTemplate {
+  id: string;
+  name: string;
+  profileName: string;
+  bgImage?: string;
+  fields: FieldPosition[];
+  printCols: number;
+  printRows: number;
+  cardTitle: string;
+  cardSubtitle: string;
+}
+
+interface FieldPosition {
+  id: string;
+  type: "username" | "password" | "profile" | "title" | "subtitle";
+  label: string;
+  x: number;
+  y: number;
+  fontSize: number;
+  color: string;
+  visible: boolean;
+}
+
+// ─── Storage Helpers ──────────────────────────
 const BATCHES_KEY = "mikrotik_voucher_batches";
+const TEMPLATES_KEY = "mikrotik_print_templates";
+const GEN_SETTINGS_KEY = "mikrotik_gen_settings";
 
 function loadBatches(): VoucherBatch[] {
-  try {
-    return JSON.parse(localStorage.getItem(BATCHES_KEY) || "[]");
-  } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(BATCHES_KEY) || "[]"); } catch { return []; }
 }
-
 function saveBatches(batches: VoucherBatch[]) {
   localStorage.setItem(BATCHES_KEY, JSON.stringify(batches));
 }
+function loadTemplates(): PrintTemplate[] {
+  try { return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || "[]"); } catch { return []; }
+}
+function saveTemplates(templates: PrintTemplate[]) {
+  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates));
+}
+function loadGenSettings(): Record<string, any> {
+  try { return JSON.parse(localStorage.getItem(GEN_SETTINGS_KEY) || "{}"); } catch { return {}; }
+}
+function saveGenSettings(settings: Record<string, any>) {
+  localStorage.setItem(GEN_SETTINGS_KEY, JSON.stringify(settings));
+}
 
-function generateRandomString(len: number): string {
-  const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+// ─── Random String Generators ──────────────────
+const CHARS_ALPHA = "abcdefghjkmnpqrstuvwxyz";
+const CHARS_NUM = "23456789";
+const CHARS_ALPHANUM = CHARS_ALPHA + CHARS_NUM;
+
+function generateRandomString(len: number, charType: CharType): string {
+  const pool = charType === "letters" ? CHARS_ALPHA : charType === "numbers" ? CHARS_NUM : CHARS_ALPHANUM;
   let result = "";
-  for (let i = 0; i < len; i++) result += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < len; i++) result += pool[Math.floor(Math.random() * pool.length)];
   return result;
 }
 
+// ─── Default Field Positions ──────────────────
+function defaultFields(): FieldPosition[] {
+  return [
+    { id: "f1", type: "username", label: "اسم المستخدم", x: 50, y: 55, fontSize: 13, color: "#000000", visible: true },
+    { id: "f2", type: "password", label: "كلمة المرور", x: 50, y: 75, fontSize: 13, color: "#000000", visible: true },
+    { id: "f3", type: "profile", label: "الباقة", x: 50, y: 90, fontSize: 9, color: "#666666", visible: false },
+    { id: "f4", type: "title", label: "العنوان", x: 50, y: 20, fontSize: 14, color: "#000000", visible: false },
+    { id: "f5", type: "subtitle", label: "العنوان الفرعي", x: 50, y: 35, fontSize: 10, color: "#666666", visible: false },
+  ];
+}
+
+// ─── Component ────────────────────────────────
 export default function VouchersPage() {
   const { data: hotspotProfiles } = useHotspotProfiles();
   const { data: umProfiles } = useUserManagerProfiles();
-  const batchAction = useBatchAction();
+  const rawBatch = useRawBatchAction();
 
+  // Generation settings
   const [type, setType] = useState<"hotspot" | "usermanager">("hotspot");
   const [count, setCount] = useState(10);
   const [prefix, setPrefix] = useState("v");
   const [passLength, setPassLength] = useState(6);
   const [nameLength, setNameLength] = useState(6);
   const [selectedProfile, setSelectedProfile] = useState("");
+  const [charType, setCharType] = useState<CharType>("alphanumeric");
+  const [passwordMode, setPasswordMode] = useState<PasswordMode>("random");
+
+  // Cards & push
   const [cards, setCards] = useState<VoucherCard[]>([]);
   const [pushing, setPushing] = useState(false);
   const [pushProgress, setPushProgress] = useState(0);
+
+  // Print settings
   const [cardTitle, setCardTitle] = useState("WiFi Card");
   const [cardSubtitle, setCardSubtitle] = useState("اتصل بالإنترنت");
-  
   const [printCols, setPrintCols] = useState(3);
   const [printRows, setPrintRows] = useState(4);
-  
   const [bgImage, setBgImage] = useState<string | null>(null);
-  const [usernamePos, setUsernamePos] = useState({ x: 50, y: 55 });
-  const [passwordPos, setPasswordPos] = useState({ x: 50, y: 75 });
+  const [fields, setFields] = useState<FieldPosition[]>(defaultFields);
+  const [draggingField, setDraggingField] = useState<string | null>(null);
 
+  // Templates
+  const [templates, setTemplates] = useState<PrintTemplate[]>(loadTemplates);
+  const [templateName, setTemplateName] = useState("");
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [loadTemplateDialogOpen, setLoadTemplateDialogOpen] = useState(false);
+
+  // Batches & history
   const [batches, setBatches] = useState<VoucherBatch[]>(loadBatches);
   const [activeTab, setActiveTab] = useState<"generate" | "history">("generate");
   const [deleteBatchId, setDeleteBatchId] = useState<string | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
   const HISTORY_PAGE_SIZE = 5;
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Persist batches
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  // Persist
   useEffect(() => { saveBatches(batches); }, [batches]);
+  useEffect(() => { saveTemplates(templates); }, [templates]);
+
+  // Load saved gen settings
+  useEffect(() => {
+    const saved = loadGenSettings();
+    if (saved.charType) setCharType(saved.charType);
+    if (saved.passwordMode) setPasswordMode(saved.passwordMode);
+    if (saved.prefix) setPrefix(saved.prefix);
+    if (saved.nameLength) setNameLength(saved.nameLength);
+    if (saved.passLength) setPassLength(saved.passLength);
+  }, []);
+
+  // Save gen settings on change
+  useEffect(() => {
+    saveGenSettings({ charType, passwordMode, prefix, nameLength, passLength });
+  }, [charType, passwordMode, prefix, nameLength, passLength]);
 
   const profiles = useMemo(() => {
     const raw = type === "hotspot" ? hotspotProfiles : umProfiles;
@@ -96,15 +198,19 @@ export default function VouchersPage() {
     const newCards: VoucherCard[] = [];
     const prof = selectedProfile || profiles[0]?.name || "default";
     for (let i = 0; i < count; i++) {
-      newCards.push({
-        username: `${prefix}${generateRandomString(nameLength)}`,
-        password: generateRandomString(passLength),
-        profile: prof,
-      });
+      const username = `${prefix}${generateRandomString(nameLength, charType)}`;
+      let password = "";
+      if (passwordMode === "random") {
+        password = generateRandomString(passLength, charType);
+      } else if (passwordMode === "same") {
+        password = username;
+      }
+      // "empty" = password stays ""
+      newCards.push({ username, password, profile: prof, status: "pending" });
     }
     setCards(newCards);
 
-    // Save as a batch
+    const config = getMikrotikConfig();
     const batch: VoucherBatch = {
       id: crypto.randomUUID(),
       type,
@@ -112,9 +218,10 @@ export default function VouchersPage() {
       cards: newCards,
       createdAt: new Date().toISOString(),
       pushed: false,
+      routerHost: config?.host,
     };
     setBatches(prev => [batch, ...prev]);
-    toast.success(`تم توليد ${count} كرت وحفظ الدفعة`);
+    toast.success(`تم توليد ${count} كرت`);
   };
 
   const pushToRouter = async () => {
@@ -122,13 +229,14 @@ export default function VouchersPage() {
     setPushing(true);
     setPushProgress(0);
 
-    const addEndpoint = type === "hotspot" 
-      ? "/ip/hotspot/user/add" 
+    const addEndpoint = type === "hotspot"
+      ? "/ip/hotspot/user/add"
       : "/user-manager/user/add";
-    
-    const CHUNK_SIZE = 50;
+
+    const CHUNK_SIZE = 20; // Smaller chunks = faster feedback
     let totalSuccess = 0;
     let totalFailed = 0;
+    const updatedCards = [...cards];
 
     for (let i = 0; i < cards.length; i += CHUNK_SIZE) {
       const chunk = cards.slice(i, i + CHUNK_SIZE);
@@ -143,32 +251,43 @@ export default function VouchersPage() {
       });
 
       try {
-        const result = await batchAction.mutateAsync({
-          commands,
-          invalidateKeys: [type === "hotspot" ? "hotspot" : "usermanager"],
-        });
-        const errs = result?.errors?.filter((e: string) => e) || [];
-        totalSuccess += chunk.length - errs.length;
-        totalFailed += errs.length;
-      } catch {
-        totalFailed += chunk.length;
+        const result = await rawBatch.mutateAsync({ commands });
+        const errors = result?.errors || [];
+        for (let j = 0; j < chunk.length; j++) {
+          const idx = i + j;
+          if (errors[j] && errors[j] !== "") {
+            updatedCards[idx] = { ...updatedCards[idx], status: "error", error: errors[j] };
+            totalFailed++;
+          } else {
+            updatedCards[idx] = { ...updatedCards[idx], status: "success" };
+            totalSuccess++;
+          }
+        }
+      } catch (err: any) {
+        for (let j = 0; j < chunk.length; j++) {
+          updatedCards[i + j] = { ...updatedCards[i + j], status: "error", error: err.message };
+          totalFailed++;
+        }
       }
-      
+
+      setCards([...updatedCards]);
       setPushProgress(Math.round(((i + chunk.length) / cards.length) * 100));
     }
 
     setPushing(false);
     setPushProgress(0);
 
-    // Mark batch as pushed
-    if (batches.length > 0) {
-      setBatches(prev => {
-        const updated = [...prev];
-        const latest = updated.find(b => b.cards.length === cards.length && b.cards[0]?.username === cards[0]?.username);
-        if (latest) latest.pushed = true;
-        return updated;
-      });
-    }
+    // Update batch
+    setBatches(prev => {
+      const updated = [...prev];
+      const latest = updated.find(b => b.cards[0]?.username === cards[0]?.username);
+      if (latest) {
+        latest.pushed = true;
+        latest.pushResults = { success: totalSuccess, failed: totalFailed };
+        latest.cards = updatedCards;
+      }
+      return updated;
+    });
 
     if (totalFailed === 0) {
       toast.success(`تم إضافة ${totalSuccess} كرت بنجاح`);
@@ -185,26 +304,86 @@ export default function VouchersPage() {
     reader.readAsDataURL(file);
   };
 
+  // ─── Drag & Drop on preview ──────────────────
+  const handlePreviewMouseDown = (fieldId: string) => {
+    setDraggingField(fieldId);
+  };
+
+  const handlePreviewMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!draggingField || !previewRef.current) return;
+    const rect = previewRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    setFields(prev => prev.map(f => f.id === draggingField ? { ...f, x: Math.round(x), y: Math.round(y) } : f));
+  }, [draggingField]);
+
+  const handlePreviewMouseUp = useCallback(() => {
+    setDraggingField(null);
+  }, []);
+
+  // ─── Template Management ─────────────────────
+  const saveTemplate = () => {
+    if (!templateName.trim()) { toast.error("أدخل اسم القالب"); return; }
+    const template: PrintTemplate = {
+      id: crypto.randomUUID(),
+      name: templateName.trim(),
+      profileName: selectedProfile,
+      bgImage: bgImage || undefined,
+      fields,
+      printCols,
+      printRows,
+      cardTitle,
+      cardSubtitle,
+    };
+    setTemplates(prev => [...prev, template]);
+    setTemplateDialogOpen(false);
+    setTemplateName("");
+    toast.success("تم حفظ القالب");
+  };
+
+  const loadTemplate = (template: PrintTemplate) => {
+    setBgImage(template.bgImage || null);
+    setFields(template.fields);
+    setPrintCols(template.printCols);
+    setPrintRows(template.printRows);
+    setCardTitle(template.cardTitle);
+    setCardSubtitle(template.cardSubtitle);
+    setLoadTemplateDialogOpen(false);
+    toast.success(`تم تحميل القالب: ${template.name}`);
+  };
+
+  const deleteTemplate = (id: string) => {
+    setTemplates(prev => prev.filter(t => t.id !== id));
+    toast.success("تم حذف القالب");
+  };
+
+  // ─── Print HTML Builder ──────────────────────
   const buildPrintHtml = (cardsToPrint: VoucherCard[]): string => {
     const cardsPerPage = printCols * printRows;
     const pages: string[] = [];
-    
+    const visibleFields = fields.filter(f => f.visible);
+
     for (let p = 0; p < cardsToPrint.length; p += cardsPerPage) {
       const pageCards = cardsToPrint.slice(p, p + cardsPerPage);
       const cardHtml = pageCards.map(c => {
         if (bgImage) {
-          return `
-            <div class="card card-custom" style="background-image:url('${bgImage}')">
-              <div class="overlay-text username" style="top:${usernamePos.y}%;left:${usernamePos.x}%">${c.username}</div>
-              <div class="overlay-text password" style="top:${passwordPos.y}%;left:${passwordPos.x}%">${c.password}</div>
-            </div>`;
+          const fieldsHtml = visibleFields.map(f => {
+            let text = "";
+            if (f.type === "username") text = c.username;
+            else if (f.type === "password") text = c.password || "—";
+            else if (f.type === "profile") text = c.profile;
+            else if (f.type === "title") text = cardTitle;
+            else if (f.type === "subtitle") text = cardSubtitle;
+            return `<div class="overlay-text" style="top:${f.y}%;left:${f.x}%;font-size:${f.fontSize}px;color:${f.color}">${text}</div>`;
+          }).join("");
+          return `<div class="card card-custom" style="background-image:url('${bgImage}')">${fieldsHtml}</div>`;
         }
         return `
           <div class="card">
             <div class="card-title">${cardTitle}</div>
             <div class="card-sub">${cardSubtitle}</div>
             <div class="field"><div class="label">اسم المستخدم</div><div class="value">${c.username}</div></div>
-            <div class="field"><div class="label">كلمة المرور</div><div class="value">${c.password}</div></div>
+            ${c.password ? `<div class="field"><div class="label">كلمة المرور</div><div class="value">${c.password}</div></div>` : ""}
             <div class="profile-badge">${c.profile}</div>
           </div>`;
       }).join("");
@@ -233,7 +412,7 @@ export default function VouchersPage() {
   }
   .overlay-text {
     position: absolute; transform: translate(-50%, -50%);
-    font-weight: 700; font-size: 13px; color: #000;
+    font-weight: 700;
     text-shadow: 0 0 4px rgba(255,255,255,0.9);
     font-family: 'JetBrains Mono', monospace; letter-spacing: 1.5px;
   }
@@ -246,51 +425,30 @@ export default function VouchersPage() {
     display: inline-block; margin-top: 4px; padding: 1px 6px;
     background: #e8e2d9; border-radius: 3px; font-size: 7px; color: #5a5247;
   }
-  @media print {
-    .page { padding: 5mm; }
-  }
-</style></head><body>
-${pages.join("")}
-</body></html>`;
+  @media print { .page { padding: 5mm; } }
+</style></head><body>${pages.join("")}</body></html>`;
   };
 
   const handlePrint = (cardsToPrint?: VoucherCard[]) => {
     const toPrint = cardsToPrint || cards;
     if (toPrint.length === 0) return;
-
     const html = buildPrintHtml(toPrint);
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
-
     const iframe = document.createElement("iframe");
-    iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "1px";
-    iframe.style.height = "1px";
-    iframe.style.opacity = "0";
-    iframe.style.border = "0";
+    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0";
     document.body.appendChild(iframe);
-
-    const cleanup = () => {
-      URL.revokeObjectURL(url);
-      iframe.remove();
-    };
-
+    const cleanup = () => { URL.revokeObjectURL(url); iframe.remove(); };
     iframe.onload = () => {
       try {
         const win = iframe.contentWindow;
-        if (!win) throw new Error("تعذر فتح معاينة الطباعة");
+        if (!win) throw new Error("تعذر فتح الطباعة");
         win.focus();
         setTimeout(() => win.print(), 120);
         win.onafterprint = cleanup;
         setTimeout(cleanup, 60000);
-      } catch {
-        cleanup();
-        toast.error("تعذر فتح نافذة الطباعة. حاول مرة أخرى.");
-      }
+      } catch { cleanup(); toast.error("تعذر فتح نافذة الطباعة"); }
     };
-
     iframe.src = url;
   };
 
@@ -304,54 +462,61 @@ ${pages.join("")}
     setCards(batch.cards);
     setType(batch.type);
     setActiveTab("generate");
-    toast.success(`تم تحميل ${batch.cards.length} كرت من الدفعة`);
+    toast.success(`تم تحميل ${batch.cards.length} كرت`);
   };
 
   const paginatedBatches = batches.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE);
   const historyTotalPages = Math.max(1, Math.ceil(batches.length / HISTORY_PAGE_SIZE));
 
+  // Card status counts
+  const successCount = cards.filter(c => c.status === "success").length;
+  const errorCount = cards.filter(c => c.status === "error").length;
+  const pendingCount = cards.filter(c => c.status === "pending" || !c.status).length;
+
+  // ─── Sales Stats ─────────────────────────────
+  const todayBatches = batches.filter(b => {
+    const d = new Date(b.createdAt);
+    const today = new Date();
+    return d.toDateString() === today.toDateString() && b.pushed;
+  });
+  const todayCards = todayBatches.reduce((sum, b) => sum + (b.pushResults?.success || b.cards.length), 0);
+
   return (
     <DashboardLayout>
-
       <Breadcrumb className="mb-4">
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild><Link to="/"><Home className="h-3.5 w-3.5" /></Link></BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>توليد الكروت</BreadcrumbPage>
-          </BreadcrumbItem>
+          <BreadcrumbItem><BreadcrumbPage>توليد الكروت</BreadcrumbPage></BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
         <div>
           <h1 className="text-lg font-bold text-foreground">توليد الكروت</h1>
           <p className="text-muted-foreground text-xs mt-0.5">إنشاء وطباعة كروت الهوتسبوت ويوزر مانجر</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant={activeTab === "generate" ? "default" : "outline"}
-            onClick={() => setActiveTab("generate")}
-          >
+          {todayCards > 0 && (
+            <Badge variant="outline" className="gap-1 text-xs">
+              <BarChart3 className="h-3 w-3" />
+              مبيعات اليوم: {todayCards}
+            </Badge>
+          )}
+          <Button size="sm" variant={activeTab === "generate" ? "default" : "outline"} onClick={() => setActiveTab("generate")}>
             <CreditCard className="h-3.5 w-3.5 ml-1" />
-            توليد
+            <span className="hidden sm:inline">توليد</span>
           </Button>
-          <Button
-            size="sm"
-            variant={activeTab === "history" ? "default" : "outline"}
-            onClick={() => setActiveTab("history")}
-          >
+          <Button size="sm" variant={activeTab === "history" ? "default" : "outline"} onClick={() => setActiveTab("history")}>
             <History className="h-3.5 w-3.5 ml-1" />
-            السجل ({batches.length})
+            <span className="hidden sm:inline">السجل</span> ({batches.length})
           </Button>
         </div>
       </div>
 
       {activeTab === "history" ? (
-        /* ─── Batch History ─── */
         <div className="space-y-3">
           {batches.length === 0 ? (
             <div className="rounded-lg border border-border bg-card p-10 text-center">
@@ -361,45 +526,35 @@ ${pages.join("")}
           ) : (
             <>
               {paginatedBatches.map(batch => (
-                <div key={batch.id} className="rounded-lg border border-border bg-card p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-medium ${
-                        batch.type === "hotspot" ? "bg-primary/10 text-primary" : "bg-accent text-accent-foreground"
-                      }`}>
+                <div key={batch.id} className="rounded-lg border border-border bg-card p-3 sm:p-4">
+                  <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Badge variant={batch.type === "hotspot" ? "default" : "secondary"} className="text-[10px]">
                         {batch.type === "hotspot" ? "هوتسبوت" : "يوزر مانجر"}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {batch.cards.length} كرت
-                      </span>
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{batch.cards.length} كرت</span>
                       {batch.pushed && (
-                        <span className="inline-block px-2 py-0.5 rounded text-[10px] bg-primary/10 text-primary">
-                          تم الرفع
-                        </span>
+                        <Badge variant="outline" className="text-[10px] gap-1">
+                          <Check className="h-2.5 w-2.5" />
+                          {batch.pushResults ? `${batch.pushResults.success}✓ ${batch.pushResults.failed ? batch.pushResults.failed + "✗" : ""}` : "تم الرفع"}
+                        </Badge>
                       )}
                     </div>
                     <span className="text-[10px] text-muted-foreground font-mono">
                       {new Date(batch.createdAt).toLocaleString("ar")}
                     </span>
                   </div>
-                  <div className="text-xs text-muted-foreground mb-3">
+                  <div className="text-xs text-muted-foreground mb-2">
                     الباقة: <span className="text-foreground font-medium">{batch.profile}</span>
-                    {" • "}
-                    أول كرت: <span className="font-mono text-foreground">{batch.cards[0]?.username}</span>
-                    {" — "}
-                    آخر كرت: <span className="font-mono text-foreground">{batch.cards[batch.cards.length - 1]?.username}</span>
+                    {batch.routerHost && <> • <span className="font-mono">{batch.routerHost}</span></>}
                   </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="text-xs" onClick={() => loadBatchCards(batch)}>
-                      تحميل الكروت
+                  <div className="flex gap-2 flex-wrap">
+                    <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => loadBatchCards(batch)}>تحميل</Button>
+                    <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => handlePrint(batch.cards)}>
+                      <Printer className="h-3 w-3 ml-1" /> طباعة
                     </Button>
-                    <Button size="sm" variant="outline" className="text-xs" onClick={() => handlePrint(batch.cards)}>
-                      <Printer className="h-3 w-3 ml-1" />
-                      طباعة
-                    </Button>
-                    <Button size="sm" variant="ghost" className="text-xs text-destructive" onClick={() => setDeleteBatchId(batch.id)}>
-                      <Trash2 className="h-3 w-3 ml-1" />
-                      حذف
+                    <Button size="sm" variant="ghost" className="text-xs text-destructive h-8" onClick={() => setDeleteBatchId(batch.id)}>
+                      <Trash2 className="h-3 w-3 ml-1" /> حذف
                     </Button>
                   </div>
                 </div>
@@ -411,7 +566,7 @@ ${pages.join("")}
                     <Button variant="ghost" size="icon" className="h-7 w-7" disabled={historyPage <= 1} onClick={() => setHistoryPage(p => p - 1)}>
                       <ChevronRight className="h-4 w-4" />
                     </Button>
-                    <span className="text-xs text-foreground px-2">{historyPage} / {historyTotalPages}</span>
+                    <span className="text-xs px-2">{historyPage} / {historyTotalPages}</span>
                     <Button variant="ghost" size="icon" className="h-7 w-7" disabled={historyPage >= historyTotalPages} onClick={() => setHistoryPage(p => p + 1)}>
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
@@ -422,11 +577,10 @@ ${pages.join("")}
           )}
         </div>
       ) : (
-        /* ─── Generate Tab ─── */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Settings Panel */}
-          <div className="lg:col-span-1 space-y-4">
-            <div className="rounded-lg border border-border bg-card p-4 space-y-4">
+          <div className="lg:col-span-1 space-y-3">
+            <div className="rounded-lg border border-border bg-card p-3 sm:p-4 space-y-3">
               <h3 className="font-semibold text-foreground text-sm">إعدادات التوليد</h3>
 
               <div>
@@ -439,24 +593,50 @@ ${pages.join("")}
                 </Tabs>
               </div>
 
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">عدد الكروت</label>
-                <Input type="number" min={1} max={1000} value={count} onChange={e => setCount(Number(e.target.value) || 1)} />
-              </div>
-
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">البادئة</label>
-                <Input value={prefix} onChange={e => setPrefix(e.target.value)} placeholder="v" />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">عدد الكروت</label>
+                  <Input type="number" min={1} max={5000} value={count} onChange={e => setCount(Number(e.target.value) || 1)} className="h-9" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">البادئة</label>
+                  <Input value={prefix} onChange={e => setPrefix(e.target.value)} placeholder="v" className="h-9" />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">طول الاسم</label>
-                  <Input type="number" min={3} max={12} value={nameLength} onChange={e => setNameLength(Number(e.target.value) || 6)} />
+                  <Input type="number" min={3} max={16} value={nameLength} onChange={e => setNameLength(Number(e.target.value) || 6)} className="h-9" />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">طول كلمة المرور</label>
-                  <Input type="number" min={3} max={12} value={passLength} onChange={e => setPassLength(Number(e.target.value) || 6)} />
+                  <Input type="number" min={3} max={16} value={passLength} onChange={e => setPassLength(Number(e.target.value) || 6)} className="h-9" disabled={passwordMode !== "random"} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">نوع الأحرف</label>
+                  <Select value={charType} onValueChange={(v) => setCharType(v as CharType)}>
+                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="alphanumeric">أحرف + أرقام</SelectItem>
+                      <SelectItem value="letters">أحرف فقط</SelectItem>
+                      <SelectItem value="numbers">أرقام فقط</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">كلمة المرور</label>
+                  <Select value={passwordMode} onValueChange={(v) => setPasswordMode(v as PasswordMode)}>
+                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="random">عشوائية</SelectItem>
+                      <SelectItem value="same">مثل الاسم</SelectItem>
+                      <SelectItem value="empty">فارغة</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -465,7 +645,7 @@ ${pages.join("")}
                 <select
                   value={selectedProfile}
                   onChange={e => setSelectedProfile(e.target.value)}
-                  className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
                 >
                   <option value="">اختر باقة</option>
                   {profiles.map((p: any, i: number) => (
@@ -474,77 +654,117 @@ ${pages.join("")}
                 </select>
               </div>
 
-              {/* Card customization */}
-              <div className="border-t border-border pt-4 space-y-3">
-                <h4 className="text-xs font-medium text-muted-foreground">تخصيص الكرت</h4>
-                
+              {/* Print Customization */}
+              <div className="border-t border-border pt-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-medium text-muted-foreground">تخصيص الطباعة</h4>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setTemplateDialogOpen(true)} title="حفظ قالب">
+                      <Save className="h-3 w-3" />
+                    </Button>
+                    {templates.length > 0 && (
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setLoadTemplateDialogOpen(true)} title="تحميل قالب">
+                        <FolderOpen className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">صورة خلفية (اختياري)</label>
                   <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => fileInputRef.current?.click()}>
+                    <Button variant="outline" size="sm" className="flex-1 text-xs h-8" onClick={() => fileInputRef.current?.click()}>
                       <Upload className="h-3 w-3 ml-1" />
-                      {bgImage ? "تغيير الصورة" : "رفع صورة"}
+                      {bgImage ? "تغيير" : "رفع صورة"}
                     </Button>
                     {bgImage && (
-                      <Button variant="ghost" size="sm" onClick={() => setBgImage(null)}>
+                      <Button variant="ghost" size="sm" className="h-8" onClick={() => setBgImage(null)}>
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     )}
                   </div>
-                  {bgImage && (
-                    <div className="mt-2 rounded border border-border overflow-hidden">
-                      <img src={bgImage} alt="خلفية الكرت" className="w-full h-20 object-cover" />
-                    </div>
-                  )}
                 </div>
 
                 {bgImage && (
                   <>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-muted-foreground mb-0.5 block">موقع الاسم X%</label>
-                        <Input type="number" min={0} max={100} value={usernamePos.x} onChange={e => setUsernamePos(p => ({ ...p, x: Number(e.target.value) }))} className="h-8 text-xs" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-muted-foreground mb-0.5 block">موقع الاسم Y%</label>
-                        <Input type="number" min={0} max={100} value={usernamePos.y} onChange={e => setUsernamePos(p => ({ ...p, y: Number(e.target.value) }))} className="h-8 text-xs" />
-                      </div>
+                    <div
+                      ref={previewRef}
+                      className="mt-2 rounded border border-border overflow-hidden relative cursor-crosshair select-none"
+                      style={{ aspectRatio: "1.6" }}
+                      onMouseMove={handlePreviewMouseMove}
+                      onMouseUp={handlePreviewMouseUp}
+                      onMouseLeave={handlePreviewMouseUp}
+                    >
+                      <img src={bgImage} alt="خلفية" className="w-full h-full object-cover pointer-events-none" />
+                      {fields.filter(f => f.visible).map(f => (
+                        <div
+                          key={f.id}
+                          className={`absolute font-mono text-[10px] font-bold cursor-grab ${draggingField === f.id ? "ring-2 ring-primary" : ""}`}
+                          style={{
+                            top: `${f.y}%`, left: `${f.x}%`,
+                            transform: "translate(-50%,-50%)",
+                            fontSize: `${Math.max(8, f.fontSize * 0.7)}px`,
+                            color: f.color,
+                          }}
+                          onMouseDown={(e) => { e.preventDefault(); handlePreviewMouseDown(f.id); }}
+                        >
+                          <GripVertical className="h-3 w-3 inline ml-0.5 opacity-50" />
+                          {f.label}
+                        </div>
+                      ))}
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] text-muted-foreground mb-0.5 block">موقع كلمة المرور X%</label>
-                        <Input type="number" min={0} max={100} value={passwordPos.x} onChange={e => setPasswordPos(p => ({ ...p, x: Number(e.target.value) }))} className="h-8 text-xs" />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-muted-foreground mb-0.5 block">موقع كلمة المرور Y%</label>
-                        <Input type="number" min={0} max={100} value={passwordPos.y} onChange={e => setPasswordPos(p => ({ ...p, y: Number(e.target.value) }))} className="h-8 text-xs" />
-                      </div>
+                    <p className="text-[10px] text-muted-foreground">اسحب الحقول لتغيير موقعها</p>
+
+                    <div className="space-y-1.5">
+                      {fields.map(f => (
+                        <div key={f.id} className="flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={f.visible}
+                            onChange={() => setFields(prev => prev.map(ff => ff.id === f.id ? { ...ff, visible: !ff.visible } : ff))}
+                            className="h-3.5 w-3.5 rounded border-input"
+                          />
+                          <span className="text-muted-foreground flex-1">{f.label}</span>
+                          <Input
+                            type="number" min={6} max={24}
+                            value={f.fontSize}
+                            onChange={e => setFields(prev => prev.map(ff => ff.id === f.id ? { ...ff, fontSize: Number(e.target.value) || 13 } : ff))}
+                            className="h-6 w-14 text-[10px] px-1"
+                          />
+                          <input
+                            type="color"
+                            value={f.color}
+                            onChange={e => setFields(prev => prev.map(ff => ff.id === f.id ? { ...ff, color: e.target.value } : ff))}
+                            className="h-6 w-6 rounded border border-input cursor-pointer"
+                          />
+                        </div>
+                      ))}
                     </div>
                   </>
                 )}
 
                 {!bgImage && (
-                  <>
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">عنوان الكرت</label>
-                      <Input value={cardTitle} onChange={e => setCardTitle(e.target.value)} />
+                      <Input value={cardTitle} onChange={e => setCardTitle(e.target.value)} className="h-9" />
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground mb-1 block">العنوان الفرعي</label>
-                      <Input value={cardSubtitle} onChange={e => setCardSubtitle(e.target.value)} />
+                      <Input value={cardSubtitle} onChange={e => setCardSubtitle(e.target.value)} className="h-9" />
                     </div>
-                  </>
+                  </div>
                 )}
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">أعمدة الطباعة</label>
-                    <Input type="number" min={1} max={5} value={printCols} onChange={e => setPrintCols(Number(e.target.value) || 3)} />
+                    <label className="text-xs text-muted-foreground mb-1 block">أعمدة</label>
+                    <Input type="number" min={1} max={5} value={printCols} onChange={e => setPrintCols(Number(e.target.value) || 3)} className="h-9" />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">صفوف الطباعة</label>
-                    <Input type="number" min={1} max={8} value={printRows} onChange={e => setPrintRows(Number(e.target.value) || 4)} />
+                    <label className="text-xs text-muted-foreground mb-1 block">صفوف</label>
+                    <Input type="number" min={1} max={8} value={printRows} onChange={e => setPrintRows(Number(e.target.value) || 4)} className="h-9" />
                   </div>
                 </div>
                 <p className="text-[10px] text-muted-foreground">{printCols * printRows} كرت في كل صفحة</p>
@@ -552,8 +772,7 @@ ${pages.join("")}
 
               <div className="flex gap-2">
                 <Button onClick={generateVouchers} className="flex-1" size="sm">
-                  <Plus className="h-3.5 w-3.5 ml-1" />
-                  توليد
+                  <Plus className="h-3.5 w-3.5 ml-1" /> توليد
                 </Button>
                 {cards.length > 0 && (
                   <Button variant="outline" size="sm" onClick={() => setCards([])}>
@@ -567,15 +786,21 @@ ${pages.join("")}
               <div className="flex flex-col gap-2">
                 <Button onClick={pushToRouter} disabled={pushing} size="sm" variant="outline" className="w-full">
                   {pushing ? (
-                    <><Loader2 className="h-3.5 w-3.5 ml-1 animate-spin" /> جاري الإضافة... {pushProgress}%</>
+                    <><Loader2 className="h-3.5 w-3.5 ml-1 animate-spin" /> {pushProgress}%</>
                   ) : (
-                    <><Download className="h-3.5 w-3.5 ml-1" /> إضافة {cards.length} كرت للراوتر</>
+                    <><Download className="h-3.5 w-3.5 ml-1" /> إضافة {cards.length} كرت</>
                   )}
                 </Button>
                 {pushing && <Progress value={pushProgress} className="h-1.5" />}
+                {(successCount > 0 || errorCount > 0) && (
+                  <div className="flex gap-2 text-xs">
+                    {successCount > 0 && <Badge variant="outline" className="gap-1 text-success border-success/30"><Check className="h-2.5 w-2.5" />{successCount}</Badge>}
+                    {errorCount > 0 && <Badge variant="outline" className="gap-1 text-destructive border-destructive/30"><X className="h-2.5 w-2.5" />{errorCount}</Badge>}
+                    {pendingCount > 0 && <Badge variant="outline" className="gap-1">{pendingCount} معلق</Badge>}
+                  </div>
+                )}
                 <Button onClick={() => handlePrint()} size="sm" variant="outline" className="w-full">
-                  <Printer className="h-3.5 w-3.5 ml-1" />
-                  طباعة الكروت
+                  <Printer className="h-3.5 w-3.5 ml-1" /> طباعة
                 </Button>
               </div>
             )}
@@ -583,11 +808,11 @@ ${pages.join("")}
 
           {/* Preview Panel */}
           <div className="lg:col-span-2">
-            <div className="rounded-lg border border-border bg-card p-4">
-              <div className="flex items-center justify-between mb-4">
+            <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
+              <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">
                   <CreditCard className="h-4 w-4 text-primary" />
-                  معاينة الكروت ({cards.length})
+                  معاينة ({cards.length})
                 </h3>
                 {cards.length > 0 && (
                   <span className="text-[10px] text-muted-foreground">
@@ -597,39 +822,71 @@ ${pages.join("")}
               </div>
 
               {cards.length === 0 ? (
-                <div className="text-center py-16">
-                  <CreditCard className="h-12 w-12 text-muted-foreground/20 mx-auto mb-3" />
+                <div className="text-center py-12">
+                  <CreditCard className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
                   <p className="text-muted-foreground text-sm">اضبط الإعدادات واضغط "توليد"</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[65dvh] overflow-y-auto pr-1">
-                  {cards.map((card, i) => (
-                    bgImage ? (
-                      <div key={i} className="rounded-lg border border-border overflow-hidden relative" style={{ aspectRatio: "1.6" }}>
-                        <img src={bgImage} alt="" className="w-full h-full object-cover" />
-                        <div className="absolute font-mono text-[10px] font-bold text-foreground" style={{ top: `${usernamePos.y}%`, left: `${usernamePos.x}%`, transform: "translate(-50%,-50%)" }}>
-                          {card.username}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[60dvh] overflow-y-auto pr-1">
+                  {cards.slice(0, 100).map((card, i) => (
+                    <div key={i} className="relative">
+                      {bgImage ? (
+                        <div className="rounded-lg border border-border overflow-hidden relative" style={{ aspectRatio: "1.6" }}>
+                          <img src={bgImage} alt="" className="w-full h-full object-cover" />
+                          {fields.filter(f => f.visible).map(f => {
+                            let text = "";
+                            if (f.type === "username") text = card.username;
+                            else if (f.type === "password") text = card.password || "—";
+                            else if (f.type === "profile") text = card.profile;
+                            else if (f.type === "title") text = cardTitle;
+                            else if (f.type === "subtitle") text = cardSubtitle;
+                            return (
+                              <div key={f.id} className="absolute font-mono font-bold"
+                                style={{
+                                  top: `${f.y}%`, left: `${f.x}%`,
+                                  transform: "translate(-50%,-50%)",
+                                  fontSize: `${Math.max(7, f.fontSize * 0.65)}px`,
+                                  color: f.color,
+                                }}
+                              >{text}</div>
+                            );
+                          })}
                         </div>
-                        <div className="absolute font-mono text-[10px] font-bold text-foreground" style={{ top: `${passwordPos.y}%`, left: `${passwordPos.x}%`, transform: "translate(-50%,-50%)" }}>
-                          {card.password}
+                      ) : (
+                        <div className="rounded-lg border border-border bg-gradient-to-br from-background to-muted/50 p-2.5 text-right">
+                          <p className="font-bold text-foreground text-[10px] mb-0.5">{cardTitle}</p>
+                          <p className="text-[9px] text-muted-foreground mb-1.5">{cardSubtitle}</p>
+                          <div className="mb-1">
+                            <span className="text-[8px] text-muted-foreground">اسم المستخدم</span>
+                            <p className="font-mono text-[10px] font-semibold text-foreground tracking-wider">{card.username}</p>
+                          </div>
+                          {card.password && (
+                            <div className="mb-1">
+                              <span className="text-[8px] text-muted-foreground">كلمة المرور</span>
+                              <p className="font-mono text-[10px] font-semibold text-foreground tracking-wider">{card.password}</p>
+                            </div>
+                          )}
+                          <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[8px] bg-muted text-muted-foreground">{card.profile}</span>
                         </div>
-                      </div>
-                    ) : (
-                      <div key={i} className="rounded-lg border border-border bg-gradient-to-br from-background to-muted/50 p-3 text-right">
-                        <p className="font-bold text-foreground text-xs mb-0.5">{cardTitle}</p>
-                        <p className="text-[10px] text-muted-foreground mb-2">{cardSubtitle}</p>
-                        <div className="mb-1">
-                          <span className="text-[9px] text-muted-foreground">اسم المستخدم</span>
-                          <p className="font-mono text-xs font-semibold text-foreground tracking-wider">{card.username}</p>
+                      )}
+                      {/* Status indicator */}
+                      {card.status === "success" && (
+                        <div className="absolute top-1 left-1 h-4 w-4 rounded-full bg-success/90 flex items-center justify-center">
+                          <Check className="h-2.5 w-2.5 text-white" />
                         </div>
-                        <div className="mb-1">
-                          <span className="text-[9px] text-muted-foreground">كلمة المرور</span>
-                          <p className="font-mono text-xs font-semibold text-foreground tracking-wider">{card.password}</p>
+                      )}
+                      {card.status === "error" && (
+                        <div className="absolute top-1 left-1 h-4 w-4 rounded-full bg-destructive/90 flex items-center justify-center" title={card.error}>
+                          <X className="h-2.5 w-2.5 text-white" />
                         </div>
-                        <span className="inline-block mt-1 px-2 py-0.5 rounded text-[9px] bg-muted text-muted-foreground">{card.profile}</span>
-                      </div>
-                    )
+                      )}
+                    </div>
                   ))}
+                  {cards.length > 100 && (
+                    <div className="col-span-full text-center py-3 text-xs text-muted-foreground">
+                      عرض أول 100 كرت من {cards.length}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -643,9 +900,9 @@ ${pages.join("")}
           <AlertDialogHeader>
             <AlertDialogTitle>حذف الدفعة</AlertDialogTitle>
             <AlertDialogDescription>
-              هل أنت متأكد من حذف هذه الدفعة؟ لا يمكن التراجع عن هذا الإجراء.
+              هل أنت متأكد من حذف هذه الدفعة؟
               <br />
-              <span className="text-destructive text-xs">ملاحظة: هذا لن يحذف الكروت من الراوتر إذا تم رفعها.</span>
+              <span className="text-destructive text-xs">ملاحظة: هذا لن يحذف الكروت من الراوتر.</span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -653,12 +910,51 @@ ${pages.join("")}
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => deleteBatchId && handleDeleteBatch(deleteBatchId)}
-            >
-              حذف
-            </AlertDialogAction>
+            >حذف</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Save Template Dialog */}
+      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+        <DialogContent className="sm:max-w-sm" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>حفظ قالب الطباعة</DialogTitle>
+            <DialogDescription>أدخل اسمًا للقالب لاستخدامه لاحقًا</DialogDescription>
+          </DialogHeader>
+          <Input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="مثال: باقة 100" className="my-2" />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTemplateDialogOpen(false)}>إلغاء</Button>
+            <Button onClick={saveTemplate}>حفظ</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Load Template Dialog */}
+      <Dialog open={loadTemplateDialogOpen} onOpenChange={setLoadTemplateDialogOpen}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>القوالب المحفوظة</DialogTitle>
+            <DialogDescription>اختر قالبًا لتحميله</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-60 overflow-y-auto py-2">
+            {templates.map(t => (
+              <div key={t.id} className="flex items-center justify-between p-2 rounded border border-border hover:bg-muted/50">
+                <div>
+                  <p className="text-sm font-medium text-foreground">{t.name}</p>
+                  <p className="text-[10px] text-muted-foreground">{t.printCols}×{t.printRows} • {t.bgImage ? "صورة خلفية" : "بدون خلفية"}</p>
+                </div>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => loadTemplate(t)}>تحميل</Button>
+                  <Button size="sm" variant="ghost" className="text-xs h-7 text-destructive" onClick={() => deleteTemplate(t.id)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
