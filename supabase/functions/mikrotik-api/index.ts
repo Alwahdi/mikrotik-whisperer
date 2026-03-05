@@ -12,31 +12,20 @@ serve(async (req) => {
   }
 
   try {
-    const MIKROTIK_HOST = Deno.env.get("MIKROTIK_HOST");
-    const MIKROTIK_USER = Deno.env.get("MIKROTIK_USER");
-    const MIKROTIK_PASS = Deno.env.get("MIKROTIK_PASS");
-    const MIKROTIK_PORT = Deno.env.get("MIKROTIK_PORT") || "443";
-    const MIKROTIK_PROTOCOL = Deno.env.get("MIKROTIK_PROTOCOL") || "https";
+    const { endpoint, host, user, pass, port, protocol } = await req.json();
 
-    if (!MIKROTIK_HOST) {
-      throw new Error("MIKROTIK_HOST is not configured");
-    }
-    if (!MIKROTIK_USER) {
-      throw new Error("MIKROTIK_USER is not configured");
-    }
-    if (!MIKROTIK_PASS) {
-      throw new Error("MIKROTIK_PASS is not configured");
-    }
+    if (!host) throw new Error("Missing 'host'");
+    if (!user) throw new Error("Missing 'user'");
+    if (!pass) throw new Error("Missing 'pass'");
+    if (!endpoint) throw new Error("Missing 'endpoint'");
 
-    const { endpoint } = await req.json();
-    if (!endpoint) {
-      throw new Error("Missing 'endpoint' in request body");
-    }
+    const actualPort = port || "443";
+    const actualProtocol = protocol || "https";
 
-    const baseUrl = `${MIKROTIK_PROTOCOL}://${MIKROTIK_HOST}:${MIKROTIK_PORT}/rest`;
+    const baseUrl = `${actualProtocol}://${host}:${actualPort}/rest`;
     const url = `${baseUrl}${endpoint}`;
 
-    const credentials = btoa(`${MIKROTIK_USER}:${MIKROTIK_PASS}`);
+    const credentials = btoa(`${user}:${pass}`);
 
     const response = await fetch(url, {
       method: "GET",
@@ -48,9 +37,7 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(
-        `MikroTik API error [${response.status}]: ${errorText}`
-      );
+      throw new Error(`MikroTik API error [${response.status}]: ${errorText}`);
     }
 
     const data = await response.json();
