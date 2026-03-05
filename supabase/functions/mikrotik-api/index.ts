@@ -274,6 +274,11 @@ function isUserManagerUserAddCommand(command: string): boolean {
   return /\/user-manager\/user\/add$/.test(command);
 }
 
+function isUserManagerProfileCommand(command: string): boolean {
+  return /\/user-manager\/profile\/(add|set)$/.test(command) ||
+         /\/tool\/user-manager\/profile\/(add|set)$/.test(command);
+}
+
 function getUserManagerRoots(command: string): string[] {
   const fromTool = command.startsWith("/tool/user-manager/");
   const roots = fromTool
