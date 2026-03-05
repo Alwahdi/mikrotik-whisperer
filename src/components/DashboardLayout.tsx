@@ -2,32 +2,52 @@ import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Wifi, Users, Settings, Menu, X,
-  Router, Moon, Sun, LogOut, ChevronLeft, Activity, CreditCard,
+  Router, Moon, Sun, LogOut, Activity, CreditCard,
+  Database, Shield,
 } from "lucide-react";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import { useAuth } from "@/contexts/AuthContext";
+import { useHotspotUsers, useUserManagerUsers } from "@/hooks/useMikrotik";
 
 const navItems = [
-  { path: "/", icon: LayoutDashboard, label: "لوحة التحكم" },
-  { path: "/hotspot", icon: Wifi, label: "الهوتسبوت" },
-  { path: "/usermanager", icon: Users, label: "يوزر مانجر" },
-  { path: "/vouchers", icon: CreditCard, label: "الكروت" },
-  { path: "/settings", icon: Settings, label: "الإعدادات" },
+  { path: "/", icon: LayoutDashboard, label: "لوحة التحكم", roles: ["admin", "cashier"] },
+  { path: "/hotspot", icon: Wifi, label: "الهوتسبوت", roles: ["admin", "cashier"] },
+  { path: "/usermanager", icon: Users, label: "يوزر مانجر", roles: ["admin", "cashier"] },
+  { path: "/vouchers", icon: CreditCard, label: "الكروت", roles: ["admin", "cashier"] },
+  { path: "/backups", icon: Database, label: "النسخ الاحتياطي", roles: ["admin"] },
+  { path: "/settings", icon: Settings, label: "الإعدادات", roles: ["admin"] },
 ];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut, role, isAdmin } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
   const config = getMikrotikConfig();
+
+  // Live badge counts
+  const { data: hotspotUsers } = useHotspotUsers();
+  const { data: umUsers } = useUserManagerUsers();
+  const hotspotCount = Array.isArray(hotspotUsers) ? hotspotUsers.length : 0;
+  const umCount = Array.isArray(umUsers) ? umUsers.length : 0;
 
   useEffect(() => {
     if (isDark) document.documentElement.classList.add("dark");
     else document.documentElement.classList.remove("dark");
     localStorage.setItem("theme", isDark ? "dark" : "light");
   }, [isDark]);
+
+  const filteredNav = navItems.filter(item => {
+    if (!role) return item.roles.includes("cashier"); // default to cashier view
+    return item.roles.includes(role);
+  });
+
+  const getBadge = (path: string): number | null => {
+    if (path === "/hotspot" && hotspotCount > 0) return hotspotCount;
+    if (path === "/usermanager" && umCount > 0) return umCount;
+    return null;
+  };
 
   return (
     <div className="flex min-h-screen" dir="rtl">
@@ -65,15 +85,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
         {/* Nav */}
         <nav className="p-2 mt-2 space-y-0.5">
-          {navItems.map((item) => {
+          {filteredNav.map((item) => {
             const isActive = location.pathname === item.path;
+            const badge = getBadge(item.path);
             return (
               <Link
                 key={item.path}
                 to={item.path}
                 onClick={() => setSidebarOpen(false)}
                 className={`
-                  flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-all
+                  flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-all relative
                   ${isActive
                     ? "bg-primary text-primary-foreground font-medium"
                     : "text-sidebar-foreground hover:bg-sidebar-accent font-normal"
@@ -82,6 +103,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}
+                {badge !== null && (
+                  <span className={`mr-auto text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full ${
+                    isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary/10 text-primary"
+                  }`}>
+                    {badge}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -89,6 +117,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
         {/* Bottom */}
         <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-sidebar-border space-y-2">
+          {/* Role Badge */}
+          {role && (
+            <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground mb-1">
+              <Shield className="h-2.5 w-2.5" />
+              {role === "admin" ? "مدير" : "كاشير"}
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <button
               onClick={() => setIsDark(!isDark)}
@@ -118,7 +153,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 min-w-0">
+      <main className="flex-1 min-w-0 pb-16 lg:pb-0">
         <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border px-4 sm:px-6 py-3 flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(true)}
@@ -128,7 +163,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </button>
           {config && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span className="h-1.5 w-1.5 rounded-full bg-success" />
+              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse-glow" />
               متصل
             </div>
           )}
@@ -141,8 +176,35 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </button>
           </div>
         </header>
-        <div className="p-4 sm:p-6 max-w-6xl mx-auto">{children}</div>
+        <div className="p-4 sm:p-6 max-w-6xl mx-auto animate-slide-up">{children}</div>
       </main>
+
+      {/* Mobile Bottom Nav */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-background/95 backdrop-blur-md border-t border-border">
+        <div className="flex items-center justify-around py-2 px-1">
+          {filteredNav.slice(0, 5).map(item => {
+            const isActive = location.pathname === item.path;
+            const badge = getBadge(item.path);
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-md transition-colors relative ${
+                  isActive ? "text-primary" : "text-muted-foreground"
+                }`}
+              >
+                <item.icon className="h-4 w-4" />
+                <span className="text-[9px]">{item.label}</span>
+                {badge !== null && (
+                  <span className="absolute -top-0.5 -left-0.5 h-3.5 min-w-[14px] flex items-center justify-center text-[8px] font-bold bg-primary text-primary-foreground rounded-full px-0.5">
+                    {badge}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
