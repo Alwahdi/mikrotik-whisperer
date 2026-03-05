@@ -307,40 +307,45 @@ function buildUserManagerArgVariants(command: string, args?: string[]): (string[
     remapArgs(remapArgs(args, { profile: "group" }), { username: "name" }),
   ];
 
-  // For profile add/set: try stripping unknown params one by one
   if (isUserManagerProfileCommand(command)) {
     const parsed = argsListToObject(args);
+    const owner = parsed.owner || parsed.customer || "admin";
+    baseVariants.unshift(
+      objectToArgsList({ ...parsed, owner }),
+      objectToArgsList({ ...parsed, customer: owner }),
+    );
+
     const optionalKeys = ["name-for-users", "override-shared-users", "transfer-limit", "uptime-limit", "price"];
-    // Try without each optional key
     for (const key of optionalKeys) {
-      if (parsed[key]) {
+      if (parsed[key] !== undefined && parsed[key] !== "") {
         baseVariants.push(omitArgsKeys(args, [key]));
       }
     }
-    // Try with only essential keys
-    const essentialOnly = omitArgsKeys(args, optionalKeys);
-    baseVariants.push(essentialOnly);
+    baseVariants.push(omitArgsKeys(args, optionalKeys));
   }
 
   if (isUserManagerUserAddCommand(command)) {
     const parsed = argsListToObject(args);
     const username = parsed.username || parsed.name || parsed.user;
-    const password = parsed.password;
+    const hasPassword = Object.prototype.hasOwnProperty.call(parsed, "password");
+    const password = hasPassword ? parsed.password : "";
     const profile = parsed.profile || parsed.group;
     const customer = parsed.customer || parsed.owner || "admin";
 
-    if (username && password) {
+    if (username && hasPassword) {
       baseVariants.unshift(
+        objectToArgsList({ username, password, profile, owner: customer }),
+        objectToArgsList({ username, password, group: profile, owner: customer }),
         objectToArgsList({ username, password, profile, customer }),
         objectToArgsList({ username, password, group: profile, customer }),
-        objectToArgsList({ username, password, profile }),
-        objectToArgsList({ username, password, group: profile }),
+        objectToArgsList({ username, password, owner: customer }),
         objectToArgsList({ username, password, customer }),
         objectToArgsList({ username, password }),
+        objectToArgsList({ name: username, password, profile, owner: customer }),
+        objectToArgsList({ name: username, password, group: profile, owner: customer }),
         objectToArgsList({ name: username, password, profile, customer }),
         objectToArgsList({ name: username, password, group: profile, customer }),
-        objectToArgsList({ name: username, password, profile }),
-        objectToArgsList({ name: username, password, group: profile }),
+        objectToArgsList({ name: username, password, owner: customer }),
         objectToArgsList({ name: username, password, customer }),
         objectToArgsList({ name: username, password }),
       );
