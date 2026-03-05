@@ -113,16 +113,33 @@ export default function UserManagerPage() {
   const allUsers = useMemo(() => Array.isArray(users) ? users : [], [users]);
   const allSessions = useMemo(() => Array.isArray(sessions) ? sessions : [], [sessions]);
 
+  // Check if user is expired (uptime used up or disabled)
+  const isExpired = (u: any): boolean => {
+    if (u.disabled === "true" || u.disabled === true) return true;
+    // If uptime-used exists and equals or exceeds profile uptime limit
+    const uptimeUsed = u["uptime-used"] || "";
+    if (uptimeUsed && uptimeUsed !== "0s") {
+      // Check if download-used exists (consumed data)
+      const dlUsed = Number(u["download-used"] || 0);
+      if (dlUsed > 0 && u["last-seen"] && u["last-seen"] !== "never") return true;
+    }
+    return false;
+  };
+
   const filteredUsers = useMemo(() => {
-    if (!search) return allUsers;
+    let list = allUsers;
+    if (userFilter === "expired") {
+      list = list.filter(isExpired);
+    }
+    if (!search) return list;
     const s = search.toLowerCase();
-    return allUsers.filter((u: any) =>
+    return list.filter((u: any) =>
       (u.name || "").toLowerCase().includes(s) ||
       (u.username || "").toLowerCase().includes(s) ||
       (u.comment || "").toLowerCase().includes(s) ||
       getProfileName(u).toLowerCase().includes(s)
     );
-  }, [allUsers, search, profileMap]);
+  }, [allUsers, search, profileMap, userFilter]);
 
   const filteredSessions = useMemo(() => {
     if (!search) return allSessions;
