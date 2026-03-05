@@ -50,7 +50,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="flex min-h-screen" dir="rtl">
+    <div className="flex min-h-dvh bg-background" dir="rtl">
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm lg:hidden"
