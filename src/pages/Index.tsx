@@ -22,6 +22,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 
 export default function Index() {
+  const { user } = useAuth();
   const config = getMikrotikConfig();
   const enabled = !!config;
 
