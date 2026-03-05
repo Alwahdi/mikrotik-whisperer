@@ -83,7 +83,6 @@ export default function VouchersPage() {
   const HISTORY_PAGE_SIZE = 5;
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const printFrameRef = useRef<HTMLIFrameElement>(null);
 
   // Persist batches
   useEffect(() => { saveBatches(batches); }, [batches]);
