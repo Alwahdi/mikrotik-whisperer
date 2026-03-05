@@ -11,7 +11,7 @@ import {
   Users, RefreshCw, AlertTriangle, Package, Clock,
   UserCheck, UserX, Search, MoreHorizontal, UserPlus,
   Ban, Trash2, CheckCircle, XCircle, Eye, ChevronLeft, ChevronRight,
-  Home, PackagePlus, PencilLine,
+  Home, PackagePlus, PencilLine, AlertCircle, CheckSquare, Square, Loader2,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -57,6 +57,10 @@ export default function UserManagerPage() {
   const [newUser, setNewUser] = useState({ name: "", password: "", profile: "" });
   const [usersPage, setUsersPage] = useState(1);
   const [sessionsPage, setSessionsPage] = useState(1);
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [userFilter, setUserFilter] = useState<"all" | "expired">("all");
+  
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileMode, setProfileMode] = useState<"add" | "edit">("add");
@@ -109,16 +113,33 @@ export default function UserManagerPage() {
   const allUsers = useMemo(() => Array.isArray(users) ? users : [], [users]);
   const allSessions = useMemo(() => Array.isArray(sessions) ? sessions : [], [sessions]);
 
+  // Check if user is expired (uptime used up or disabled)
+  const isExpired = (u: any): boolean => {
+    if (u.disabled === "true" || u.disabled === true) return true;
+    // If uptime-used exists and equals or exceeds profile uptime limit
+    const uptimeUsed = u["uptime-used"] || "";
+    if (uptimeUsed && uptimeUsed !== "0s") {
+      // Check if download-used exists (consumed data)
+      const dlUsed = Number(u["download-used"] || 0);
+      if (dlUsed > 0 && u["last-seen"] && u["last-seen"] !== "never") return true;
+    }
+    return false;
+  };
+
   const filteredUsers = useMemo(() => {
-    if (!search) return allUsers;
+    let list = allUsers;
+    if (userFilter === "expired") {
+      list = list.filter(isExpired);
+    }
+    if (!search) return list;
     const s = search.toLowerCase();
-    return allUsers.filter((u: any) =>
+    return list.filter((u: any) =>
       (u.name || "").toLowerCase().includes(s) ||
       (u.username || "").toLowerCase().includes(s) ||
       (u.comment || "").toLowerCase().includes(s) ||
       getProfileName(u).toLowerCase().includes(s)
     );
-  }, [allUsers, search, profileMap]);
+  }, [allUsers, search, profileMap, userFilter]);
 
   const filteredSessions = useMemo(() => {
     if (!search) return allSessions;
@@ -140,6 +161,30 @@ export default function UserManagerPage() {
     const id = user[".id"] || user.id;
     if (!id) { toast.error("لا يمكن تحديد المستخدم"); return; }
     action.mutate({ action: userAction, id });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedUsers.size === 0) return;
+    setBulkDeleting(true);
+    const ids = Array.from(selectedUsers);
+    for (const id of ids) {
+      try { await new Promise<void>((resolve, reject) => action.mutate({ action: "remove", id }, { onSuccess: () => resolve(), onError: reject })); } catch {}
+    }
+    setSelectedUsers(new Set());
+    setBulkDeleting(false);
+    toast.success(`تم حذف ${ids.length} مستخدم`);
+  };
+
+  const toggleSelectUser = (id: string) => {
+    setSelectedUsers(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedUsers.size === paginatedUsers.length) {
+      setSelectedUsers(new Set());
+    } else {
+      setSelectedUsers(new Set(paginatedUsers.map((u: any) => u[".id"] || u.id)));
+    }
   };
 
   const handleAddUser = () => {
@@ -344,11 +389,28 @@ export default function UserManagerPage() {
         </TabsList>
 
         <TabsContent value="users">
+          <div className="flex gap-2 mb-3 flex-wrap items-center">
+            <Button size="sm" variant={userFilter === "all" ? "default" : "outline"} className="text-xs h-7" onClick={() => { setUserFilter("all"); setUsersPage(1); setSelectedUsers(new Set()); }}>الكل</Button>
+            <Button size="sm" variant={userFilter === "expired" ? "default" : "outline"} className="text-xs h-7" onClick={() => { setUserFilter("expired"); setUsersPage(1); setSelectedUsers(new Set()); }}>
+              <AlertCircle className="h-3 w-3 ml-1" /> منتهية
+            </Button>
+            {selectedUsers.size > 0 && (
+              <Button size="sm" variant="destructive" className="text-xs h-7 mr-auto" disabled={bulkDeleting} onClick={handleBulkDelete}>
+                {bulkDeleting ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : <Trash2 className="h-3 w-3 ml-1" />}
+                حذف {selectedUsers.size} محدد
+              </Button>
+            )}
+          </div>
           <div className="rounded-lg border border-border bg-card shadow-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
+                    <th className="p-2.5 w-8 text-center">
+                      <button onClick={toggleSelectAll} className="text-muted-foreground hover:text-foreground">
+                        {selectedUsers.size === paginatedUsers.length && paginatedUsers.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                      </button>
+                    </th>
                     <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">المستخدم</th>
                     <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">الباقة</th>
                     <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">الحالة</th>
@@ -360,6 +422,7 @@ export default function UserManagerPage() {
                   {loadingUsers ? (
                     Array.from({ length: 5 }).map((_, i) => (
                       <tr key={i} className="border-b border-border/50">
+                        <td className="p-2.5"><Skeleton className="h-4 w-4" /></td>
                         <td className="p-2.5"><Skeleton className="h-4 w-24" /></td>
                         <td className="p-2.5"><Skeleton className="h-4 w-20" /></td>
                         <td className="p-2.5"><Skeleton className="h-4 w-12" /></td>
@@ -369,16 +432,22 @@ export default function UserManagerPage() {
                     ))
                   ) : paginatedUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center">
+                      <td colSpan={6} className="p-8 text-center">
                         <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                        <p className="text-muted-foreground text-sm">{search ? "لا توجد نتائج" : "لا يوجد مستخدمين"}</p>
+                        <p className="text-muted-foreground text-sm">{search ? "لا توجد نتائج" : userFilter === "expired" ? "لا توجد كروت منتهية" : "لا يوجد مستخدمين"}</p>
                       </td>
                     </tr>
                   ) : (
                     paginatedUsers.map((user: any, i: number) => {
                       const isDisabled = user.disabled === "true" || user.disabled === true;
+                      const uid = user[".id"] || user.id;
                       return (
-                        <tr key={user[".id"] || i} className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
+                        <tr key={uid || i} className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
+                          <td className="p-2.5 text-center">
+                            <button onClick={() => uid && toggleSelectUser(uid)} className="text-muted-foreground hover:text-foreground">
+                              {selectedUsers.has(uid) ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
+                            </button>
+                          </td>
                           <td className="p-2.5 font-medium text-foreground text-sm">{user.name || user.username || "—"}</td>
                           <td className="p-2.5">
                             <span className="inline-block px-1.5 py-0.5 rounded bg-muted text-foreground text-[10px]">
