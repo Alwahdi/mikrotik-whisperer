@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { useHotspotProfiles, useUserManagerProfiles, useHotspotUserAction, useUserManagerAction } from "@/hooks/useMikrotik";
+import { useHotspotProfiles, useUserManagerProfiles, useBatchAction } from "@/hooks/useMikrotik";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -8,9 +8,10 @@ import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
   BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
-import { Printer, CreditCard, Plus, Trash2, Download, Home, Upload, ImageIcon } from "lucide-react";
+import { Printer, CreditCard, Plus, Trash2, Download, Home, Upload, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { Progress } from "@/components/ui/progress";
 
 interface VoucherCard {
   username: string;
@@ -28,8 +29,7 @@ function generateRandomString(len: number): string {
 export default function VouchersPage() {
   const { data: hotspotProfiles } = useHotspotProfiles();
   const { data: umProfiles } = useUserManagerProfiles();
-  const hotspotAction = useHotspotUserAction();
-  const umAction = useUserManagerAction();
+  const batchAction = useBatchAction();
 
   const [type, setType] = useState<"hotspot" | "usermanager">("hotspot");
   const [count, setCount] = useState(10);
@@ -38,25 +38,24 @@ export default function VouchersPage() {
   const [nameLength, setNameLength] = useState(6);
   const [selectedProfile, setSelectedProfile] = useState("");
   const [cards, setCards] = useState<VoucherCard[]>([]);
-  const [generating, setGenerating] = useState(false);
+  const [pushing, setPushing] = useState(false);
+  const [pushProgress, setPushProgress] = useState(0);
   const [cardTitle, setCardTitle] = useState("WiFi Card");
   const [cardSubtitle, setCardSubtitle] = useState("اتصل بالإنترنت");
   
-  // Print grid config
   const [printCols, setPrintCols] = useState(3);
   const [printRows, setPrintRows] = useState(4);
   
-  // Custom background image
   const [bgImage, setBgImage] = useState<string | null>(null);
   const [usernamePos, setUsernamePos] = useState({ x: 50, y: 55 });
   const [passwordPos, setPasswordPos] = useState({ x: 50, y: 75 });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const printRef = useRef<HTMLDivElement>(null);
 
-  const profiles = type === "hotspot"
-    ? (Array.isArray(hotspotProfiles) ? hotspotProfiles : [])
-    : (Array.isArray(umProfiles) ? umProfiles : []);
+  const profiles = useMemo(() => {
+    const raw = type === "hotspot" ? hotspotProfiles : umProfiles;
+    return Array.isArray(raw) ? raw : [];
+  }, [type, hotspotProfiles, umProfiles]);
 
   const generateVouchers = () => {
     const newCards: VoucherCard[] = [];
@@ -74,34 +73,54 @@ export default function VouchersPage() {
 
   const pushToRouter = async () => {
     if (cards.length === 0) return;
-    setGenerating(true);
-    const actionFn = type === "hotspot" ? hotspotAction : umAction;
-    let success = 0;
-    let failed = 0;
+    setPushing(true);
+    setPushProgress(0);
 
-    for (const card of cards) {
-      try {
-        // Hotspot uses "profile", User Manager uses "group"
-        const data: Record<string, any> = { name: card.username, password: card.password };
+    // Build batch commands - use correct endpoint and field names
+    const addEndpoint = type === "hotspot" 
+      ? "/ip/hotspot/user/add" 
+      : "/user-manager/user/add";
+    
+    // Process in chunks of 50 to avoid timeout
+    const CHUNK_SIZE = 50;
+    let totalSuccess = 0;
+    let totalFailed = 0;
+
+    for (let i = 0; i < cards.length; i += CHUNK_SIZE) {
+      const chunk = cards.slice(i, i + CHUNK_SIZE);
+      const commands = chunk.map(card => {
+        const args: string[] = [`=name=${card.username}`, `=password=${card.password}`];
+        // Hotspot uses "profile", User Manager uses "group" for v7 
         if (type === "hotspot") {
-          data.profile = card.profile;
+          args.push(`=profile=${card.profile}`);
         } else {
-          data.group = card.profile;
+          args.push(`=group=${card.profile}`);
         }
-        
-        await actionFn.mutateAsync({ action: "add", data });
-        success++;
-      } catch (err: any) {
-        console.error("Failed to add card:", err);
-        failed++;
+        return { command: addEndpoint, args };
+      });
+
+      try {
+        const result = await batchAction.mutateAsync({
+          commands,
+          invalidateKeys: [type === "hotspot" ? "hotspot" : "usermanager"],
+        });
+        const errors = result?.errors?.filter((e: string) => e) || [];
+        totalSuccess += chunk.length - errors.length;
+        totalFailed += errors.length;
+      } catch {
+        totalFailed += chunk.length;
       }
+      
+      setPushProgress(Math.round(((i + chunk.length) / cards.length) * 100));
     }
 
-    setGenerating(false);
-    if (failed === 0) {
-      toast.success(`تم إضافة ${success} مستخدم بنجاح`);
+    setPushing(false);
+    setPushProgress(0);
+
+    if (totalFailed === 0) {
+      toast.success(`تم إضافة ${totalSuccess} كرت بنجاح عبر الدفعة`);
     } else {
-      toast.warning(`نجح ${success} من ${cards.length} — فشل ${failed}`);
+      toast.warning(`نجح ${totalSuccess} — فشل ${totalFailed}`);
     }
   };
 
@@ -191,7 +210,6 @@ export default function VouchersPage() {
 
   return (
     <DashboardLayout>
-      {/* Breadcrumb */}
       <Breadcrumb className="mb-4">
         <BreadcrumbList>
           <BreadcrumbItem>
@@ -229,7 +247,7 @@ export default function VouchersPage() {
 
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">عدد الكروت</label>
-              <Input type="number" min={1} max={500} value={count} onChange={e => setCount(Number(e.target.value) || 1)} />
+              <Input type="number" min={1} max={1000} value={count} onChange={e => setCount(Number(e.target.value) || 1)} />
             </div>
 
             <div>
@@ -266,7 +284,6 @@ export default function VouchersPage() {
             <div className="border-t border-border pt-4 space-y-3">
               <h4 className="text-xs font-medium text-muted-foreground">تخصيص الكرت</h4>
               
-              {/* Background image upload */}
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">صورة خلفية (اختياري)</label>
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
@@ -326,7 +343,6 @@ export default function VouchersPage() {
                 </>
               )}
 
-              {/* Print grid config */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">أعمدة الطباعة</label>
@@ -355,10 +371,14 @@ export default function VouchersPage() {
 
           {cards.length > 0 && (
             <div className="flex flex-col gap-2">
-              <Button onClick={pushToRouter} disabled={generating} size="sm" variant="outline" className="w-full">
-                <Download className="h-3.5 w-3.5 ml-1" />
-                {generating ? "جاري الإضافة..." : `إضافة ${cards.length} كرت للراوتر`}
+              <Button onClick={pushToRouter} disabled={pushing} size="sm" variant="outline" className="w-full">
+                {pushing ? (
+                  <><Loader2 className="h-3.5 w-3.5 ml-1 animate-spin" /> جاري الإضافة... {pushProgress}%</>
+                ) : (
+                  <><Download className="h-3.5 w-3.5 ml-1" /> إضافة {cards.length} كرت للراوتر (دفعة واحدة)</>
+                )}
               </Button>
+              {pushing && <Progress value={pushProgress} className="h-1.5" />}
               <Button onClick={handlePrint} size="sm" variant="outline" className="w-full">
                 <Printer className="h-3.5 w-3.5 ml-1" />
                 طباعة الكروت
@@ -388,7 +408,7 @@ export default function VouchersPage() {
                 <p className="text-muted-foreground text-sm">اضبط الإعدادات واضغط "توليد"</p>
               </div>
             ) : (
-              <div ref={printRef} className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto pr-1">
                 {cards.map((card, i) => (
                   bgImage ? (
                     <div key={i} className="rounded-lg border border-border overflow-hidden relative" style={{ aspectRatio: "1.6" }}>

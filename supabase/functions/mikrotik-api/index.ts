@@ -265,7 +265,6 @@ async function handleApi(
   user: string, pass: string, command: string,
   args?: string[]
 ): Promise<any> {
-  // First try: v7 command
   const client1 = await createApiClient(host, port, useTls, user, pass);
   try {
     const result = await client1.execute(command, args);
@@ -283,7 +282,6 @@ async function handleApi(
     client1.close();
   }
 
-  // Second try: v6 fallback with a FRESH connection
   const fallbackCmd = getV6FallbackCommand(command)!;
   const client2 = await createApiClient(host, port, useTls, user, pass);
   try {
@@ -295,6 +293,64 @@ async function handleApi(
     throw e2;
   } finally {
     client2.close();
+  }
+}
+
+// ─── Batch Handler: execute multiple commands over ONE connection ────────
+async function handleBatch(
+  host: string, port: string, useTls: boolean,
+  user: string, pass: string,
+  commands: { command: string; args?: string[] }[]
+): Promise<{ results: any[]; errors: string[] }> {
+  const client = await createApiClient(host, port, useTls, user, pass);
+  const results: any[] = [];
+  const errors: string[] = [];
+  
+  try {
+    for (const cmd of commands) {
+      try {
+        const result = await client.execute(cmd.command, cmd.args);
+        results.push(result);
+      } catch (err: any) {
+        // Try v6 fallback for user-manager commands
+        const fallback = getV6FallbackCommand(cmd.command);
+        const isNoSuchCommand = err.message?.includes("no such command") || err.message?.includes("unknown command");
+        
+        if (fallback && isNoSuchCommand) {
+          try {
+            const result = await client.execute(fallback, cmd.args);
+            results.push(result);
+          } catch (e2: any) {
+            errors.push(e2.message || "Command failed");
+            results.push(null);
+          }
+        } else {
+          errors.push(err.message || "Command failed");
+          results.push(null);
+        }
+      }
+    }
+  } finally {
+    client.close();
+  }
+  
+  return { results, errors };
+}
+
+// ─── Health Check ───────────────────────────────────────────────────────
+async function handleHealthCheck(
+  host: string, port: string, useTls: boolean,
+  user: string, pass: string
+): Promise<{ status: string; latency: number; version?: string }> {
+  const start = Date.now();
+  const client = await createApiClient(host, port, useTls, user, pass);
+  try {
+    const res = await client.execute("/system/resource/print");
+    const latency = Date.now() - start;
+    const version = res[0]?.version || "unknown";
+    return { status: "online", latency, version };
+  } finally {
+    client.close();
   }
 }
 
@@ -317,6 +373,65 @@ serve(async (req) => {
       return new Response(JSON.stringify(results), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // ─── Health Check Action ──────────────────────────────────────
+    if (action === "health-check") {
+      if (!host || !user || !pass) throw new Error("Missing credentials for health check");
+      const actualPort = port || "8728";
+      const useTls = protocol === "api-ssl";
+      
+      if (mode === "api") {
+        const result = await handleHealthCheck(host, actualPort, useTls, user, pass);
+        return new Response(JSON.stringify(result), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } else {
+        // REST health check
+        const start = Date.now();
+        const actualPort2 = port || (protocol === "https" ? "443" : "80");
+        const actualProtocol = protocol || "https";
+        const data = await handleRest(host, actualPort2, actualProtocol, user, pass, "/system/resource/print");
+        const latency = Date.now() - start;
+        const version = Array.isArray(data) ? data[0]?.version : data?.version;
+        return new Response(JSON.stringify({ status: "online", latency, version }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // ─── Batch Action ─────────────────────────────────────────────
+    if (action === "batch") {
+      if (!host || !user || !pass) throw new Error("Missing credentials");
+      const commands = body.commands as { command: string; args?: string[] }[];
+      if (!Array.isArray(commands) || commands.length === 0) throw new Error("Missing commands array");
+      
+      if (mode === "api") {
+        const actualPort = port || "8728";
+        const useTls = protocol === "api-ssl";
+        const result = await handleBatch(host, actualPort, useTls, user, pass, commands);
+        return new Response(JSON.stringify(result), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } else {
+        // REST batch: execute sequentially (REST doesn't support persistent connections well)
+        const results: any[] = [];
+        const errors: string[] = [];
+        const actualPort = port || (protocol === "https" ? "443" : "80");
+        const actualProtocol = protocol || "https";
+        for (const cmd of commands) {
+          try {
+            const r = await handleRest(host, actualPort, actualProtocol, user, pass, cmd.command, "POST", cmd.args);
+            results.push(r);
+          } catch (e: any) {
+            errors.push(e.message);
+            results.push(null);
+          }
+        }
+        return new Response(JSON.stringify({ results, errors }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     if (!host) throw new Error("Missing router address");
