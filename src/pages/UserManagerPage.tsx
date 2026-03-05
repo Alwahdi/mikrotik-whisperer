@@ -631,6 +631,42 @@ export default function UserManagerPage() {
               />
             </div>
 
+            <div className="border-t border-border pt-3">
+              <label className="text-xs text-muted-foreground mb-2 block font-medium">حد نقل البيانات (Transfer Limit)</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-muted-foreground mb-0.5 block">↓ RX (تحميل)</label>
+                  <Input value={profileForm.rxTransferLimit} onChange={e => setProfileForm(p => ({ ...p, rxTransferLimit: e.target.value, transferLimit: "" }))} placeholder="1G / 500M" className="h-8 text-xs" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground mb-0.5 block">↑ TX (رفع)</label>
+                  <Input value={profileForm.txTransferLimit} onChange={e => setProfileForm(p => ({ ...p, txTransferLimit: e.target.value, transferLimit: "" }))} placeholder="500M" className="h-8 text-xs" />
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                أو اكتب مباشرة: <span className="font-mono">rx/tx</span> مثل <span className="font-mono">1G/500M</span>
+              </p>
+              <Input
+                value={profileForm.transferLimit}
+                onChange={e => setProfileForm(p => ({ ...p, transferLimit: e.target.value, rxTransferLimit: "", txTransferLimit: "" }))}
+                placeholder="1G/500M"
+                className="h-8 text-xs mt-1"
+              />
+            </div>
+
+            <div className="border-t border-border pt-3">
+              <label className="text-xs text-muted-foreground mb-2 block font-medium">حد وقت التشغيل (Uptime Limit)</label>
+              <Input
+                value={profileForm.uptimeLimit}
+                onChange={e => setProfileForm(p => ({ ...p, uptimeLimit: e.target.value }))}
+                placeholder="1h / 30m / 1d / 7d"
+                className="h-8 text-xs"
+              />
+              <p className="text-[10px] text-muted-foreground mt-1">
+                مثال: <span className="font-mono">1h</span> (ساعة)، <span className="font-mono">30m</span> (30 دقيقة)، <span className="font-mono">1d</span> (يوم)
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">عدد الأجهزة</label>
