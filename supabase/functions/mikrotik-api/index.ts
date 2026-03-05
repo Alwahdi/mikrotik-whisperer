@@ -213,15 +213,105 @@ function getV6FallbackCommand(command: string): string | null {
 }
 
 // ─── v6 parameter name mapping for user-manager ─────────────────────────
+function remapArgs(args: string[] | undefined, map: Record<string, string>): string[] | undefined {
+  if (!args) return args;
+  return args.map((arg) => {
+    if (!arg.startsWith("=")) return arg;
+    const idx = arg.indexOf("=", 1);
+    if (idx <= 0) return arg;
+    const key = arg.substring(1, idx);
+    const value = arg.substring(idx + 1);
+    const mappedKey = map[key] || key;
+    return `=${mappedKey}=${value}`;
+  });
+}
+
+function uniqueArgVariants(variants: (string[] | undefined)[]): (string[] | undefined)[] {
+  const seen = new Set<string>();
+  const out: (string[] | undefined)[] = [];
+  for (const v of variants) {
+    const key = (v || []).join("\u0001");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(v);
+  }
+  return out;
+}
+
+function buildUserManagerArgVariants(args?: string[]): (string[] | undefined)[] {
+  if (!args || args.length === 0) return [args];
+  return uniqueArgVariants([
+    args,
+    remapArgs(args, { group: "profile" }),
+    remapArgs(args, { profile: "group" }),
+    remapArgs(args, { name: "username" }),
+    remapArgs(args, { username: "name" }),
+    remapArgs(remapArgs(args, { group: "profile" }), { name: "username" }),
+    remapArgs(remapArgs(args, { profile: "group" }), { username: "name" }),
+  ]);
+}
+
+function getV6FallbackCommand(command: string): string | null {
+  if (command.startsWith("/user-manager/")) {
+    return "/tool" + command;
+  }
+  return null;
+}
+
 function mapArgsForV6(command: string, args?: string[]): string[] | undefined {
   if (!args || !command.includes("user-manager")) return args;
-  return args.map(arg => {
-    // v7 uses "group", v6 uses "profile" for user-manager
-    if (arg.startsWith("=group=")) {
-      return arg.replace("=group=", "=profile=");
+  return remapArgs(args, { group: "profile", name: "username" });
+}
+
+function isCompatibilityError(message: string): boolean {
+  const m = (message || "").toLowerCase();
+  return (
+    m.includes("unknown parameter") ||
+    m.includes("no such command") ||
+    m.includes("unknown command") ||
+    m.includes("input does not match")
+  );
+}
+
+async function executeUserManagerCompatible(
+  client: MikroTikApiClient,
+  command: string,
+  args?: string[],
+): Promise<Record<string, string>[]> {
+  const attempts: { command: string; args?: string[] }[] = [];
+
+  for (const variant of buildUserManagerArgVariants(args)) {
+    attempts.push({ command, args: variant });
+  }
+
+  const fallback = getV6FallbackCommand(command);
+  if (fallback) {
+    const v6Base = mapArgsForV6(fallback, args);
+    for (const variant of buildUserManagerArgVariants(v6Base)) {
+      attempts.push({ command: fallback, args: variant });
     }
-    return arg;
-  });
+  }
+
+  const seen = new Set<string>();
+  let lastError: Error | null = null;
+
+  for (const attempt of attempts) {
+    const key = `${attempt.command}|${(attempt.args || []).join("\u0001")}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    try {
+      return await client.execute(attempt.command, attempt.args);
+    } catch (err: any) {
+      const errorObj = err instanceof Error ? err : new Error(String(err));
+      lastError = errorObj;
+      if (!isCompatibilityError(errorObj.message)) {
+        throw errorObj;
+      }
+    }
+  }
+
+  throw lastError || new Error("User Manager command failed");
 }
 
 // ─── Port Scanner ───────────────────────────────────────────────────────
@@ -295,41 +385,85 @@ async function handleRest(
   }
 }
 
-// ─── API Protocol Handler (v6/v7) with fallback ────────────────────────
+function buildRestBodyVariants(body?: Record<string, any>): (Record<string, any> | undefined)[] {
+  if (!body || Object.keys(body).length === 0) return [body];
+
+  const remapBody = (obj: Record<string, any>, map: Record<string, string>) => {
+    const out: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      out[map[key] || key] = value;
+    }
+    return out;
+  };
+
+  const variants = [
+    body,
+    remapBody(body, { group: "profile" }),
+    remapBody(body, { profile: "group" }),
+    remapBody(body, { name: "username" }),
+    remapBody(body, { username: "name" }),
+    remapBody(remapBody(body, { group: "profile" }), { name: "username" }),
+  ];
+
+  const seen = new Set<string>();
+  const out: (Record<string, any> | undefined)[] = [];
+  for (const item of variants) {
+    const key = JSON.stringify(item || {});
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+
+  return out;
+}
+
+async function handleRestWithCompat(
+  host: string,
+  port: string,
+  protocol: string,
+  user: string,
+  pass: string,
+  command: string,
+  method?: string,
+  restBody?: Record<string, any>,
+): Promise<any> {
+  if (!command.includes("user-manager")) {
+    return handleRest(host, port, protocol, user, pass, command, method, restBody);
+  }
+
+  let lastError: Error | null = null;
+  for (const bodyVariant of buildRestBodyVariants(restBody)) {
+    try {
+      return await handleRest(host, port, protocol, user, pass, command, method, bodyVariant);
+    } catch (err: any) {
+      const errorObj = err instanceof Error ? err : new Error(String(err));
+      lastError = errorObj;
+      if (!isCompatibilityError(errorObj.message)) throw errorObj;
+    }
+  }
+
+  throw lastError || new Error("REST user-manager command failed");
+}
+
+// ─── API Protocol Handler (v6/v7) with compatibility mapping ────────────
 async function handleApi(
   host: string, port: string, useTls: boolean,
   user: string, pass: string, command: string,
   args?: string[]
 ): Promise<any> {
-  const client1 = await createApiClient(host, port, useTls, user, pass);
+  const client = await createApiClient(host, port, useTls, user, pass);
   try {
-    const result = await client1.execute(command, args);
-    return result;
-  } catch (err: any) {
-    const fallback = getV6FallbackCommand(command);
-    const isNoSuchCommand = err.message?.includes("no such command") || err.message?.includes("unknown command");
-    
-    if (!fallback || !isNoSuchCommand) {
-      throw err;
+    if (command.includes("user-manager")) {
+      return await executeUserManagerCompatible(client, command, args);
     }
-    
-    console.log(`v7 failed, trying v6 fallback with NEW connection: ${fallback}`);
-  } finally {
-    client1.close();
-  }
-
-  const fallbackCmd = getV6FallbackCommand(command)!;
-  const v6Args = mapArgsForV6(fallbackCmd, args);
-  const client2 = await createApiClient(host, port, useTls, user, pass);
-  try {
-    return await client2.execute(fallbackCmd, v6Args);
-  } catch (e2: any) {
-    if (e2.message?.includes("no such command")) {
+    return await client.execute(command, args);
+  } catch (err: any) {
+    if (command.includes("user-manager") && err?.message?.includes("no such command")) {
       throw new Error("User Manager غير مثبّت على هذا الراوتر. يرجى تثبيت حزمة user-manager وإعادة التشغيل.");
     }
-    throw e2;
+    throw err;
   } finally {
-    client2.close();
+    client.close();
   }
 }
 
@@ -342,38 +476,24 @@ async function handleBatch(
   const client = await createApiClient(host, port, useTls, user, pass);
   const results: any[] = [];
   const errors: string[] = [];
-  
+
   try {
     for (const cmd of commands) {
       try {
-        const result = await client.execute(cmd.command, cmd.args);
+        const result = cmd.command.includes("user-manager")
+          ? await executeUserManagerCompatible(client, cmd.command, cmd.args)
+          : await client.execute(cmd.command, cmd.args);
         results.push(result);
         errors.push("");
       } catch (err: any) {
-        // Try v6 fallback for user-manager commands
-        const fallback = getV6FallbackCommand(cmd.command);
-        const isNoSuchCommand = err.message?.includes("no such command") || err.message?.includes("unknown command");
-        
-        if (fallback && isNoSuchCommand) {
-          try {
-            const v6Args = mapArgsForV6(fallback, cmd.args);
-            const result = await client.execute(fallback, v6Args);
-            results.push(result);
-            errors.push("");
-          } catch (e2: any) {
-            errors.push(e2.message || "Command failed");
-            results.push(null);
-          }
-        } else {
-          errors.push(err.message || "Command failed");
-          results.push(null);
-        }
+        errors.push(err.message || "Command failed");
+        results.push(null);
       }
     }
   } finally {
     client.close();
   }
-  
+
   return { results, errors };
 }
 
@@ -385,12 +505,12 @@ async function handleBatchRest(
 ): Promise<{ results: any[]; errors: string[] }> {
   const results: any[] = [];
   const errors: string[] = [];
-  
+
   for (const cmd of commands) {
     try {
       const restBody = argsToRestBody(cmd.args);
       const method = getRestMethod(cmd.command);
-      const r = await handleRest(host, port, protocol, user, pass, cmd.command, method, restBody);
+      const r = await handleRestWithCompat(host, port, protocol, user, pass, cmd.command, method, restBody);
       results.push(r);
       errors.push("");
     } catch (e: any) {
@@ -398,7 +518,7 @@ async function handleBatchRest(
       results.push(null);
     }
   }
-  
+
   return { results, errors };
 }
 
