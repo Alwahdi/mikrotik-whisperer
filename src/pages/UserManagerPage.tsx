@@ -60,7 +60,7 @@ export default function UserManagerPage() {
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [userFilter, setUserFilter] = useState<"all" | "expired">("all");
-  const [sessionsPage2] = useState(1); // placeholder removed duplicate
+  
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileMode, setProfileMode] = useState<"add" | "edit">("add");
