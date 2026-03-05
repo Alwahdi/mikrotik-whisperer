@@ -36,6 +36,7 @@ const App = () => (
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/hotspot" element={<ProtectedRoute><HotspotPage /></ProtectedRoute>} />
             <Route path="/usermanager" element={<ProtectedRoute><UserManagerPage /></ProtectedRoute>} />
+            <Route path="/vouchers" element={<ProtectedRoute><VouchersPage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

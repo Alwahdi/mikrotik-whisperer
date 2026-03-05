@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
+import { toast } from "sonner";
 
 async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>) {
   const config = getMikrotikConfig();
@@ -51,16 +52,49 @@ export function useHotspotAllUsers() {
   });
 }
 
+// ─── Hotspot Mutations ─────────────────────
+export function useHotspotUserAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ action, id, data }: { action: string; id?: string; data?: Record<string, any> }) => {
+      const args: string[] = [];
+      if (id) args.push(`=.id=${id}`);
+      if (data) {
+        for (const [k, v] of Object.entries(data)) args.push(`=${k}=${v}`);
+      }
+      
+      const endpointMap: Record<string, string> = {
+        disable: "/ip/hotspot/user/set",
+        enable: "/ip/hotspot/user/set",
+        remove: "/ip/hotspot/user/remove",
+        add: "/ip/hotspot/user/add",
+        kick: "/ip/hotspot/active/remove",
+      };
+      
+      const finalArgs = [...args];
+      if (action === "disable") finalArgs.push("=disabled=true");
+      if (action === "enable") finalArgs.push("=disabled=false");
+      
+      return callMikrotikApi(endpointMap[action] || `/ip/hotspot/user/${action}`, { args: finalArgs });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mikrotik", "hotspot"] });
+      toast.success("تم تنفيذ العملية بنجاح");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "فشلت العملية");
+    },
+  });
+}
+
 // ─── User Manager ──────────────────────────
-// v7 uses /user-manager/*, v6 uses /tool/user-manager/*
-// The edge function automatically falls back to v6 paths
 export function useUserManagerUsers() {
   return useQuery({
     queryKey: ["mikrotik", "usermanager", "users"],
     queryFn: () => callMikrotikApi("/user-manager/user/print"),
     refetchInterval: 15000,
     enabled: useEnabled(),
-    retry: 1,
+    retry: 2,
   });
 }
 export function useUserManagerProfiles() {
@@ -68,7 +102,7 @@ export function useUserManagerProfiles() {
     queryKey: ["mikrotik", "usermanager", "profiles"],
     queryFn: () => callMikrotikApi("/user-manager/profile/print"),
     enabled: useEnabled(),
-    retry: 1,
+    retry: 2,
   });
 }
 export function useUserManagerSessions() {
@@ -77,7 +111,42 @@ export function useUserManagerSessions() {
     queryFn: () => callMikrotikApi("/user-manager/session/print"),
     refetchInterval: 10000,
     enabled: useEnabled(),
-    retry: 1,
+    retry: 2,
+  });
+}
+
+// ─── User Manager Mutations ────────────────
+export function useUserManagerAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ action, id, data }: { action: string; id?: string; data?: Record<string, any> }) => {
+      const args: string[] = [];
+      if (id) args.push(`=.id=${id}`);
+      if (data) {
+        for (const [k, v] of Object.entries(data)) args.push(`=${k}=${v}`);
+      }
+
+      const endpointMap: Record<string, string> = {
+        disable: "/user-manager/user/set",
+        enable: "/user-manager/user/set",
+        remove: "/user-manager/user/remove",
+        add: "/user-manager/user/add",
+        "create-vouchers": "/user-manager/user/add",
+      };
+
+      const finalArgs = [...args];
+      if (action === "disable") finalArgs.push("=disabled=true");
+      if (action === "enable") finalArgs.push("=disabled=false");
+
+      return callMikrotikApi(endpointMap[action] || `/user-manager/user/${action}`, { args: finalArgs });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mikrotik", "usermanager"] });
+      toast.success("تم تنفيذ العملية بنجاح");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "فشلت العملية");
+    },
   });
 }
 
@@ -140,5 +209,14 @@ export function useIPAddresses() {
     queryKey: ["mikrotik", "ip", "address"],
     queryFn: () => callMikrotikApi("/ip/address/print"),
     enabled: useEnabled(),
+  });
+}
+
+// ─── Generic command executor ──────────────
+export function useMikrotikCommand() {
+  return useMutation({
+    mutationFn: async ({ endpoint, args }: { endpoint: string; args?: string[] }) => {
+      return callMikrotikApi(endpoint, args ? { args } : undefined);
+    },
   });
 }

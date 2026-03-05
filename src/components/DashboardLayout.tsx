@@ -11,6 +11,7 @@ const navItems = [
   { path: "/", icon: LayoutDashboard, label: "لوحة التحكم" },
   { path: "/hotspot", icon: Wifi, label: "الهوتسبوت" },
   { path: "/usermanager", icon: Users, label: "يوزر مانجر" },
+  { path: "/vouchers", icon: CreditCard, label: "الكروت" },
   { path: "/settings", icon: Settings, label: "الإعدادات" },
 ];
 
