@@ -175,6 +175,8 @@ export default function UserManagerPage() {
     // Parse rate-limit into rx/tx if format is rx/tx
     const rl = profile["rate-limit"] || "";
     const [rx, tx] = rl.includes("/") ? rl.split("/") : [rl, ""];
+    const tl = profile["transfer-limit"] || "";
+    const [rxTl, txTl] = tl.includes("/") ? tl.split("/") : [tl, ""];
     setProfileForm({
       name: profile.name || "",
       nameForUsers: profile["name-for-users"] || "",
@@ -185,6 +187,10 @@ export default function UserManagerPage() {
       rxRateLimit: rx,
       txRateLimit: tx,
       overrideSharedUsers: profile["override-shared-users"] || "",
+      transferLimit: tl,
+      rxTransferLimit: rxTl,
+      txTransferLimit: txTl,
+      uptimeLimit: profile["uptime-limit"] || profile["uptime"] || "",
     });
     setProfileOpen(true);
   };
