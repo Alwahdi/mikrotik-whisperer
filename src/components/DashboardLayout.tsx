@@ -50,7 +50,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="flex min-h-screen" dir="rtl">
+    <div className="flex min-h-dvh bg-background" dir="rtl">
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm lg:hidden"
@@ -153,8 +153,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 min-w-0 pb-16 lg:pb-0">
-        <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border px-4 sm:px-6 py-3 flex items-center gap-3">
+      <main className="flex-1 min-w-0 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <header className="sticky top-0 z-30 glass border-b border-border px-3 sm:px-6 py-2.5 pt-[max(env(safe-area-inset-top),0.625rem)] flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden text-muted-foreground hover:text-foreground"
@@ -176,11 +176,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             </button>
           </div>
         </header>
-        <div className="p-4 sm:p-6 max-w-6xl mx-auto animate-slide-up">{children}</div>
+        <div className="p-3 sm:p-6 max-w-6xl mx-auto w-full animate-slide-up">{children}</div>
       </main>
 
       {/* Mobile Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-background/95 backdrop-blur-md border-t border-border">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden glass border-t border-border pb-[max(env(safe-area-inset-bottom),0.35rem)]">
         <div className="flex items-center justify-around py-2 px-1">
           {filteredNav.slice(0, 5).map(item => {
             const isActive = location.pathname === item.path;

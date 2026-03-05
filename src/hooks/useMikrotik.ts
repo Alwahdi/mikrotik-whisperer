@@ -222,6 +222,38 @@ export function useUserManagerAction() {
   });
 }
 
+// ─── User Manager Profiles Mutations ────────────────
+export function useUserManagerProfileAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ action, id, data }: { action: string; id?: string; data?: Record<string, any> }) => {
+      const args: string[] = [];
+      if (id) args.push(`=.id=${id}`);
+      if (data) {
+        for (const [k, v] of Object.entries(data)) {
+          if (v !== undefined && v !== null && `${v}` !== "") args.push(`=${k}=${v}`);
+        }
+      }
+
+      const endpointMap: Record<string, string> = {
+        add: "/user-manager/profile/add",
+        set: "/user-manager/profile/set",
+        remove: "/user-manager/profile/remove",
+      };
+
+      return callMikrotikApi(endpointMap[action] || `/user-manager/profile/${action}`, { args });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mikrotik", "usermanager", "profiles"] });
+      qc.invalidateQueries({ queryKey: ["mikrotik", "usermanager", "users"] });
+      toast.success("تم حفظ الباقة بنجاح");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "فشل حفظ الباقة");
+    },
+  });
+}
+
 // ─── System ────────────────────────────────
 export function useSystemResources() {
   return useQuery({

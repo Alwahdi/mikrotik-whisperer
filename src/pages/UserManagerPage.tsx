@@ -5,12 +5,13 @@ import {
   useUserManagerProfiles,
   useUserManagerSessions,
   useUserManagerAction,
+  useUserManagerProfileAction,
 } from "@/hooks/useMikrotik";
 import {
   Users, RefreshCw, AlertTriangle, Package, Clock,
   UserCheck, UserX, Search, MoreHorizontal, UserPlus,
   Ban, Trash2, CheckCircle, XCircle, Eye, ChevronLeft, ChevronRight,
-  Home,
+  Home, PackagePlus, PencilLine,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -45,6 +46,7 @@ export default function UserManagerPage() {
   const { data: sessions, isLoading: loadingSessions, error: sessionsError } = useUserManagerSessions();
   const queryClient = useQueryClient();
   const action = useUserManagerAction();
+  const profileAction = useUserManagerProfileAction();
 
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -53,6 +55,18 @@ export default function UserManagerPage() {
   const [newUser, setNewUser] = useState({ name: "", password: "", profile: "" });
   const [usersPage, setUsersPage] = useState(1);
   const [sessionsPage, setSessionsPage] = useState(1);
+
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileMode, setProfileMode] = useState<"add" | "edit">("add");
+  const [editingProfile, setEditingProfile] = useState<any>(null);
+  const [profileForm, setProfileForm] = useState({
+    name: "",
+    nameForUsers: "",
+    validity: "30d",
+    price: "",
+    rateLimit: "",
+    sharedUsers: "1",
+  });
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["mikrotik", "usermanager"] });
@@ -136,6 +150,75 @@ export default function UserManagerPage() {
         setNewUser({ name: "", password: "", profile: "" });
       }
     });
+  };
+
+  const openAddProfile = () => {
+    setProfileMode("add");
+    setEditingProfile(null);
+    setProfileForm({
+      name: "",
+      nameForUsers: "",
+      validity: "30d",
+      price: "",
+      rateLimit: "",
+      sharedUsers: "1",
+    });
+    setProfileOpen(true);
+  };
+
+  const openEditProfile = (profile: any) => {
+    setProfileMode("edit");
+    setEditingProfile(profile);
+    setProfileForm({
+      name: profile.name || "",
+      nameForUsers: profile["name-for-users"] || "",
+      validity: profile.validity || "",
+      price: profile.price || "",
+      rateLimit: profile["rate-limit"] || "",
+      sharedUsers: profile["shared-users"] || "1",
+    });
+    setProfileOpen(true);
+  };
+
+  const handleSaveProfile = () => {
+    if (!profileForm.name.trim()) {
+      toast.error("اسم الباقة مطلوب");
+      return;
+    }
+
+    const data: Record<string, any> = {
+      name: profileForm.name.trim(),
+      validity: profileForm.validity,
+      price: profileForm.price,
+      "rate-limit": profileForm.rateLimit,
+      "shared-users": profileForm.sharedUsers,
+      "name-for-users": profileForm.nameForUsers,
+    };
+
+    if (profileMode === "edit") {
+      const id = editingProfile?.[".id"] || editingProfile?.id;
+      if (!id) {
+        toast.error("تعذر تحديد الباقة للتعديل");
+        return;
+      }
+      profileAction.mutate(
+        { action: "set", id, data },
+        {
+          onSuccess: () => {
+            setProfileOpen(false);
+            setEditingProfile(null);
+          },
+        },
+      );
+      return;
+    }
+
+    profileAction.mutate(
+      { action: "add", data },
+      {
+        onSuccess: () => setProfileOpen(false),
+      },
+    );
   };
 
   // Reset page on search change
@@ -335,6 +418,13 @@ export default function UserManagerPage() {
 
         {/* Profiles Tab */}
         <TabsContent value="profiles">
+          <div className="flex items-center justify-end mb-3">
+            <Button size="sm" onClick={openAddProfile}>
+              <PackagePlus className="h-3.5 w-3.5 ml-1" />
+              إضافة باقة
+            </Button>
+          </div>
+
           {loadingProfiles ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -349,9 +439,14 @@ export default function UserManagerPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {Array.isArray(profiles) && profiles.map((profile: any, i: number) => (
                 <div key={i} className="rounded-lg border border-border bg-card shadow-card p-4 hover:border-foreground/10 transition-colors">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Package className="h-4 w-4 text-primary" />
-                    <h3 className="font-semibold text-foreground text-sm">{profile.name}</h3>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Package className="h-4 w-4 text-primary shrink-0" />
+                      <h3 className="font-semibold text-foreground text-sm truncate">{profile.name}</h3>
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditProfile(profile)}>
+                      <PencilLine className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                   <div className="space-y-2">
                     {profile["name-for-users"] && <Row label="الاسم" value={profile["name-for-users"]} />}
@@ -359,7 +454,6 @@ export default function UserManagerPage() {
                     {profile.price && <Row label="السعر" value={profile.price} highlight />}
                     {profile["rate-limit"] && <Row label="السرعة" value={profile["rate-limit"]} />}
                     {profile["shared-users"] && <Row label="مشاركة" value={profile["shared-users"]} />}
-                    {profile.override && <Row label="Override" value={JSON.stringify(profile.override).slice(0, 50)} />}
                   </div>
                 </div>
               ))}
@@ -460,6 +554,52 @@ export default function UserManagerPage() {
             <Button variant="outline" onClick={() => setAddOpen(false)}>إلغاء</Button>
             <Button onClick={handleAddUser} disabled={action.isPending}>
               {action.isPending ? "جاري الإضافة..." : "إضافة"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Profile Dialog */}
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>{profileMode === "add" ? "إضافة باقة" : "تعديل باقة"}</DialogTitle>
+            <DialogDescription>حدد بيانات الباقة (السرعة/الصلاحية/السعر)</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">اسم الباقة</label>
+              <Input value={profileForm.name} onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))} placeholder="basic-1d" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">اسم العرض</label>
+              <Input value={profileForm.nameForUsers} onChange={e => setProfileForm(p => ({ ...p, nameForUsers: e.target.value }))} placeholder="باقة يومية" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">الصلاحية</label>
+                <Input value={profileForm.validity} onChange={e => setProfileForm(p => ({ ...p, validity: e.target.value }))} placeholder="30d" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">السعر</label>
+                <Input value={profileForm.price} onChange={e => setProfileForm(p => ({ ...p, price: e.target.value }))} placeholder="100" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">السرعة</label>
+                <Input value={profileForm.rateLimit} onChange={e => setProfileForm(p => ({ ...p, rateLimit: e.target.value }))} placeholder="2M/2M" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">عدد الأجهزة</label>
+                <Input value={profileForm.sharedUsers} onChange={e => setProfileForm(p => ({ ...p, sharedUsers: e.target.value }))} placeholder="1" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProfileOpen(false)}>إلغاء</Button>
+            <Button onClick={handleSaveProfile} disabled={profileAction.isPending}>
+              {profileAction.isPending ? "جاري الحفظ..." : "حفظ"}
             </Button>
           </DialogFooter>
         </DialogContent>

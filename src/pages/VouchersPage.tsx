@@ -83,7 +83,6 @@ export default function VouchersPage() {
   const HISTORY_PAGE_SIZE = 5;
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const printFrameRef = useRef<HTMLIFrameElement>(null);
 
   // Persist batches
   useEffect(() => { saveBatches(batches); }, [batches]);
@@ -258,27 +257,41 @@ ${pages.join("")}
   const handlePrint = (cardsToPrint?: VoucherCard[]) => {
     const toPrint = cardsToPrint || cards;
     if (toPrint.length === 0) return;
-    
+
     const html = buildPrintHtml(toPrint);
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
-    
-    // Use hidden iframe for reliable printing
-    const iframe = printFrameRef.current;
-    if (iframe) {
-      iframe.src = url;
-      iframe.onload = () => {
-        try {
-          iframe.contentWindow?.print();
-        } catch {
-          // Fallback: open in new tab
-          window.open(url, "_blank");
-        }
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
-      };
-    } else {
-      window.open(url, "_blank");
-    }
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "1px";
+    iframe.style.height = "1px";
+    iframe.style.opacity = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+      iframe.remove();
+    };
+
+    iframe.onload = () => {
+      try {
+        const win = iframe.contentWindow;
+        if (!win) throw new Error("تعذر فتح معاينة الطباعة");
+        win.focus();
+        setTimeout(() => win.print(), 120);
+        win.onafterprint = cleanup;
+        setTimeout(cleanup, 60000);
+      } catch {
+        cleanup();
+        toast.error("تعذر فتح نافذة الطباعة. حاول مرة أخرى.");
+      }
+    };
+
+    iframe.src = url;
   };
 
   const handleDeleteBatch = (batchId: string) => {
@@ -299,8 +312,6 @@ ${pages.join("")}
 
   return (
     <DashboardLayout>
-      {/* Hidden iframe for printing */}
-      <iframe ref={printFrameRef} className="hidden" title="print-frame" />
 
       <Breadcrumb className="mb-4">
         <BreadcrumbList>
@@ -591,7 +602,7 @@ ${pages.join("")}
                   <p className="text-muted-foreground text-sm">اضبط الإعدادات واضغط "توليد"</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-h-[60vh] overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[65dvh] overflow-y-auto pr-1">
                   {cards.map((card, i) => (
                     bgImage ? (
                       <div key={i} className="rounded-lg border border-border overflow-hidden relative" style={{ aspectRatio: "1.6" }}>
