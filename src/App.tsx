@@ -14,6 +14,7 @@ import UserManagerPage from "./pages/UserManagerPage";
 import SettingsPage from "./pages/SettingsPage";
 import VouchersPage from "./pages/VouchersPage";
 import BackupsPage from "./pages/BackupsPage";
+import SalesPage from "./pages/SalesPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
