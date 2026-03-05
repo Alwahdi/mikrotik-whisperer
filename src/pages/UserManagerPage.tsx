@@ -559,6 +559,52 @@ export default function UserManagerPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Profile Dialog */}
+      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>{profileMode === "add" ? "إضافة باقة" : "تعديل باقة"}</DialogTitle>
+            <DialogDescription>حدد بيانات الباقة (السرعة/الصلاحية/السعر)</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">اسم الباقة</label>
+              <Input value={profileForm.name} onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))} placeholder="basic-1d" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">اسم العرض</label>
+              <Input value={profileForm.nameForUsers} onChange={e => setProfileForm(p => ({ ...p, nameForUsers: e.target.value }))} placeholder="باقة يومية" />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">الصلاحية</label>
+                <Input value={profileForm.validity} onChange={e => setProfileForm(p => ({ ...p, validity: e.target.value }))} placeholder="30d" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">السعر</label>
+                <Input value={profileForm.price} onChange={e => setProfileForm(p => ({ ...p, price: e.target.value }))} placeholder="100" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">السرعة</label>
+                <Input value={profileForm.rateLimit} onChange={e => setProfileForm(p => ({ ...p, rateLimit: e.target.value }))} placeholder="2M/2M" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">عدد الأجهزة</label>
+                <Input value={profileForm.sharedUsers} onChange={e => setProfileForm(p => ({ ...p, sharedUsers: e.target.value }))} placeholder="1" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProfileOpen(false)}>إلغاء</Button>
+            <Button onClick={handleSaveProfile} disabled={profileAction.isPending}>
+              {profileAction.isPending ? "جاري الحفظ..." : "حفظ"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete Confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent dir="rtl">
