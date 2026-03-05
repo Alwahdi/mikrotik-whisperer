@@ -14,6 +14,7 @@ import UserManagerPage from "./pages/UserManagerPage";
 import SettingsPage from "./pages/SettingsPage";
 import VouchersPage from "./pages/VouchersPage";
 import BackupsPage from "./pages/BackupsPage";
+import SalesPage from "./pages/SalesPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -40,6 +41,7 @@ const App = () => (
             <Route path="/usermanager" element={<ProtectedRoute><UserManagerPage /></ProtectedRoute>} />
             <Route path="/vouchers" element={<ProtectedRoute><VouchersPage /></ProtectedRoute>} />
             <Route path="/backups" element={<ProtectedRoute><BackupsPage /></ProtectedRoute>} />
+            <Route path="/sales" element={<ProtectedRoute><SalesPage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
