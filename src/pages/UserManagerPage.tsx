@@ -389,11 +389,28 @@ export default function UserManagerPage() {
         </TabsList>
 
         <TabsContent value="users">
+          <div className="flex gap-2 mb-3 flex-wrap items-center">
+            <Button size="sm" variant={userFilter === "all" ? "default" : "outline"} className="text-xs h-7" onClick={() => { setUserFilter("all"); setUsersPage(1); setSelectedUsers(new Set()); }}>الكل</Button>
+            <Button size="sm" variant={userFilter === "expired" ? "default" : "outline"} className="text-xs h-7" onClick={() => { setUserFilter("expired"); setUsersPage(1); setSelectedUsers(new Set()); }}>
+              <AlertCircle className="h-3 w-3 ml-1" /> منتهية
+            </Button>
+            {selectedUsers.size > 0 && (
+              <Button size="sm" variant="destructive" className="text-xs h-7 mr-auto" disabled={bulkDeleting} onClick={handleBulkDelete}>
+                {bulkDeleting ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : <Trash2 className="h-3 w-3 ml-1" />}
+                حذف {selectedUsers.size} محدد
+              </Button>
+            )}
+          </div>
           <div className="rounded-lg border border-border bg-card shadow-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
+                    <th className="p-2.5 w-8 text-center">
+                      <button onClick={toggleSelectAll} className="text-muted-foreground hover:text-foreground">
+                        {selectedUsers.size === paginatedUsers.length && paginatedUsers.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                      </button>
+                    </th>
                     <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">المستخدم</th>
                     <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">الباقة</th>
                     <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">الحالة</th>
