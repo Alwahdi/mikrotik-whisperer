@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 
 export default function Index() {
   const config = getMikrotikConfig();
+  const enabled = !!config;
 
   const { data: hotspotUsers, isLoading: loadingH } = useHotspotUsers();
   const { data: umUsers, isLoading: loadingU } = useUserManagerUsers();
@@ -30,6 +31,27 @@ export default function Index() {
   const { data: interfaces } = useInterfaces();
   const { data: dhcpLeases } = useDHCPLeases();
   const { data: health } = useRouterHealth();
+
+  // Alerts - must be before conditional returns
+  const cpuLoad = sysResource?.["cpu-load"] ?? "—";
+  const totalMem = Number(sysResource?.["total-memory"] || 0);
+  const freeMem = Number(sysResource?.["free-memory"] || 0);
+  const memUsed = totalMem > 0 ? Math.round(((totalMem - freeMem) / totalMem) * 100) : 0;
+  const totalHdd = Number(sysResource?.["total-hdd-space"] || 0);
+  const freeHdd = Number(sysResource?.["free-hdd-space"] || 0);
+  const hddUsed = totalHdd > 0 ? Math.round(((totalHdd - freeHdd) / totalHdd) * 100) : 0;
+
+  const alerts = useMemo(() => {
+    const a: { type: "warning" | "error"; msg: string }[] = [];
+    if (Number(cpuLoad) > 80) a.push({ type: "warning", msg: `CPU عالي: ${cpuLoad}%` });
+    if (memUsed > 85) a.push({ type: "warning", msg: `الذاكرة ممتلئة: ${memUsed}%` });
+    if (hddUsed > 90) a.push({ type: "error", msg: `التخزين ممتلئ: ${hddUsed}%` });
+    if (Array.isArray(umUsers)) {
+      const expired = umUsers.filter((u: any) => u.disabled === "true" || u.disabled === true).length;
+      if (expired > 0) a.push({ type: "warning", msg: `${expired} مستخدم معطل في يوزر مانجر` });
+    }
+    return a;
+  }, [cpuLoad, memUsed, hddUsed, umUsers]);
 
   if (!config) {
     return (
