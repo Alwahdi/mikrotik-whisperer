@@ -163,6 +163,31 @@ export default function UserManagerPage() {
     action.mutate({ action: userAction, id });
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedUsers.size === 0) return;
+    setBulkDeleting(true);
+    const ids = Array.from(selectedUsers);
+    for (const id of ids) {
+      try { await new Promise<void>((resolve, reject) => action.mutate({ action: "remove", id }, { onSuccess: () => resolve(), onError: reject })); } catch {}
+    }
+    setSelectedUsers(new Set());
+    setBulkDeleting(false);
+    toast.success(`تم حذف ${ids.length} مستخدم`);
+  };
+
+  const toggleSelectUser = (id: string) => {
+    setSelectedUsers(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedUsers.size === paginatedUsers.length) {
+      setSelectedUsers(new Set());
+    } else {
+      setSelectedUsers(new Set(paginatedUsers.map((u: any) => u[".id"] || u.id)));
+    }
+  };
+  };
+
   const handleAddUser = () => {
     if (!newUser.name || !newUser.password) {
       toast.error("اسم المستخدم وكلمة المرور مطلوبان");
