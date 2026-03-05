@@ -504,12 +504,20 @@ async function executeUserManagerCompatible(
     const profile = parsed.profile || parsed.group;
     const customer = parsed.customer || parsed.owner || "admin";
 
-    // First: create user with best-effort compatibility without profile/group params.
+    // Fast path: try creating user with profile/group directly first (faster for most routers)
+    try {
+      const directAttempts = buildUserManagerCommandAttempts(command, args);
+      return await executeCompatibilityAttempts(client, directAttempts);
+    } catch (err: any) {
+      const errorObj = err instanceof Error ? err : new Error(String(err));
+      if (!isCompatibilityError(errorObj.message)) throw errorObj;
+    }
+
+    // Fallback path: create user first then attach profile
     const addArgs = omitArgsKeys(args, ["profile", "group"]);
     const addAttempts = buildUserManagerCommandAttempts(command, addArgs);
     const addResult = await executeCompatibilityAttempts(client, addAttempts);
 
-    // Second: attach profile/package if provided.
     if (username && profile) {
       await activateUserManagerProfileCompatible(client, command, username, profile, customer);
     }
