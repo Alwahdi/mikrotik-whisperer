@@ -362,7 +362,7 @@ ${pages.join("")}
                         {batch.cards.length} كرت
                       </span>
                       {batch.pushed && (
-                        <span className="inline-block px-2 py-0.5 rounded text-[10px] bg-green-500/10 text-green-600">
+                        <span className="inline-block px-2 py-0.5 rounded text-[10px] bg-primary/10 text-primary">
                           تم الرفع
                         </span>
                       )}
