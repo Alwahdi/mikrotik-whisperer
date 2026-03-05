@@ -567,7 +567,13 @@ async function handleRest(
   }
 }
 
-function buildRestBodyVariants(body?: Record<string, any>): (Record<string, any> | undefined)[] {
+function omitBodyKeys(body: Record<string, any> | undefined, keys: string[]): Record<string, any> | undefined {
+  if (!body) return body;
+  const keySet = new Set(keys);
+  return Object.fromEntries(Object.entries(body).filter(([k]) => !keySet.has(k)));
+}
+
+function buildRestBodyVariants(command: string, body?: Record<string, any>): (Record<string, any> | undefined)[] {
   if (!body || Object.keys(body).length === 0) return [body];
 
   const remapBody = (obj: Record<string, any>, map: Record<string, string>) => {
@@ -584,8 +590,38 @@ function buildRestBodyVariants(body?: Record<string, any>): (Record<string, any>
     remapBody(body, { profile: "group" }),
     remapBody(body, { name: "username" }),
     remapBody(body, { username: "name" }),
+    remapBody(body, { user: "username" }),
+    remapBody(body, { username: "user" }),
+    remapBody(body, { owner: "customer" }),
+    remapBody(body, { customer: "owner" }),
+    remapBody(body, { ".id": "numbers" }),
+    remapBody(body, { numbers: ".id" }),
     remapBody(remapBody(body, { group: "profile" }), { name: "username" }),
   ];
+
+  if (isUserManagerUserAddCommand(command)) {
+    const username = body.username || body.name || body.user;
+    const password = body.password;
+    const profile = body.profile || body.group;
+    const customer = body.customer || body.owner || "admin";
+
+    if (username && password) {
+      variants.unshift(
+        { username, password, profile, customer },
+        { username, password, group: profile, customer },
+        { username, password, profile },
+        { username, password, group: profile },
+        { username, password, customer },
+        { username, password },
+        { name: username, password, profile, customer },
+        { name: username, password, group: profile, customer },
+        { name: username, password, profile },
+        { name: username, password, group: profile },
+        { name: username, password, customer },
+        { name: username, password },
+      );
+    }
+  }
 
   const seen = new Set<string>();
   const out: (Record<string, any> | undefined)[] = [];
@@ -597,6 +633,50 @@ function buildRestBodyVariants(body?: Record<string, any>): (Record<string, any>
   }
 
   return out;
+}
+
+async function activateUserManagerProfileRest(
+  host: string,
+  port: string,
+  protocol: string,
+  user: string,
+  pass: string,
+  command: string,
+  username: string,
+  profile: string,
+  customer: string,
+): Promise<void> {
+  const attempts: Array<{ command: string; method: string; body: Record<string, any> }> = [];
+
+  for (const root of getUserManagerRoots(command)) {
+    const activateCommand = `${root}/user/create-and-activate-profile`;
+    const setCommand = `${root}/user/set`;
+
+    attempts.push(
+      { command: activateCommand, method: "POST", body: { profile, customer, username } },
+      { command: activateCommand, method: "POST", body: { profile, customer, name: username } },
+      { command: activateCommand, method: "POST", body: { profile, customer, user: username } },
+      { command: setCommand, method: "PATCH", body: { username, profile } },
+      { command: setCommand, method: "PATCH", body: { username, group: profile } },
+      { command: setCommand, method: "PATCH", body: { name: username, profile } },
+    );
+  }
+
+  let lastError: Error | null = null;
+  for (const attempt of attempts) {
+    for (const bodyVariant of buildRestBodyVariants(attempt.command, attempt.body)) {
+      try {
+        await handleRest(host, port, protocol, user, pass, attempt.command, attempt.method, bodyVariant);
+        return;
+      } catch (err: any) {
+        const errorObj = err instanceof Error ? err : new Error(String(err));
+        lastError = errorObj;
+        if (!isCompatibilityError(errorObj.message)) throw errorObj;
+      }
+    }
+  }
+
+  throw lastError || new Error("Failed to activate user-manager profile in REST mode");
 }
 
 async function handleRestWithCompat(
@@ -613,8 +693,38 @@ async function handleRestWithCompat(
     return handleRest(host, port, protocol, user, pass, command, method, restBody);
   }
 
+  if (isUserManagerUserAddCommand(command)) {
+    const username = restBody?.username || restBody?.name || restBody?.user;
+    const profile = restBody?.profile || restBody?.group;
+    const customer = restBody?.customer || restBody?.owner || "admin";
+    const addBody = omitBodyKeys(restBody, ["profile", "group"]);
+
+    let addResult: any;
+    let addError: Error | null = null;
+
+    for (const bodyVariant of buildRestBodyVariants(command, addBody)) {
+      try {
+        addResult = await handleRest(host, port, protocol, user, pass, command, method, bodyVariant);
+        addError = null;
+        break;
+      } catch (err: any) {
+        const errorObj = err instanceof Error ? err : new Error(String(err));
+        addError = errorObj;
+        if (!isCompatibilityError(errorObj.message)) throw errorObj;
+      }
+    }
+
+    if (addError) throw addError;
+
+    if (username && profile) {
+      await activateUserManagerProfileRest(host, port, protocol, user, pass, command, username, profile, customer);
+    }
+
+    return addResult;
+  }
+
   let lastError: Error | null = null;
-  for (const bodyVariant of buildRestBodyVariants(restBody)) {
+  for (const bodyVariant of buildRestBodyVariants(command, restBody)) {
     try {
       return await handleRest(host, port, protocol, user, pass, command, method, bodyVariant);
     } catch (err: any) {
