@@ -312,8 +312,6 @@ ${pages.join("")}
 
   return (
     <DashboardLayout>
-      {/* Hidden iframe for printing */}
-      <iframe ref={printFrameRef} className="hidden" title="print-frame" />
 
       <Breadcrumb className="mb-4">
         <BreadcrumbList>
