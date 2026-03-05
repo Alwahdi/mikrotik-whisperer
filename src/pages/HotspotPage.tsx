@@ -1,6 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import { useHotspotUsers, useHotspotAllUsers, useHotspotProfiles } from "@/hooks/useMikrotik";
-import { Wifi, RefreshCw } from "lucide-react";
+import { Wifi, RefreshCw, Users, UserCheck, UserX } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -18,55 +18,81 @@ export default function HotspotPage() {
     <DashboardLayout>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <Wifi className="h-5 w-5 text-primary" />
-            الهوتسبوت
-          </h2>
-          <p className="text-muted-foreground text-sm">إدارة مستخدمي الهوتسبوت</p>
+          <h2 className="text-lg font-bold text-foreground">الهوتسبوت</h2>
+          <p className="text-muted-foreground text-xs mt-0.5">إدارة مستخدمي الهوتسبوت</p>
         </div>
         <button
           onClick={refresh}
-          className="p-2 rounded-lg bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
+          className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors"
         >
           <RefreshCw className="h-4 w-4" />
         </button>
       </div>
 
+      {/* Quick Stats */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="rounded-lg border border-border bg-card p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Wifi className="h-3.5 w-3.5 text-success" />
+            <span className="text-xs text-muted-foreground">متصلين</span>
+          </div>
+          <p className="text-xl font-bold text-foreground">{loadingActive ? "—" : (Array.isArray(activeUsers) ? activeUsers.length : 0)}</p>
+        </div>
+        <div className="rounded-lg border border-border bg-card p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <Users className="h-3.5 w-3.5 text-foreground" />
+            <span className="text-xs text-muted-foreground">إجمالي</span>
+          </div>
+          <p className="text-xl font-bold text-foreground">{loadingAll ? "—" : (Array.isArray(allUsers) ? allUsers.length : 0)}</p>
+        </div>
+        <div className="rounded-lg border border-border bg-card p-3">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs text-muted-foreground">بروفايلات</span>
+          </div>
+          <p className="text-xl font-bold text-foreground">{Array.isArray(profiles) ? profiles.length : 0}</p>
+        </div>
+      </div>
+
       <Tabs defaultValue="active" dir="rtl">
-        <TabsList className="bg-muted mb-4">
-          <TabsTrigger value="active">المتصلين ({Array.isArray(activeUsers) ? activeUsers.length : 0})</TabsTrigger>
-          <TabsTrigger value="users">المستخدمين ({Array.isArray(allUsers) ? allUsers.length : 0})</TabsTrigger>
-          <TabsTrigger value="profiles">البروفايلات ({Array.isArray(profiles) ? profiles.length : 0})</TabsTrigger>
+        <TabsList className="bg-muted mb-4 w-full justify-start">
+          <TabsTrigger value="active" className="text-xs">المتصلين</TabsTrigger>
+          <TabsTrigger value="users" className="text-xs">المستخدمين</TabsTrigger>
+          <TabsTrigger value="profiles" className="text-xs">البروفايلات</TabsTrigger>
         </TabsList>
 
         <TabsContent value="active">
-          <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden">
+          <div className="rounded-lg border border-border bg-card shadow-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border text-muted-foreground bg-muted/50">
-                    <th className="text-right p-3 font-medium text-xs">المستخدم</th>
-                    <th className="text-right p-3 font-medium text-xs">IP</th>
-                    <th className="text-right p-3 font-medium text-xs">MAC</th>
-                    <th className="text-right p-3 font-medium text-xs">المدة</th>
-                    <th className="text-right p-3 font-medium text-xs">↓ تحميل</th>
-                    <th className="text-right p-3 font-medium text-xs">↑ رفع</th>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">المستخدم</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">IP</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">MAC</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">المدة</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">↓</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">↑</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingActive ? (
-                    <tr><td colSpan={6} className="p-8 text-center text-muted-foreground text-sm">جاري التحميل...</td></tr>
+                    <tr><td colSpan={6} className="p-10 text-center text-muted-foreground text-sm">جاري التحميل...</td></tr>
                   ) : !Array.isArray(activeUsers) || activeUsers.length === 0 ? (
-                    <tr><td colSpan={6} className="p-8 text-center text-muted-foreground text-sm">لا يوجد متصلين حالياً</td></tr>
+                    <tr>
+                      <td colSpan={6} className="p-10 text-center">
+                        <Wifi className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                        <p className="text-muted-foreground text-sm">لا يوجد متصلين حالياً</p>
+                      </td>
+                    </tr>
                   ) : (
                     activeUsers.map((user: any, i: number) => (
                       <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                         <td className="p-3 font-medium text-foreground text-sm">{user.user || "—"}</td>
                         <td className="p-3 font-mono text-xs text-muted-foreground">{user.address || "—"}</td>
                         <td className="p-3 font-mono text-xs text-muted-foreground">{user["mac-address"] || "—"}</td>
-                        <td className="p-3 text-muted-foreground text-sm">{user.uptime || "—"}</td>
-                        <td className="p-3 text-primary text-sm">{formatBytes(user["bytes-in"])}</td>
-                        <td className="p-3 text-accent text-sm">{formatBytes(user["bytes-out"])}</td>
+                        <td className="p-3 text-muted-foreground text-xs">{user.uptime || "—"}</td>
+                        <td className="p-3 font-mono text-xs text-foreground">{formatBytes(user["bytes-in"])}</td>
+                        <td className="p-3 font-mono text-xs text-foreground">{formatBytes(user["bytes-out"])}</td>
                       </tr>
                     ))
                   )}
@@ -77,36 +103,43 @@ export default function HotspotPage() {
         </TabsContent>
 
         <TabsContent value="users">
-          <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden">
+          <div className="rounded-lg border border-border bg-card shadow-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border text-muted-foreground bg-muted/50">
-                    <th className="text-right p-3 font-medium text-xs">المستخدم</th>
-                    <th className="text-right p-3 font-medium text-xs">البروفايل</th>
-                    <th className="text-right p-3 font-medium text-xs">الحد</th>
-                    <th className="text-right p-3 font-medium text-xs">الحالة</th>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">المستخدم</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">البروفايل</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">الحد</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">الحالة</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingAll ? (
-                    <tr><td colSpan={4} className="p-8 text-center text-muted-foreground text-sm">جاري التحميل...</td></tr>
+                    <tr><td colSpan={4} className="p-10 text-center text-muted-foreground text-sm">جاري التحميل...</td></tr>
                   ) : !Array.isArray(allUsers) || allUsers.length === 0 ? (
-                    <tr><td colSpan={4} className="p-8 text-center text-muted-foreground text-sm">لا يوجد مستخدمين</td></tr>
+                    <tr>
+                      <td colSpan={4} className="p-10 text-center">
+                        <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                        <p className="text-muted-foreground text-sm">لا يوجد مستخدمين</p>
+                      </td>
+                    </tr>
                   ) : (
                     allUsers.map((user: any, i: number) => (
                       <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                         <td className="p-3 font-medium text-foreground text-sm">{user.name || "—"}</td>
-                        <td className="p-3 text-muted-foreground text-sm">{user.profile || "—"}</td>
-                        <td className="p-3 text-muted-foreground text-sm">{user["limit-uptime"] || "—"}</td>
+                        <td className="p-3 text-muted-foreground text-xs">{user.profile || "—"}</td>
+                        <td className="p-3 text-muted-foreground text-xs">{user["limit-uptime"] || "—"}</td>
                         <td className="p-3">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                            user.disabled === "true" || user.disabled === true
-                              ? "bg-destructive/10 text-destructive" 
-                              : "bg-success/10 text-success"
-                          }`}>
-                            {user.disabled === "true" || user.disabled === true ? "معطل" : "نشط"}
-                          </span>
+                          {user.disabled === "true" || user.disabled === true ? (
+                            <span className="inline-flex items-center gap-1 text-xs text-destructive">
+                              <UserX className="h-3 w-3" /> معطل
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs text-success">
+                              <UserCheck className="h-3 w-3" /> نشط
+                            </span>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -120,13 +153,13 @@ export default function HotspotPage() {
         <TabsContent value="profiles">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {Array.isArray(profiles) && profiles.map((profile: any, i: number) => (
-              <div key={i} className="rounded-xl border border-border bg-card shadow-card p-4">
+              <div key={i} className="rounded-lg border border-border bg-card shadow-card p-4">
                 <h3 className="font-semibold text-foreground mb-3 text-sm">{profile.name}</h3>
                 <div className="space-y-2 text-sm">
                   {profile["rate-limit"] && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground text-xs">السرعة</span>
-                      <span className="font-mono text-primary text-xs">{profile["rate-limit"]}</span>
+                      <span className="font-mono text-foreground text-xs">{profile["rate-limit"]}</span>
                     </div>
                   )}
                   {profile["shared-users"] && (
@@ -145,7 +178,9 @@ export default function HotspotPage() {
               </div>
             ))}
             {(!Array.isArray(profiles) || profiles.length === 0) && (
-              <p className="text-muted-foreground col-span-full text-center py-8 text-sm">لا توجد بروفايلات</p>
+              <div className="col-span-full text-center py-10">
+                <p className="text-muted-foreground text-sm">لا توجد بروفايلات</p>
+              </div>
             )}
           </div>
         </TabsContent>

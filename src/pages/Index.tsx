@@ -29,16 +29,16 @@ export default function Index() {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-          <div className="p-4 rounded-2xl bg-primary/10 mb-6">
-            <Settings className="h-10 w-10 text-primary" />
+          <div className="p-4 rounded-xl gradient-primary mb-6">
+            <Settings className="h-8 w-8 text-primary-foreground" />
           </div>
-          <h2 className="text-xl font-bold text-foreground mb-2">مرحباً بك!</h2>
-          <p className="text-muted-foreground mb-6 text-sm max-w-sm">
-            اذهب لصفحة الراوترات لإضافة جهاز مايكروتيك والبدء
+          <h2 className="text-lg font-bold text-foreground mb-2">مرحباً بك</h2>
+          <p className="text-muted-foreground mb-6 text-sm max-w-xs">
+            اذهب لصفحة الراوترات لإضافة جهاز والبدء
           </p>
           <Link
             to="/routers"
-            className="gradient-primary text-primary-foreground font-medium py-2.5 px-6 rounded-xl text-sm hover:opacity-90 transition-opacity shadow-glow"
+            className="gradient-primary text-primary-foreground font-medium py-2.5 px-6 rounded-lg text-sm hover:opacity-90 transition-opacity"
           >
             إدارة الراوترات
           </Link>
@@ -65,8 +65,8 @@ export default function Index() {
     <DashboardLayout>
       {/* Header */}
       <div className="mb-6">
-        <h2 className="text-xl font-bold text-foreground">{routerName}</h2>
-        <p className="text-muted-foreground text-sm flex items-center gap-2">
+        <h2 className="text-lg font-bold text-foreground">{routerName}</h2>
+        <p className="text-muted-foreground text-xs flex items-center gap-2 mt-0.5">
           <span className="h-1.5 w-1.5 rounded-full bg-success inline-block" />
           {sysResource?.version || "RouterOS"} • {config.mode === "rest" ? "REST" : "API"}
         </p>
@@ -101,13 +101,13 @@ export default function Index() {
 
       {/* Active Hotspot Users */}
       {Array.isArray(hotspotUsers) && hotspotUsers.length > 0 && (
-        <div className="rounded-xl border border-border bg-card shadow-card p-5 mb-6">
+        <div className="rounded-lg border border-border bg-card shadow-card p-5 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Wifi className="h-4 w-4 text-primary" />
+            <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide flex items-center gap-2">
+              <Wifi className="h-3.5 w-3.5" />
               المتصلين ({hotspotUsers.length})
             </h3>
-            <Link to="/hotspot" className="text-xs text-primary hover:underline">عرض الكل</Link>
+            <Link to="/hotspot" className="text-xs text-muted-foreground hover:text-foreground transition-colors">عرض الكل →</Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -128,8 +128,8 @@ export default function Index() {
                     <td className="p-2 font-mono text-muted-foreground">{u.address || "—"}</td>
                     <td className="p-2 font-mono text-muted-foreground">{u["mac-address"] || "—"}</td>
                     <td className="p-2 text-muted-foreground">{u.uptime || "—"}</td>
-                    <td className="p-2 text-primary">{formatSize(u["bytes-in"])}</td>
-                    <td className="p-2 text-accent">{formatSize(u["bytes-out"])}</td>
+                    <td className="p-2 font-mono text-foreground">{formatSize(u["bytes-in"])}</td>
+                    <td className="p-2 font-mono text-foreground">{formatSize(u["bytes-out"])}</td>
                   </tr>
                 ))}
               </tbody>
@@ -140,21 +140,21 @@ export default function Index() {
 
       {/* Interfaces */}
       {Array.isArray(interfaces) && interfaces.length > 0 && (
-        <div className="rounded-xl border border-border bg-card shadow-card p-5">
-          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-            <Network className="h-4 w-4 text-info" />
+        <div className="rounded-lg border border-border bg-card shadow-card p-5">
+          <h3 className="text-xs font-semibold text-foreground mb-4 uppercase tracking-wide flex items-center gap-2">
+            <Network className="h-3.5 w-3.5" />
             الواجهات
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {interfaces.filter((i: any) => i.type !== "loopback").slice(0, 9).map((iface: any, i: number) => {
               const running = iface.running === "true" || iface.running === true;
               return (
-                <div key={i} className={`p-3 rounded-lg border ${running ? "border-success/20 bg-success/5" : "border-border bg-muted/50"}`}>
+                <div key={i} className={`p-3 rounded-md border transition-colors ${running ? "border-success/20 bg-success/5" : "border-border bg-muted/50"}`}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-medium text-foreground font-mono">{iface.name}</span>
-                    <span className={`h-1.5 w-1.5 rounded-full ${running ? "bg-success" : "bg-muted-foreground"}`} />
+                    <span className={`h-1.5 w-1.5 rounded-full ${running ? "bg-success" : "bg-muted-foreground/30"}`} />
                   </div>
-                  <div className="text-[10px] text-muted-foreground">
+                  <div className="text-[10px] text-muted-foreground font-mono">
                     ↓ {formatSize(iface["rx-byte"])} / ↑ {formatSize(iface["tx-byte"])}
                   </div>
                 </div>

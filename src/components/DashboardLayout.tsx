@@ -39,14 +39,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 right-0 z-50 w-60 bg-sidebar border-l border-sidebar-border
+        fixed inset-y-0 right-0 z-50 w-56 bg-sidebar border-l border-sidebar-border
         transform transition-transform duration-200 ease-in-out
         lg:relative lg:translate-x-0
         ${sidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"}
       `}>
         {/* Logo */}
-        <div className="flex items-center gap-3 p-4 border-b border-sidebar-border">
-          <div className="p-1.5 rounded-lg gradient-primary">
+        <div className="flex items-center gap-3 px-4 py-5 border-b border-sidebar-border">
+          <div className="p-1.5 rounded-md gradient-primary">
             <Router className="h-4 w-4 text-primary-foreground" />
           </div>
           <div className="flex-1 min-w-0">
@@ -63,7 +63,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
 
         {/* Nav */}
-        <nav className="p-2 space-y-0.5">
+        <nav className="p-2 mt-2 space-y-0.5">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
@@ -72,16 +72,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 to={item.path}
                 onClick={() => setSidebarOpen(false)}
                 className={`
-                  flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all
+                  flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-all
                   ${isActive
-                    ? "bg-primary/10 text-primary"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent"
+                    ? "bg-primary text-primary-foreground font-medium"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent font-normal"
                   }
                 `}
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}
-                {isActive && <ChevronLeft className="h-3 w-3 mr-auto opacity-50" />}
               </Link>
             );
           })}
@@ -97,13 +96,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
               {isDark ? "نهاري" : "ليلي"}
             </button>
-            <Link to="/routers" className="text-xs text-muted-foreground hover:text-primary transition-colors">
+            <Link to="/routers" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               تغيير الراوتر
             </Link>
           </div>
           <button
             onClick={() => { signOut(); navigate("/auth"); }}
-            className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1.5 rounded-lg hover:bg-muted"
+            className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1.5 rounded-md hover:bg-muted"
           >
             <LogOut className="h-3 w-3" />
             تسجيل خروج
@@ -119,7 +118,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       {/* Main */}
       <main className="flex-1 min-w-0">
-        <header className="sticky top-0 z-30 glass border-b border-border px-4 sm:px-6 py-2.5 flex items-center gap-3">
+        <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b border-border px-4 sm:px-6 py-3 flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden text-muted-foreground hover:text-foreground"
@@ -135,13 +134,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <div className="mr-auto">
             <button
               onClick={() => setIsDark(!isDark)}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
           </div>
         </header>
-        <div className="p-4 sm:p-6">{children}</div>
+        <div className="p-4 sm:p-6 max-w-6xl mx-auto">{children}</div>
       </main>
     </div>
   );
