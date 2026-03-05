@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 
 const PAGE_SIZE = 20;
 
@@ -51,6 +52,7 @@ export default function UserManagerPage() {
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [deleteProfileTarget, setDeleteProfileTarget] = useState<any>(null);
   const [detailUser, setDetailUser] = useState<any>(null);
   const [newUser, setNewUser] = useState({ name: "", password: "", profile: "" });
   const [usersPage, setUsersPage] = useState(1);
@@ -66,10 +68,15 @@ export default function UserManagerPage() {
     price: "",
     rateLimit: "",
     sharedUsers: "1",
+    rxRateLimit: "",
+    txRateLimit: "",
+    overrideSharedUsers: "",
   });
 
+  const config = getMikrotikConfig();
+
   const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["mikrotik", "usermanager"] });
+    queryClient.invalidateQueries({ queryKey: ["mikrotik"] });
     toast.success("جاري تحديث البيانات...");
   };
 
@@ -79,22 +86,17 @@ export default function UserManagerPage() {
     (usersError as any)?.message?.includes("no such command")
   );
 
-  // Build profile name lookup map
   const profileMap = useMemo(() => {
     const map: Record<string, string> = {};
     if (Array.isArray(profiles)) {
       profiles.forEach((p: any) => {
-        if (p.name) {
-          map[p.name] = p.name;
-          map[p[".id"]] = p.name;
-        }
+        if (p.name) { map[p.name] = p.name; map[p[".id"]] = p.name; }
       });
     }
     return map;
   }, [profiles]);
 
   const getProfileName = (user: any): string => {
-    // Try all possible profile field names from v6 and v7
     const raw = user.group || user.profile || user["actual-profile"] || user.actual_profile || "";
     if (!raw) return "—";
     return profileMap[raw] || raw;
@@ -122,7 +124,6 @@ export default function UserManagerPage() {
     );
   }, [allSessions, search]);
 
-  // Paginated slices
   const usersTotalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
   const sessionsTotalPages = Math.max(1, Math.ceil(filteredSessions.length / PAGE_SIZE));
   const paginatedUsers = filteredUsers.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE);
@@ -156,12 +157,9 @@ export default function UserManagerPage() {
     setProfileMode("add");
     setEditingProfile(null);
     setProfileForm({
-      name: "",
-      nameForUsers: "",
-      validity: "30d",
-      price: "",
-      rateLimit: "",
-      sharedUsers: "1",
+      name: "", nameForUsers: "", validity: "30d", price: "",
+      rateLimit: "", sharedUsers: "1", rxRateLimit: "", txRateLimit: "",
+      overrideSharedUsers: "",
     });
     setProfileOpen(true);
   };
@@ -169,13 +167,19 @@ export default function UserManagerPage() {
   const openEditProfile = (profile: any) => {
     setProfileMode("edit");
     setEditingProfile(profile);
+    // Parse rate-limit into rx/tx if format is rx/tx
+    const rl = profile["rate-limit"] || "";
+    const [rx, tx] = rl.includes("/") ? rl.split("/") : [rl, ""];
     setProfileForm({
       name: profile.name || "",
       nameForUsers: profile["name-for-users"] || "",
       validity: profile.validity || "",
       price: profile.price || "",
-      rateLimit: profile["rate-limit"] || "",
+      rateLimit: rl,
       sharedUsers: profile["shared-users"] || "1",
+      rxRateLimit: rx,
+      txRateLimit: tx,
+      overrideSharedUsers: profile["override-shared-users"] || "",
     });
     setProfileOpen(true);
   };
@@ -186,42 +190,46 @@ export default function UserManagerPage() {
       return;
     }
 
+    // Build rate-limit from rx/tx
+    let rateLimit = profileForm.rateLimit;
+    if (profileForm.rxRateLimit || profileForm.txRateLimit) {
+      rateLimit = `${profileForm.rxRateLimit || "0"}/${profileForm.txRateLimit || "0"}`;
+    }
+
     const data: Record<string, any> = {
       name: profileForm.name.trim(),
       validity: profileForm.validity,
       price: profileForm.price,
-      "rate-limit": profileForm.rateLimit,
+      "rate-limit": rateLimit,
       "shared-users": profileForm.sharedUsers,
       "name-for-users": profileForm.nameForUsers,
     };
+    if (profileForm.overrideSharedUsers) {
+      data["override-shared-users"] = profileForm.overrideSharedUsers;
+    }
 
     if (profileMode === "edit") {
       const id = editingProfile?.[".id"] || editingProfile?.id;
-      if (!id) {
-        toast.error("تعذر تحديد الباقة للتعديل");
-        return;
-      }
-      profileAction.mutate(
-        { action: "set", id, data },
-        {
-          onSuccess: () => {
-            setProfileOpen(false);
-            setEditingProfile(null);
-          },
-        },
-      );
+      if (!id) { toast.error("تعذر تحديد الباقة"); return; }
+      profileAction.mutate({ action: "set", id, data }, {
+        onSuccess: () => { setProfileOpen(false); setEditingProfile(null); },
+      });
       return;
     }
 
-    profileAction.mutate(
-      { action: "add", data },
-      {
-        onSuccess: () => setProfileOpen(false),
-      },
-    );
+    profileAction.mutate({ action: "add", data }, {
+      onSuccess: () => setProfileOpen(false),
+    });
   };
 
-  // Reset page on search change
+  const handleDeleteProfile = (profile: any) => {
+    const id = profile[".id"] || profile.id;
+    if (!id) { toast.error("تعذر تحديد الباقة"); return; }
+    profileAction.mutate({ action: "remove", id }, {
+      onSuccess: () => setDeleteProfileTarget(null),
+    });
+  };
+
   const handleSearch = (val: string) => {
     setSearch(val);
     setUsersPage(1);
@@ -230,68 +238,63 @@ export default function UserManagerPage() {
 
   return (
     <DashboardLayout>
-      {/* Breadcrumb */}
       <Breadcrumb className="mb-4">
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild><Link to="/"><Home className="h-3.5 w-3.5" /></Link></BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>يوزر مانجر</BreadcrumbPage>
-          </BreadcrumbItem>
+          <BreadcrumbItem><BreadcrumbPage>يوزر مانجر</BreadcrumbPage></BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
 
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
         <div>
           <h1 className="text-lg font-bold text-foreground">يوزر مانجر</h1>
-          <p className="text-muted-foreground text-xs mt-0.5">إدارة المستخدمين والباقات والجلسات</p>
+          <p className="text-muted-foreground text-xs mt-0.5">
+            إدارة المستخدمين والباقات والجلسات
+            {config && <span className="font-mono text-[10px] mr-2">({config.host})</span>}
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
+          <Button size="sm" variant="outline" onClick={() => setAddOpen(true)} className="h-8">
             <UserPlus className="h-3.5 w-3.5 ml-1" />
-            إضافة
+            <span className="hidden sm:inline">إضافة</span>
           </Button>
-          <Button size="icon" variant="outline" onClick={refresh}>
+          <Button size="icon" variant="outline" onClick={refresh} className="h-8 w-8">
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Warnings */}
       {isNotInstalled && (
-        <div className="mb-5 p-4 rounded-lg bg-warning/5 border border-warning/20">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+        <div className="mb-4 p-3 rounded-lg bg-warning/5 border border-warning/20">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-foreground text-sm">User Manager غير مثبّت</p>
-              <p className="text-muted-foreground text-xs mt-1 leading-relaxed">
-                حزمة User Manager غير مثبّتة على هذا الراوتر. حمّل الحزمة من موقع MikroTik ثم أعد تشغيل الراوتر.
-              </p>
+              <p className="text-muted-foreground text-xs mt-1">حمّل الحزمة من موقع MikroTik ثم أعد تشغيل الراوتر.</p>
             </div>
           </div>
         </div>
       )}
 
       {hasError && !isNotInstalled && (
-        <div className="mb-5 p-4 rounded-lg bg-destructive/5 border border-destructive/20">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+        <div className="mb-4 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold text-foreground text-sm">خطأ في الاتصال</p>
               <p className="text-muted-foreground text-xs mt-1">
-                {(usersError as any)?.message || (profilesError as any)?.message || "حدث خطأ أثناء جلب البيانات"}
+                {(usersError as any)?.message || (profilesError as any)?.message || "حدث خطأ"}
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Quick Stats */}
       {!isNotInstalled && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
           <StatBox icon={<Users className="h-3.5 w-3.5 text-foreground" />} label="إجمالي" value={loadingUsers ? null : allUsers.length} loading={loadingUsers} />
           <StatBox icon={<UserCheck className="h-3.5 w-3.5 text-success" />} label="نشط" value={loadingUsers ? null : activeCount} loading={loadingUsers} />
           <StatBox icon={<UserX className="h-3.5 w-3.5 text-destructive" />} label="معطل" value={loadingUsers ? null : disabledCount} loading={loadingUsers} />
@@ -299,20 +302,18 @@ export default function UserManagerPage() {
         </div>
       )}
 
-      {/* Search */}
-      <div className="relative mb-4">
+      <div className="relative mb-3">
         <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="بحث عن مستخدم، باقة، أو تعليق..."
+          placeholder="بحث..."
           value={search}
           onChange={(e) => handleSearch(e.target.value)}
-          className="pr-10 text-sm"
+          className="pr-10 text-sm h-9"
         />
       </div>
 
-      {/* Tabs */}
       <Tabs defaultValue="users" dir="rtl">
-        <TabsList className="bg-muted mb-4 w-full justify-start">
+        <TabsList className="bg-muted mb-3 w-full justify-start">
           <TabsTrigger value="users" className="text-xs">
             المستخدمين {!loadingUsers && `(${allUsers.length})`}
           </TabsTrigger>
@@ -324,34 +325,33 @@ export default function UserManagerPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Users Tab */}
         <TabsContent value="users">
           <div className="rounded-lg border border-border bg-card shadow-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">المستخدم</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">الباقة</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">الحالة</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground hidden sm:table-cell">التعليق</th>
-                    <th className="text-center p-3 font-medium text-xs text-muted-foreground w-12">إجراء</th>
+                    <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">المستخدم</th>
+                    <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">الباقة</th>
+                    <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">الحالة</th>
+                    <th className="text-right p-2.5 font-medium text-xs text-muted-foreground hidden sm:table-cell">التعليق</th>
+                    <th className="text-center p-2.5 font-medium text-xs text-muted-foreground w-10">إجراء</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingUsers ? (
                     Array.from({ length: 5 }).map((_, i) => (
                       <tr key={i} className="border-b border-border/50">
-                        <td className="p-3"><Skeleton className="h-4 w-24" /></td>
-                        <td className="p-3"><Skeleton className="h-4 w-20" /></td>
-                        <td className="p-3"><Skeleton className="h-4 w-12" /></td>
-                        <td className="p-3 hidden sm:table-cell"><Skeleton className="h-4 w-16" /></td>
-                        <td className="p-3"><Skeleton className="h-4 w-6 mx-auto" /></td>
+                        <td className="p-2.5"><Skeleton className="h-4 w-24" /></td>
+                        <td className="p-2.5"><Skeleton className="h-4 w-20" /></td>
+                        <td className="p-2.5"><Skeleton className="h-4 w-12" /></td>
+                        <td className="p-2.5 hidden sm:table-cell"><Skeleton className="h-4 w-16" /></td>
+                        <td className="p-2.5"><Skeleton className="h-4 w-6 mx-auto" /></td>
                       </tr>
                     ))
                   ) : paginatedUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-10 text-center">
+                      <td colSpan={5} className="p-8 text-center">
                         <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
                         <p className="text-muted-foreground text-sm">{search ? "لا توجد نتائج" : "لا يوجد مستخدمين"}</p>
                       </td>
@@ -361,29 +361,29 @@ export default function UserManagerPage() {
                       const isDisabled = user.disabled === "true" || user.disabled === true;
                       return (
                         <tr key={user[".id"] || i} className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
-                          <td className="p-3 font-medium text-foreground text-sm">{user.name || user.username || "—"}</td>
-                          <td className="p-3 text-muted-foreground text-xs">
-                            <span className="inline-block px-2 py-0.5 rounded bg-muted text-foreground text-[11px]">
+                          <td className="p-2.5 font-medium text-foreground text-sm">{user.name || user.username || "—"}</td>
+                          <td className="p-2.5">
+                            <span className="inline-block px-1.5 py-0.5 rounded bg-muted text-foreground text-[10px]">
                               {getProfileName(user)}
                             </span>
                           </td>
-                          <td className="p-3">
+                          <td className="p-2.5">
                             <span className={`inline-flex items-center gap-1 text-xs ${isDisabled ? "text-destructive" : "text-success"}`}>
                               {isDisabled ? <XCircle className="h-3 w-3" /> : <CheckCircle className="h-3 w-3" />}
-                              {isDisabled ? "معطل" : "نشط"}
+                              <span className="hidden sm:inline">{isDisabled ? "معطل" : "نشط"}</span>
                             </span>
                           </td>
-                          <td className="p-3 text-muted-foreground text-xs max-w-[150px] truncate hidden sm:table-cell">{user.comment || "—"}</td>
-                          <td className="p-3 text-center">
+                          <td className="p-2.5 text-muted-foreground text-xs max-w-[120px] truncate hidden sm:table-cell">{user.comment || "—"}</td>
+                          <td className="p-2.5 text-center">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button variant="ghost" size="icon" className="h-7 w-7 opacity-60 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-40">
+                              <DropdownMenuContent align="end" className="w-36">
                                 <DropdownMenuItem onClick={() => setDetailUser(user)}>
-                                  <Eye className="h-3.5 w-3.5 ml-2" /> عرض التفاصيل
+                                  <Eye className="h-3.5 w-3.5 ml-2" /> التفاصيل
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {isDisabled ? (
@@ -409,26 +409,23 @@ export default function UserManagerPage() {
                 </tbody>
               </table>
             </div>
-            {/* Pagination */}
             {!loadingUsers && filteredUsers.length > PAGE_SIZE && (
               <PaginationBar page={usersPage} totalPages={usersTotalPages} onPageChange={setUsersPage} total={filteredUsers.length} />
             )}
           </div>
         </TabsContent>
 
-        {/* Profiles Tab */}
         <TabsContent value="profiles">
           <div className="flex items-center justify-end mb-3">
-            <Button size="sm" onClick={openAddProfile}>
-              <PackagePlus className="h-3.5 w-3.5 ml-1" />
-              إضافة باقة
+            <Button size="sm" onClick={openAddProfile} className="h-8">
+              <PackagePlus className="h-3.5 w-3.5 ml-1" /> إضافة باقة
             </Button>
           </div>
 
           {loadingProfiles ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="rounded-lg border border-border bg-card p-4">
+                <div key={i} className="rounded-lg border border-border bg-card p-3">
                   <Skeleton className="h-5 w-32 mb-3" />
                   <Skeleton className="h-4 w-full mb-2" />
                   <Skeleton className="h-4 w-2/3" />
@@ -436,29 +433,35 @@ export default function UserManagerPage() {
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {Array.isArray(profiles) && profiles.map((profile: any, i: number) => (
-                <div key={i} className="rounded-lg border border-border bg-card shadow-card p-4 hover:border-foreground/10 transition-colors">
-                  <div className="flex items-center justify-between gap-2 mb-3">
+                <div key={i} className="rounded-lg border border-border bg-card shadow-card p-3 hover:border-foreground/10 transition-colors">
+                  <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <Package className="h-4 w-4 text-primary shrink-0" />
                       <h3 className="font-semibold text-foreground text-sm truncate">{profile.name}</h3>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditProfile(profile)}>
-                      <PencilLine className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="flex gap-0.5">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditProfile(profile)}>
+                        <PencilLine className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteProfileTarget(profile)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     {profile["name-for-users"] && <Row label="الاسم" value={profile["name-for-users"]} />}
                     {profile.validity && <Row label="الصلاحية" value={profile.validity} />}
                     {profile.price && <Row label="السعر" value={profile.price} highlight />}
                     {profile["rate-limit"] && <Row label="السرعة" value={profile["rate-limit"]} />}
-                    {profile["shared-users"] && <Row label="مشاركة" value={profile["shared-users"]} />}
+                    {profile["shared-users"] && <Row label="أجهزة" value={profile["shared-users"]} />}
+                    {profile["override-shared-users"] && <Row label="Override" value={profile["override-shared-users"]} />}
                   </div>
                 </div>
               ))}
               {(!Array.isArray(profiles) || profiles.length === 0) && (
-                <div className="col-span-full text-center py-10">
+                <div className="col-span-full text-center py-8">
                   <Package className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
                   <p className="text-muted-foreground text-sm">لا توجد باقات</p>
                 </div>
@@ -467,34 +470,33 @@ export default function UserManagerPage() {
           )}
         </TabsContent>
 
-        {/* Sessions Tab */}
         <TabsContent value="sessions">
           <div className="rounded-lg border border-border bg-card shadow-card overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">المستخدم</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">البداية</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground hidden sm:table-cell">النهاية</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">↓ تحميل</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">↑ رفع</th>
+                    <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">المستخدم</th>
+                    <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">البداية</th>
+                    <th className="text-right p-2.5 font-medium text-xs text-muted-foreground hidden sm:table-cell">النهاية</th>
+                    <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">↓</th>
+                    <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">↑</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingSessions ? (
                     Array.from({ length: 5 }).map((_, i) => (
                       <tr key={i} className="border-b border-border/50">
-                        <td className="p-3"><Skeleton className="h-4 w-24" /></td>
-                        <td className="p-3"><Skeleton className="h-4 w-20" /></td>
-                        <td className="p-3 hidden sm:table-cell"><Skeleton className="h-4 w-20" /></td>
-                        <td className="p-3"><Skeleton className="h-4 w-16" /></td>
-                        <td className="p-3"><Skeleton className="h-4 w-16" /></td>
+                        <td className="p-2.5"><Skeleton className="h-4 w-24" /></td>
+                        <td className="p-2.5"><Skeleton className="h-4 w-20" /></td>
+                        <td className="p-2.5 hidden sm:table-cell"><Skeleton className="h-4 w-20" /></td>
+                        <td className="p-2.5"><Skeleton className="h-4 w-14" /></td>
+                        <td className="p-2.5"><Skeleton className="h-4 w-14" /></td>
                       </tr>
                     ))
                   ) : paginatedSessions.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-10 text-center">
+                      <td colSpan={5} className="p-8 text-center">
                         <Clock className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
                         <p className="text-muted-foreground text-sm">لا توجد جلسات</p>
                       </td>
@@ -502,11 +504,11 @@ export default function UserManagerPage() {
                   ) : (
                     paginatedSessions.map((s: any, i: number) => (
                       <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                        <td className="p-3 font-medium text-foreground text-sm">{s.user || s.customer || s.name || "—"}</td>
-                        <td className="p-3 text-muted-foreground text-xs font-mono">{s["from-time"] || s.started || s["acct-session-id"] || "—"}</td>
-                        <td className="p-3 text-muted-foreground text-xs font-mono hidden sm:table-cell">{s["till-time"] || s.ended || "—"}</td>
-                        <td className="p-3 text-foreground text-xs font-mono">{formatBytes(s.download || s["bytes-in"] || s["acct-input-octets"])}</td>
-                        <td className="p-3 text-foreground text-xs font-mono">{formatBytes(s.upload || s["bytes-out"] || s["acct-output-octets"])}</td>
+                        <td className="p-2.5 font-medium text-foreground text-sm">{s.user || s.customer || s.name || "—"}</td>
+                        <td className="p-2.5 text-muted-foreground text-xs font-mono">{s["from-time"] || s.started || "—"}</td>
+                        <td className="p-2.5 text-muted-foreground text-xs font-mono hidden sm:table-cell">{s["till-time"] || s.ended || "—"}</td>
+                        <td className="p-2.5 text-foreground text-xs font-mono">{formatBytes(s.download || s["bytes-in"] || s["acct-input-octets"])}</td>
+                        <td className="p-2.5 text-foreground text-xs font-mono">{formatBytes(s.upload || s["bytes-out"] || s["acct-output-octets"])}</td>
                       </tr>
                     ))
                   )}
@@ -522,10 +524,10 @@ export default function UserManagerPage() {
 
       {/* Add User Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogContent className="sm:max-w-md max-h-[85dvh] overflow-y-auto" dir="rtl">
           <DialogHeader>
             <DialogTitle>إضافة مستخدم جديد</DialogTitle>
-            <DialogDescription>أدخل بيانات المستخدم الجديد</DialogDescription>
+            <DialogDescription>أدخل بيانات المستخدم</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div>
@@ -541,7 +543,7 @@ export default function UserManagerPage() {
               <select
                 value={newUser.profile}
                 onChange={e => setNewUser(p => ({ ...p, profile: e.target.value }))}
-                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
               >
                 <option value="">اختر باقة</option>
                 {Array.isArray(profiles) && profiles.map((p: any, i: number) => (
@@ -553,7 +555,7 @@ export default function UserManagerPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddOpen(false)}>إلغاء</Button>
             <Button onClick={handleAddUser} disabled={action.isPending}>
-              {action.isPending ? "جاري الإضافة..." : "إضافة"}
+              {action.isPending ? "جاري..." : "إضافة"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -561,15 +563,15 @@ export default function UserManagerPage() {
 
       {/* Profile Dialog */}
       <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
-        <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogContent className="sm:max-w-md max-h-[85dvh] overflow-y-auto" dir="rtl">
           <DialogHeader>
             <DialogTitle>{profileMode === "add" ? "إضافة باقة" : "تعديل باقة"}</DialogTitle>
-            <DialogDescription>حدد بيانات الباقة (السرعة/الصلاحية/السعر)</DialogDescription>
+            <DialogDescription>حدد بيانات الباقة</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">اسم الباقة</label>
-              <Input value={profileForm.name} onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))} placeholder="basic-1d" />
+              <label className="text-xs text-muted-foreground mb-1 block">اسم الباقة *</label>
+              <Input value={profileForm.name} onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))} placeholder="basic-1d" disabled={profileMode === "edit"} />
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">اسم العرض</label>
@@ -578,40 +580,64 @@ export default function UserManagerPage() {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">الصلاحية</label>
-                <Input value={profileForm.validity} onChange={e => setProfileForm(p => ({ ...p, validity: e.target.value }))} placeholder="30d" />
+                <Input value={profileForm.validity} onChange={e => setProfileForm(p => ({ ...p, validity: e.target.value }))} placeholder="30d / 1h / 7d" />
               </div>
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">السعر</label>
                 <Input value={profileForm.price} onChange={e => setProfileForm(p => ({ ...p, price: e.target.value }))} placeholder="100" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">السرعة</label>
-                <Input value={profileForm.rateLimit} onChange={e => setProfileForm(p => ({ ...p, rateLimit: e.target.value }))} placeholder="2M/2M" />
+
+            <div className="border-t border-border pt-3">
+              <label className="text-xs text-muted-foreground mb-2 block font-medium">حدود السرعة</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-muted-foreground mb-0.5 block">↓ RX (تحميل)</label>
+                  <Input value={profileForm.rxRateLimit} onChange={e => setProfileForm(p => ({ ...p, rxRateLimit: e.target.value, rateLimit: "" }))} placeholder="2M" className="h-8 text-xs" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground mb-0.5 block">↑ TX (رفع)</label>
+                  <Input value={profileForm.txRateLimit} onChange={e => setProfileForm(p => ({ ...p, txRateLimit: e.target.value, rateLimit: "" }))} placeholder="2M" className="h-8 text-xs" />
+                </div>
               </div>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                أو اكتب مباشرة: <span className="font-mono">rx/tx</span> مثل <span className="font-mono">2M/2M</span>
+              </p>
+              <Input
+                value={profileForm.rateLimit}
+                onChange={e => setProfileForm(p => ({ ...p, rateLimit: e.target.value, rxRateLimit: "", txRateLimit: "" }))}
+                placeholder="2M/2M"
+                className="h-8 text-xs mt-1"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-xs text-muted-foreground mb-1 block">عدد الأجهزة</label>
                 <Input value={profileForm.sharedUsers} onChange={e => setProfileForm(p => ({ ...p, sharedUsers: e.target.value }))} placeholder="1" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Override أجهزة</label>
+                <Input value={profileForm.overrideSharedUsers} onChange={e => setProfileForm(p => ({ ...p, overrideSharedUsers: e.target.value }))} placeholder="off" />
               </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setProfileOpen(false)}>إلغاء</Button>
             <Button onClick={handleSaveProfile} disabled={profileAction.isPending}>
-              {profileAction.isPending ? "جاري الحفظ..." : "حفظ"}
+              {profileAction.isPending ? "جاري..." : "حفظ"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
+      {/* Delete User Confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
             <AlertDialogTitle>حذف المستخدم</AlertDialogTitle>
             <AlertDialogDescription>
-              هل أنت متأكد من حذف "{deleteTarget?.name || deleteTarget?.username}"؟ لا يمكن التراجع عن هذا الإجراء.
+              هل أنت متأكد من حذف "{deleteTarget?.name || deleteTarget?.username}"؟
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -619,25 +645,44 @@ export default function UserManagerPage() {
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => { handleAction("remove", deleteTarget); setDeleteTarget(null); }}
-            >
-              حذف
-            </AlertDialogAction>
+            >حذف</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Profile Confirmation */}
+      <AlertDialog open={!!deleteProfileTarget} onOpenChange={() => setDeleteProfileTarget(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف الباقة</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف الباقة "{deleteProfileTarget?.name}"؟
+              <br />
+              <span className="text-destructive text-xs">سيتم فصل جميع المستخدمين المرتبطين بها.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteProfileTarget && handleDeleteProfile(deleteProfileTarget)}
+            >حذف</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Detail Dialog */}
       <Dialog open={!!detailUser} onOpenChange={() => setDetailUser(null)}>
-        <DialogContent className="sm:max-w-md" dir="rtl">
+        <DialogContent className="sm:max-w-md max-h-[85dvh] overflow-y-auto" dir="rtl">
           <DialogHeader>
             <DialogTitle>تفاصيل المستخدم</DialogTitle>
           </DialogHeader>
           {detailUser && (
-            <div className="space-y-2 py-2 max-h-80 overflow-y-auto">
+            <div className="space-y-1.5 py-2">
               {Object.entries(detailUser).filter(([k]) => !k.startsWith(".")).map(([key, val]) => (
                 <div key={key} className="flex justify-between items-center py-1 border-b border-border/50">
                   <span className="text-xs text-muted-foreground">{key}</span>
-                  <span className="text-xs font-mono text-foreground max-w-[200px] truncate">{String(val || "—")}</span>
+                  <span className="text-xs font-mono text-foreground max-w-[180px] truncate">{String(val || "—")}</span>
                 </div>
               ))}
             </div>
@@ -650,13 +695,13 @@ export default function UserManagerPage() {
 
 function PaginationBar({ page, totalPages, onPageChange, total }: { page: number; totalPages: number; onPageChange: (p: number) => void; total: number }) {
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/30">
+    <div className="flex items-center justify-between px-3 py-2 border-t border-border bg-muted/30">
       <span className="text-xs text-muted-foreground">{total} عنصر</span>
       <div className="flex items-center gap-1">
         <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
           <ChevronRight className="h-4 w-4" />
         </Button>
-        <span className="text-xs text-foreground px-2 min-w-[60px] text-center">{page} / {totalPages}</span>
+        <span className="text-xs text-foreground px-2 min-w-[50px] text-center">{page}/{totalPages}</span>
         <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
           <ChevronLeft className="h-4 w-4" />
         </Button>
@@ -667,12 +712,12 @@ function PaginationBar({ page, totalPages, onPageChange, total }: { page: number
 
 function StatBox({ icon, label, value, loading }: { icon: React.ReactNode; label: string; value: string | number | null; loading?: boolean }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-3">
-      <div className="flex items-center gap-2 mb-1">
+    <div className="rounded-lg border border-border bg-card p-2.5">
+      <div className="flex items-center gap-1.5 mb-0.5">
         {icon}
-        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="text-[10px] text-muted-foreground">{label}</span>
       </div>
-      {loading ? <Skeleton className="h-7 w-12" /> : <p className="text-xl font-bold text-foreground">{value}</p>}
+      {loading ? <Skeleton className="h-6 w-10" /> : <p className="text-lg font-bold text-foreground">{value}</p>}
     </div>
   );
 }
