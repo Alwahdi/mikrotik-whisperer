@@ -180,7 +180,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       </main>
 
       {/* Mobile Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-background/95 backdrop-blur-md border-t border-border">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden glass border-t border-border pb-[max(env(safe-area-inset-bottom),0.35rem)]">
         <div className="flex items-center justify-around py-2 px-1">
           {filteredNav.slice(0, 5).map(item => {
             const isActive = location.pathname === item.path;
