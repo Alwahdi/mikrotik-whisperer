@@ -10,12 +10,13 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useHotspotUsers, useUserManagerUsers } from "@/hooks/useMikrotik";
 
 const navItems = [
-  { path: "/", icon: LayoutDashboard, label: "لوحة التحكم", roles: ["admin", "cashier"] },
+  { path: "/dashboard", icon: LayoutDashboard, label: "لوحة التحكم", roles: ["admin", "cashier"] },
   { path: "/hotspot", icon: Wifi, label: "الهوتسبوت", roles: ["admin", "cashier"] },
   { path: "/usermanager", icon: Users, label: "يوزر مانجر", roles: ["admin", "cashier"] },
   { path: "/vouchers", icon: CreditCard, label: "الكروت", roles: ["admin", "cashier"] },
   { path: "/sales", icon: Activity, label: "المبيعات", roles: ["admin", "cashier"] },
   { path: "/backups", icon: Database, label: "النسخ الاحتياطي", roles: ["admin"] },
+  { path: "/admin/users", icon: Shield, label: "إدارة المستخدمين", roles: ["admin"] },
   { path: "/settings", icon: Settings, label: "الإعدادات", roles: ["admin"] },
 ];
 
