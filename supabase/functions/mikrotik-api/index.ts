@@ -754,6 +754,7 @@ async function handleRestWithCompat(
     return addResult;
   }
 
+  // Try primary command with all body variants
   let lastError: Error | null = null;
   for (const bodyVariant of buildRestBodyVariants(command, restBody)) {
     try {
@@ -762,6 +763,20 @@ async function handleRestWithCompat(
       const errorObj = err instanceof Error ? err : new Error(String(err));
       lastError = errorObj;
       if (!isCompatibilityError(errorObj.message)) throw errorObj;
+    }
+  }
+
+  // Try v6 fallback path (/tool/user-manager/...)
+  const fallbackCmd = getV6FallbackCommand(command);
+  if (fallbackCmd) {
+    for (const bodyVariant of buildRestBodyVariants(fallbackCmd, restBody)) {
+      try {
+        return await handleRest(host, port, protocol, user, pass, fallbackCmd, method, bodyVariant);
+      } catch (err: any) {
+        const errorObj = err instanceof Error ? err : new Error(String(err));
+        lastError = errorObj;
+        if (!isCompatibilityError(errorObj.message)) throw errorObj;
+      }
     }
   }
 
