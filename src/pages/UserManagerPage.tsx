@@ -186,7 +186,6 @@ export default function UserManagerPage() {
       setSelectedUsers(new Set(paginatedUsers.map((u: any) => u[".id"] || u.id)));
     }
   };
-  };
 
   const handleAddUser = () => {
     if (!newUser.name || !newUser.password) {
