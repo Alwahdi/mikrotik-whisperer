@@ -140,6 +140,7 @@ export type Database = {
           notes: string | null
           profile_name: string
           router_host: string
+          sales_point: string | null
           success_count: number
           total_amount: number | null
           unit_price: number | null
@@ -155,6 +156,7 @@ export type Database = {
           notes?: string | null
           profile_name?: string
           router_host?: string
+          sales_point?: string | null
           success_count?: number
           total_amount?: number | null
           unit_price?: number | null
@@ -170,6 +172,7 @@ export type Database = {
           notes?: string | null
           profile_name?: string
           router_host?: string
+          sales_point?: string | null
           success_count?: number
           total_amount?: number | null
           unit_price?: number | null
