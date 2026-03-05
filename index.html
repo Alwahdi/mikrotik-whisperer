@@ -2,24 +2,39 @@
 <html lang="ar" dir="rtl" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MikroTik Manager</title>
-    <meta name="description" content="إدارة أجهزة المايكروتيك بسهولة - RouterOS v6 & v7" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>MikroTik Manager Pro - إدارة شبكات المايكروتيك</title>
+    <meta name="description" content="منصة احترافية لإدارة أجهزة المايكروتيك - RouterOS v6 & v7 - هوتسبوت، يوزر مانجر، كروت، نسخ احتياطي" />
+
+    <!-- PWA Meta -->
+    <meta name="theme-color" content="#1a1917" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MikroTik" />
+    <link rel="apple-touch-icon" href="/pwa-192.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+
+    <!-- OG -->
+    <meta property="og:title" content="MikroTik Manager Pro" />
+    <meta property="og:description" content="منصة احترافية لإدارة أجهزة المايكروتيك" />
+    <meta property="og:type" content="website" />
+
     <script>
       const t = localStorage.getItem('theme');
       if (t === 'light') document.documentElement.classList.remove('dark');
     </script>
-    <meta name="author" content="Lovable" />
 
-    <!-- TODO: Update og:title to match your application name -->
-    <meta property="og:title" content="Lovable App" />
-    <meta property="og:description" content="Lovable Generated Project" />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
-
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@Lovable" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <!-- JSON-LD -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "MikroTik Manager Pro",
+      "description": "منصة احترافية لإدارة أجهزة المايكروتيك",
+      "applicationCategory": "NetworkUtility",
+      "operatingSystem": "Any"
+    }
+    </script>
   </head>
 
   <body>

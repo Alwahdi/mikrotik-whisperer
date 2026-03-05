@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import PWAInstallBanner from "@/components/PWAInstallBanner";
 import AuthPage from "./pages/AuthPage";
 import RoutersPage from "./pages/RoutersPage";
 import Index from "./pages/Index";
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <PWAInstallBanner />
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
