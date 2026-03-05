@@ -17,6 +17,7 @@ import {
 import {
   BarChart3, Home, TrendingUp, CreditCard,
   ChevronLeft, ChevronRight, Search, Trash2, DollarSign, Store,
+  Download,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
