@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import HotspotPage from "./pages/HotspotPage";
 import UserManagerPage from "./pages/UserManagerPage";
 import SettingsPage from "./pages/SettingsPage";
+import VouchersPage from "./pages/VouchersPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
