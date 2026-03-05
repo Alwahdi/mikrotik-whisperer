@@ -127,8 +127,9 @@ class MikroTikApiClient {
     throw new Error(`Unexpected login response: ${type}`);
   }
 
-  async execute(command: string): Promise<Record<string, string>[]> {
-    await this.writeSentence([command]);
+  async execute(command: string, args?: string[]): Promise<Record<string, string>[]> {
+    const words = [command, ...(args || [])];
+    await this.writeSentence(words);
     const results: Record<string, string>[] = [];
 
     while (true) {
@@ -184,8 +185,6 @@ async function computeChallengeResponse(password: string, challengeHex: string):
 }
 
 // ─── v6/v7 command mapping ──────────────────────────────────────────────
-// RouterOS v6 uses /tool/user-manager/... while v7 uses /user-manager/...
-// We detect by trying v7 first, then falling back to v6 path
 function getV6FallbackCommand(command: string): string | null {
   if (command.startsWith("/user-manager/")) {
     return "/tool" + command;
@@ -193,10 +192,41 @@ function getV6FallbackCommand(command: string): string | null {
   return null;
 }
 
+// ─── Port Scanner ───────────────────────────────────────────────────────
+async function scanPorts(host: string, ports: number[]): Promise<{ port: number; open: boolean; service: string }[]> {
+  const portServices: Record<number, string> = {
+    21: "FTP", 22: "SSH", 23: "Telnet", 53: "DNS",
+    80: "HTTP (www)", 443: "HTTPS (www-ssl)",
+    8291: "Winbox", 8728: "API", 8729: "API-SSL",
+    8080: "HTTP Proxy", 161: "SNMP", 179: "BGP",
+    1723: "PPTP", 500: "IKE/IPSec",
+  };
+
+  const results = await Promise.allSettled(
+    ports.map(async (port) => {
+      try {
+        const conn = await Promise.race([
+          Deno.connect({ hostname: host, port }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000)),
+        ]) as Deno.Conn;
+        conn.close();
+        return { port, open: true, service: portServices[port] || `Port ${port}` };
+      } catch {
+        return { port, open: false, service: portServices[port] || `Port ${port}` };
+      }
+    })
+  );
+
+  return results
+    .filter((r): r is PromiseFulfilledResult<{ port: number; open: boolean; service: string }> => r.status === "fulfilled")
+    .map((r) => r.value);
+}
+
 // ─── REST API Handler (v7+) ─────────────────────────────────────────────
 async function handleRest(
   host: string, port: string, protocol: string,
-  user: string, pass: string, command: string
+  user: string, pass: string, command: string,
+  method: string = "GET", body?: any
 ): Promise<any> {
   const path = command.replace(/\/print$/, "");
   const url = `${protocol}://${host}:${port}/rest${path}`;
@@ -206,14 +236,19 @@ async function handleRest(
   const timeout = setTimeout(() => controller.abort(), 15000);
 
   try {
-    const response = await fetch(url, {
-      method: "GET",
+    const fetchOpts: RequestInit = {
+      method,
       headers: {
         Authorization: `Basic ${credentials}`,
         "Content-Type": "application/json",
       },
       signal: controller.signal,
-    });
+    };
+    if (body && method !== "GET") {
+      fetchOpts.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(url, fetchOpts);
 
     if (!response.ok) {
       const text = await response.text();
@@ -229,7 +264,8 @@ async function handleRest(
 // ─── API Protocol Handler (v6/v7) ───────────────────────────────────────
 async function handleApi(
   host: string, port: string, useTls: boolean,
-  user: string, pass: string, command: string
+  user: string, pass: string, command: string,
+  args?: string[]
 ): Promise<any> {
   const client = new MikroTikApiClient();
   try {
@@ -237,13 +273,13 @@ async function handleApi(
     await client.login(user, pass);
     
     try {
-      return await client.execute(command);
+      return await client.execute(command, args);
     } catch (err: any) {
       // If command fails, try v6 fallback path
       const fallback = getV6FallbackCommand(command);
-      if (fallback && err.message?.includes("no such command")) {
+      if (fallback && (err.message?.includes("no such command") || err.message?.includes("unknown command"))) {
         console.log(`Retrying with v6 path: ${fallback}`);
-        return await client.execute(fallback);
+        return await client.execute(fallback, args);
       }
       throw err;
     }
@@ -260,7 +296,18 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { endpoint, host, user, pass, port, protocol, mode } = body;
+    const { endpoint, host, user, pass, port, protocol, mode, action, args } = body;
+
+    // ─── Port Scan Action ─────────────────────────────────────────
+    if (action === "scan-ports") {
+      if (!host) throw new Error("Missing host for port scan");
+      const defaultPorts = [21, 22, 23, 53, 80, 443, 8080, 8291, 8728, 8729];
+      const portsToScan = body.ports || defaultPorts;
+      const results = await scanPorts(host, portsToScan);
+      return new Response(JSON.stringify(results), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (!host) throw new Error("Missing router address");
     if (!user) throw new Error("Missing username");
@@ -272,11 +319,12 @@ serve(async (req) => {
     if (mode === "api") {
       const actualPort = port || "8728";
       const useTls = protocol === "api-ssl";
-      data = await handleApi(host, actualPort, useTls, user, pass, endpoint);
+      data = await handleApi(host, actualPort, useTls, user, pass, endpoint, args);
     } else {
       const actualPort = port || (protocol === "https" ? "443" : "80");
       const actualProtocol = protocol || "https";
-      data = await handleRest(host, actualPort, actualProtocol, user, pass, endpoint);
+      const method = body.method || "GET";
+      data = await handleRest(host, actualPort, actualProtocol, user, pass, endpoint, method, body.body);
     }
 
     return new Response(JSON.stringify(data), {
@@ -286,7 +334,7 @@ serve(async (req) => {
     console.error("MikroTik error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: message }), {
-      status: 200, // Return 200 with error in body to avoid Edge Function error
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

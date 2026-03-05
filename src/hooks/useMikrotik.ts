@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 
-async function callMikrotikApi(endpoint: string) {
+async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>) {
   const config = getMikrotikConfig();
   if (!config) throw new Error("لم يتم إعداد بيانات الاتصال بالمايكروتيك");
 
@@ -15,6 +15,7 @@ async function callMikrotikApi(endpoint: string) {
       port: config.port,
       protocol: config.protocol,
       mode: config.mode,
+      ...extraBody,
     },
   });
   if (error) throw error;
@@ -51,12 +52,15 @@ export function useHotspotAllUsers() {
 }
 
 // ─── User Manager ──────────────────────────
+// v7 uses /user-manager/*, v6 uses /tool/user-manager/*
+// The edge function automatically falls back to v6 paths
 export function useUserManagerUsers() {
   return useQuery({
     queryKey: ["mikrotik", "usermanager", "users"],
     queryFn: () => callMikrotikApi("/user-manager/user/print"),
     refetchInterval: 15000,
     enabled: useEnabled(),
+    retry: 1,
   });
 }
 export function useUserManagerProfiles() {
@@ -64,6 +68,7 @@ export function useUserManagerProfiles() {
     queryKey: ["mikrotik", "usermanager", "profiles"],
     queryFn: () => callMikrotikApi("/user-manager/profile/print"),
     enabled: useEnabled(),
+    retry: 1,
   });
 }
 export function useUserManagerSessions() {
@@ -72,6 +77,7 @@ export function useUserManagerSessions() {
     queryFn: () => callMikrotikApi("/user-manager/session/print"),
     refetchInterval: 10000,
     enabled: useEnabled(),
+    retry: 1,
   });
 }
 
