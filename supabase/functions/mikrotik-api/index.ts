@@ -621,10 +621,10 @@ serve(async (req) => {
     } else {
       const actualPort = port || (protocol === "https" ? "443" : "80");
       const actualProtocol = protocol || "https";
-      // Convert args to REST body for non-GET requests
+      // Convert args to REST body for non-GET requests with compatibility remapping
       const restBody = argsToRestBody(args) || body.body;
       const method = body.method || getRestMethod(endpoint);
-      data = await handleRest(host, actualPort, actualProtocol, user, pass, endpoint, method, restBody);
+      data = await handleRestWithCompat(host, actualPort, actualProtocol, user, pass, endpoint, method, restBody);
     }
 
     return new Response(JSON.stringify(data), {
