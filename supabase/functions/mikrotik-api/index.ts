@@ -271,7 +271,7 @@ function uniqueArgVariants(variants: (string[] | undefined)[]): (string[] | unde
 }
 
 function isUserManagerUserAddCommand(command: string): boolean {
-  return /\/user-manager\/user\/add$/.test(command);
+  return /(?:\/tool)?\/user-manager\/user\/add$/.test(command);
 }
 
 function isUserManagerProfileCommand(command: string): boolean {
@@ -307,40 +307,45 @@ function buildUserManagerArgVariants(command: string, args?: string[]): (string[
     remapArgs(remapArgs(args, { profile: "group" }), { username: "name" }),
   ];
 
-  // For profile add/set: try stripping unknown params one by one
   if (isUserManagerProfileCommand(command)) {
     const parsed = argsListToObject(args);
+    const owner = parsed.owner || parsed.customer || "admin";
+    baseVariants.unshift(
+      objectToArgsList({ ...parsed, owner }),
+      objectToArgsList({ ...parsed, customer: owner }),
+    );
+
     const optionalKeys = ["name-for-users", "override-shared-users", "transfer-limit", "uptime-limit", "price"];
-    // Try without each optional key
     for (const key of optionalKeys) {
-      if (parsed[key]) {
+      if (parsed[key] !== undefined && parsed[key] !== "") {
         baseVariants.push(omitArgsKeys(args, [key]));
       }
     }
-    // Try with only essential keys
-    const essentialOnly = omitArgsKeys(args, optionalKeys);
-    baseVariants.push(essentialOnly);
+    baseVariants.push(omitArgsKeys(args, optionalKeys));
   }
 
   if (isUserManagerUserAddCommand(command)) {
     const parsed = argsListToObject(args);
     const username = parsed.username || parsed.name || parsed.user;
-    const password = parsed.password;
+    const hasPassword = Object.prototype.hasOwnProperty.call(parsed, "password");
+    const password = hasPassword ? parsed.password : "";
     const profile = parsed.profile || parsed.group;
     const customer = parsed.customer || parsed.owner || "admin";
 
-    if (username && password) {
+    if (username && hasPassword) {
       baseVariants.unshift(
+        objectToArgsList({ username, password, profile, owner: customer }),
+        objectToArgsList({ username, password, group: profile, owner: customer }),
         objectToArgsList({ username, password, profile, customer }),
         objectToArgsList({ username, password, group: profile, customer }),
-        objectToArgsList({ username, password, profile }),
-        objectToArgsList({ username, password, group: profile }),
+        objectToArgsList({ username, password, owner: customer }),
         objectToArgsList({ username, password, customer }),
         objectToArgsList({ username, password }),
+        objectToArgsList({ name: username, password, profile, owner: customer }),
+        objectToArgsList({ name: username, password, group: profile, owner: customer }),
         objectToArgsList({ name: username, password, profile, customer }),
         objectToArgsList({ name: username, password, group: profile, customer }),
-        objectToArgsList({ name: username, password, profile }),
-        objectToArgsList({ name: username, password, group: profile }),
+        objectToArgsList({ name: username, password, owner: customer }),
         objectToArgsList({ name: username, password, customer }),
         objectToArgsList({ name: username, password }),
       );
@@ -499,12 +504,20 @@ async function executeUserManagerCompatible(
     const profile = parsed.profile || parsed.group;
     const customer = parsed.customer || parsed.owner || "admin";
 
-    // First: create user with best-effort compatibility without profile/group params.
+    // Fast path: try creating user with profile/group directly first (faster for most routers)
+    try {
+      const directAttempts = buildUserManagerCommandAttempts(command, args);
+      return await executeCompatibilityAttempts(client, directAttempts);
+    } catch (err: any) {
+      const errorObj = err instanceof Error ? err : new Error(String(err));
+      if (!isCompatibilityError(errorObj.message)) throw errorObj;
+    }
+
+    // Fallback path: create user first then attach profile
     const addArgs = omitArgsKeys(args, ["profile", "group"]);
     const addAttempts = buildUserManagerCommandAttempts(command, addArgs);
     const addResult = await executeCompatibilityAttempts(client, addAttempts);
 
-    // Second: attach profile/package if provided.
     if (username && profile) {
       await activateUserManagerProfileCompatible(client, command, username, profile, customer);
     }
@@ -619,8 +632,13 @@ function buildRestBodyVariants(command: string, body?: Record<string, any>): (Re
     remapBody(remapBody(body, { group: "profile" }), { name: "username" }),
   ];
 
-  // For profile add/set: try stripping unknown params one by one
   if (isUserManagerProfileCommand(command)) {
+    const owner = body.owner || body.customer || "admin";
+    variants.unshift(
+      { ...body, owner },
+      { ...body, customer: owner },
+    );
+
     const optionalKeys = ["name-for-users", "override-shared-users", "transfer-limit", "uptime-limit", "price"];
     for (const key of optionalKeys) {
       if (body[key] !== undefined) {
@@ -632,22 +650,25 @@ function buildRestBodyVariants(command: string, body?: Record<string, any>): (Re
 
   if (isUserManagerUserAddCommand(command)) {
     const username = body.username || body.name || body.user;
-    const password = body.password;
+    const hasPassword = Object.prototype.hasOwnProperty.call(body, "password");
+    const password = hasPassword ? body.password : "";
     const profile = body.profile || body.group;
     const customer = body.customer || body.owner || "admin";
 
-    if (username && password) {
+    if (username && hasPassword) {
       variants.unshift(
+        { username, password, profile, owner: customer },
+        { username, password, group: profile, owner: customer },
         { username, password, profile, customer },
         { username, password, group: profile, customer },
-        { username, password, profile },
-        { username, password, group: profile },
+        { username, password, owner: customer },
         { username, password, customer },
         { username, password },
+        { name: username, password, profile, owner: customer },
+        { name: username, password, group: profile, owner: customer },
         { name: username, password, profile, customer },
         { name: username, password, group: profile, customer },
-        { name: username, password, profile },
-        { name: username, password, group: profile },
+        { name: username, password, owner: customer },
         { name: username, password, customer },
         { name: username, password },
       );
@@ -728,10 +749,24 @@ async function handleRestWithCompat(
     const username = restBody?.username || restBody?.name || restBody?.user;
     const profile = restBody?.profile || restBody?.group;
     const customer = restBody?.customer || restBody?.owner || "admin";
+
+    // Fast path: try direct add with profile/group first
+    let directError: Error | null = null;
+    for (const bodyVariant of buildRestBodyVariants(command, restBody)) {
+      try {
+        return await handleRest(host, port, protocol, user, pass, command, method, bodyVariant);
+      } catch (err: any) {
+        const errorObj = err instanceof Error ? err : new Error(String(err));
+        directError = errorObj;
+        if (!isCompatibilityError(errorObj.message)) throw errorObj;
+      }
+    }
+
+    // Fallback path: add user then activate profile
     const addBody = omitBodyKeys(restBody, ["profile", "group"]);
 
     let addResult: any;
-    let addError: Error | null = null;
+    let addError: Error | null = directError;
 
     for (const bodyVariant of buildRestBodyVariants(command, addBody)) {
       try {

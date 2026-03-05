@@ -241,12 +241,9 @@ export default function VouchersPage() {
     for (let i = 0; i < cards.length; i += CHUNK_SIZE) {
       const chunk = cards.slice(i, i + CHUNK_SIZE);
       const commands = chunk.map(card => {
-        const args: string[] = [`=name=${card.username}`, `=password=${card.password}`];
-        if (type === "hotspot") {
-          args.push(`=profile=${card.profile}`);
-        } else {
-          args.push(`=group=${card.profile}`);
-        }
+        const args: string[] = type === "hotspot"
+          ? [`=name=${card.username}`, `=password=${card.password}`, `=profile=${card.profile}`]
+          : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`, "=owner=admin"];
         return { command: addEndpoint, args };
       });
 
