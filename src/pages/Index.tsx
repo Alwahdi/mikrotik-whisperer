@@ -79,31 +79,9 @@ export default function Index() {
   const totalUsers = Array.isArray(umUsers) ? umUsers.length : 0;
   const totalLeases = Array.isArray(dhcpLeases) ? dhcpLeases.length : 0;
   const totalInterfaces = Array.isArray(interfaces) ? interfaces.filter((i: any) => i.running === "true" || i.running === true).length : 0;
-  const cpuLoad = sysResource?.["cpu-load"] ?? "—";
   const uptime = sysResource?.uptime ?? "—";
-  const totalMem = Number(sysResource?.["total-memory"] || 0);
-  const freeMem = Number(sysResource?.["free-memory"] || 0);
-  const memUsed = totalMem > 0 ? Math.round(((totalMem - freeMem) / totalMem) * 100) : 0;
-  const totalHdd = Number(sysResource?.["total-hdd-space"] || 0);
-  const freeHdd = Number(sysResource?.["free-hdd-space"] || 0);
-  const hddUsed = totalHdd > 0 ? Math.round(((totalHdd - freeHdd) / totalHdd) * 100) : 0;
   const routerName = identity?.name ?? config.label ?? "MikroTik";
   const latency = health?.latency;
-
-  // Alerts
-  const alerts = useMemo(() => {
-    const a: { type: "warning" | "error"; msg: string }[] = [];
-    if (Number(cpuLoad) > 80) a.push({ type: "warning", msg: `CPU عالي: ${cpuLoad}%` });
-    if (memUsed > 85) a.push({ type: "warning", msg: `الذاكرة ممتلئة: ${memUsed}%` });
-    if (hddUsed > 90) a.push({ type: "error", msg: `التخزين ممتلئ: ${hddUsed}%` });
-    // Expired UM users
-    if (Array.isArray(umUsers)) {
-      const expired = umUsers.filter((u: any) => u.disabled === "true" || u.disabled === true).length;
-      if (expired > 0) a.push({ type: "warning", msg: `${expired} مستخدم معطل في يوزر مانجر` });
-    }
-    return a;
-  }, [cpuLoad, memUsed, hddUsed, umUsers]);
-
   const activeSessions = Array.isArray(umSessions) ? umSessions.length : 0;
 
   return (
