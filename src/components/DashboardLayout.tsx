@@ -2,7 +2,7 @@ import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Wifi, Users, Settings, Menu, X,
-  Router, Moon, Sun, LogOut, ChevronLeft, Activity,
+  Router, Moon, Sun, LogOut, ChevronLeft, Activity, CreditCard,
 } from "lucide-react";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import { useAuth } from "@/contexts/AuthContext";
