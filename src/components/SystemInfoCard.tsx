@@ -17,12 +17,12 @@ export default function SystemInfoCard({ resource, identity, routerboard }: Syst
   ].filter((item) => item.value);
 
   return (
-    <div className="gradient-card rounded-xl border border-border shadow-card p-5">
+    <div className="rounded-xl border border-border bg-card shadow-card p-5">
       <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-        <span className="inline-block w-2 h-2 rounded-full bg-primary animate-pulse-glow" />
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary" />
         معلومات النظام
       </h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2.5">
         {items.map((item, i) => (
           <div key={i} className="flex justify-between items-center py-1.5 border-b border-border/50 last:border-0">
             <span className="text-xs text-muted-foreground">{item.label}</span>

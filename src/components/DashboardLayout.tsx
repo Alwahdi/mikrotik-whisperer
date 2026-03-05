@@ -2,7 +2,7 @@ import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Wifi, Users, Settings, Menu, X,
-  Router, Activity, ChevronLeft, Moon, Sun, LogOut, ArrowRight,
+  Router, Moon, Sun, LogOut, ChevronLeft, Activity,
 } from "lucide-react";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import { useAuth } from "@/contexts/AuthContext";
@@ -19,29 +19,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const { signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== "undefined") {
-      return document.documentElement.classList.contains("dark");
-    }
-    return true;
-  });
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
   const config = getMikrotikConfig();
 
   useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    if (isDark) document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
     localStorage.setItem("theme", isDark ? "dark" : "light");
   }, [isDark]);
-
-  // Init theme from localStorage
-  useEffect(() => {
-    const saved = localStorage.getItem("theme");
-    if (saved === "light") setIsDark(false);
-    else if (saved === "dark") setIsDark(true);
-  }, []);
 
   return (
     <div className="flex min-h-screen" dir="rtl">
@@ -54,32 +39,31 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 right-0 z-50 w-64 bg-sidebar border-l border-sidebar-border
+        fixed inset-y-0 right-0 z-50 w-60 bg-sidebar border-l border-sidebar-border
         transform transition-transform duration-200 ease-in-out
         lg:relative lg:translate-x-0
         ${sidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0"}
       `}>
-        <div className="flex items-center gap-3 p-5 border-b border-sidebar-border">
-          <div className="p-2 rounded-lg gradient-primary">
-            <Router className="h-5 w-5 text-primary-foreground" />
+        {/* Logo */}
+        <div className="flex items-center gap-3 p-4 border-b border-sidebar-border">
+          <div className="p-1.5 rounded-lg gradient-primary">
+            <Router className="h-4 w-4 text-primary-foreground" />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="font-bold text-foreground text-base truncate">
+            <h1 className="font-bold text-sidebar-foreground text-sm truncate">
               {config?.label || "MikroTik"}
             </h1>
-            <p className="text-[10px] text-muted-foreground truncate">
+            <p className="text-[10px] text-muted-foreground truncate font-mono">
               {config ? `${config.host}:${config.port}` : "غير متصل"}
             </p>
           </div>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-5 w-5" />
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <nav className="p-3 space-y-1">
+        {/* Nav */}
+        <nav className="p-2 space-y-0.5">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             return (
@@ -88,55 +72,46 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
                 to={item.path}
                 onClick={() => setSidebarOpen(false)}
                 className={`
-                  flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium
-                  transition-all duration-150
+                  flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all
                   ${isActive
-                    ? "bg-primary/10 text-primary shadow-glow"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    ? "bg-primary/10 text-primary"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent"
                   }
                 `}
               >
-                <item.icon className="h-4.5 w-4.5" />
+                <item.icon className="h-4 w-4" />
                 {item.label}
-                {isActive && <ChevronLeft className="h-3 w-3 mr-auto text-primary/60" />}
+                {isActive && <ChevronLeft className="h-3 w-3 mr-auto opacity-50" />}
               </Link>
             );
           })}
         </nav>
 
-        {/* Bottom actions */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-sidebar-border space-y-3">
+        {/* Bottom */}
+        <div className="absolute bottom-0 left-0 right-0 p-3 border-t border-sidebar-border space-y-2">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setIsDark(!isDark)}
-              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              {isDark ? "وضع نهاري" : "وضع ليلي"}
+              {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+              {isDark ? "نهاري" : "ليلي"}
             </button>
-          </div>
-          <div className="flex items-center justify-between">
-            <Link
-              to="/routers"
-              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowRight className="h-3 w-3" />
+            <Link to="/routers" className="text-xs text-muted-foreground hover:text-primary transition-colors">
               تغيير الراوتر
             </Link>
-            <button
-              onClick={() => { signOut(); navigate("/auth"); }}
-              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <LogOut className="h-3 w-3" />
-              خروج
-            </button>
           </div>
+          <button
+            onClick={() => { signOut(); navigate("/auth"); }}
+            className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1.5 rounded-lg hover:bg-muted"
+          >
+            <LogOut className="h-3 w-3" />
+            تسجيل خروج
+          </button>
           {config && (
-            <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-              <Activity className="h-3 w-3 text-success animate-pulse" />
-              <span>{config.mode === "rest" ? "REST API" : "MikroTik API"}</span>
-              <span>•</span>
-              <span>{config.protocol.toUpperCase()}</span>
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground justify-center">
+              <Activity className="h-2.5 w-2.5 text-success" />
+              {config.mode === "rest" ? "REST" : "API"} • {config.protocol.toUpperCase()}
             </div>
           )}
         </div>
@@ -144,23 +119,23 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
       {/* Main */}
       <main className="flex-1 min-w-0">
-        <header className="sticky top-0 z-30 glass border-b border-border px-4 sm:px-6 py-3 flex items-center gap-4">
+        <header className="sticky top-0 z-30 glass border-b border-border px-4 sm:px-6 py-2.5 flex items-center gap-3">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden text-muted-foreground hover:text-foreground"
           >
-            <Menu className="h-6 w-6" />
+            <Menu className="h-5 w-5" />
           </button>
           {config && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-success" />
               متصل
             </div>
           )}
           <div className="mr-auto">
             <button
               onClick={() => setIsDark(!isDark)}
-              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>

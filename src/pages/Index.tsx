@@ -29,21 +29,18 @@ export default function Index() {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center min-h-[60vh] text-center">
-          <div className="p-4 rounded-2xl bg-primary/10 mb-6 animate-pulse-glow">
-            <Settings className="h-12 w-12 text-primary" />
+          <div className="p-4 rounded-2xl bg-primary/10 mb-6">
+            <Settings className="h-10 w-10 text-primary" />
           </div>
-          <h2 className="text-2xl font-bold text-foreground mb-2">مرحباً بك!</h2>
-          <p className="text-muted-foreground mb-2 max-w-md">
-            عشان تبدأ، لازم تدخل بيانات الاتصال بجهاز المايكروتيك.
-          </p>
-          <p className="text-muted-foreground text-xs mb-6 max-w-md">
-            يدعم RouterOS v6 (API) و v7+ (REST API) • IP محلي أو عام أو Cloud DDNS
+          <h2 className="text-xl font-bold text-foreground mb-2">مرحباً بك!</h2>
+          <p className="text-muted-foreground mb-6 text-sm max-w-sm">
+            اذهب لصفحة الراوترات لإضافة جهاز مايكروتيك والبدء
           </p>
           <Link
-            to="/settings"
-            className="gradient-primary text-primary-foreground font-medium py-3 px-8 rounded-lg text-sm hover:opacity-90 transition-opacity"
+            to="/routers"
+            className="gradient-primary text-primary-foreground font-medium py-2.5 px-6 rounded-xl text-sm hover:opacity-90 transition-opacity shadow-glow"
           >
-            إعداد الاتصال
+            إدارة الراوترات
           </Link>
         </div>
       </DashboardLayout>
@@ -68,10 +65,10 @@ export default function Index() {
     <DashboardLayout>
       {/* Header */}
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-foreground">{routerName}</h2>
+        <h2 className="text-xl font-bold text-foreground">{routerName}</h2>
         <p className="text-muted-foreground text-sm flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-success inline-block animate-pulse-glow" />
-          {sysResource?.version || "RouterOS"} • {config.mode === "rest" ? "REST API" : "MikroTik API"}
+          <span className="h-1.5 w-1.5 rounded-full bg-success inline-block" />
+          {sysResource?.version || "RouterOS"} • {config.mode === "rest" ? "REST" : "API"}
         </p>
       </div>
 
@@ -86,14 +83,14 @@ export default function Index() {
       </div>
 
       {/* System Info + Uptime */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
         <div className="lg:col-span-2">
           <SystemInfoCard resource={sysResource} identity={identity} routerboard={routerboard} />
         </div>
-        <div className="space-y-4">
+        <div className="space-y-3">
           <StatCard title="وقت التشغيل" value={uptime} icon={Clock} variant="accent" />
           <StatCard title="التخزين" value={`${hddUsed}%`} subtitle={formatSize(freeHdd) + " متاح"} icon={HardDrive} variant={hddUsed > 90 ? "warning" : "default"} />
-          <StatCard title="حالة النظام" value="متصل" icon={Activity} variant="accent" />
+          <StatCard title="الحالة" value="متصل" icon={Activity} variant="accent" />
         </div>
       </div>
 
@@ -102,15 +99,15 @@ export default function Index() {
         <TrafficChart interfaces={interfaces} />
       </div>
 
-      {/* Active Hotspot Users Quick View */}
+      {/* Active Hotspot Users */}
       {Array.isArray(hotspotUsers) && hotspotUsers.length > 0 && (
-        <div className="gradient-card rounded-xl border border-border shadow-card p-5 mb-6">
+        <div className="rounded-xl border border-border bg-card shadow-card p-5 mb-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <Wifi className="h-4 w-4 text-primary" />
-              المتصلين الآن ({hotspotUsers.length})
+              المتصلين ({hotspotUsers.length})
             </h3>
-            <Link to="/hotspot" className="text-xs text-primary hover:underline">عرض الكل ←</Link>
+            <Link to="/hotspot" className="text-xs text-primary hover:underline">عرض الكل</Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -119,14 +116,14 @@ export default function Index() {
                   <th className="text-right p-2 font-medium">المستخدم</th>
                   <th className="text-right p-2 font-medium">IP</th>
                   <th className="text-right p-2 font-medium">MAC</th>
-                  <th className="text-right p-2 font-medium">مدة الاتصال</th>
-                  <th className="text-right p-2 font-medium">↓ تحميل</th>
-                  <th className="text-right p-2 font-medium">↑ رفع</th>
+                  <th className="text-right p-2 font-medium">المدة</th>
+                  <th className="text-right p-2 font-medium">↓</th>
+                  <th className="text-right p-2 font-medium">↑</th>
                 </tr>
               </thead>
               <tbody>
-                {hotspotUsers.slice(0, 10).map((u: any, i: number) => (
-                  <tr key={i} className="border-b border-border/30 hover:bg-secondary/50 transition-colors">
+                {hotspotUsers.slice(0, 8).map((u: any, i: number) => (
+                  <tr key={i} className="border-b border-border/30 hover:bg-muted/50 transition-colors">
                     <td className="p-2 font-medium text-foreground">{u.user || "—"}</td>
                     <td className="p-2 font-mono text-muted-foreground">{u.address || "—"}</td>
                     <td className="p-2 font-mono text-muted-foreground">{u["mac-address"] || "—"}</td>
@@ -141,25 +138,24 @@ export default function Index() {
         </div>
       )}
 
-      {/* Interfaces Quick View */}
+      {/* Interfaces */}
       {Array.isArray(interfaces) && interfaces.length > 0 && (
-        <div className="gradient-card rounded-xl border border-border shadow-card p-5">
+        <div className="rounded-xl border border-border bg-card shadow-card p-5">
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
             <Network className="h-4 w-4 text-info" />
-            حالة الواجهات
+            الواجهات
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {interfaces.filter((i: any) => i.type !== "loopback").slice(0, 9).map((iface: any, i: number) => {
               const running = iface.running === "true" || iface.running === true;
               return (
-                <div key={i} className={`p-3 rounded-lg border ${running ? "border-success/20 bg-success/5" : "border-border bg-secondary/50"}`}>
+                <div key={i} className={`p-3 rounded-lg border ${running ? "border-success/20 bg-success/5" : "border-border bg-muted/50"}`}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-medium text-foreground font-mono">{iface.name}</span>
-                    <span className={`h-2 w-2 rounded-full ${running ? "bg-success" : "bg-muted-foreground"}`} />
+                    <span className={`h-1.5 w-1.5 rounded-full ${running ? "bg-success" : "bg-muted-foreground"}`} />
                   </div>
-                  <div className="text-[10px] text-muted-foreground space-y-0.5">
-                    <div>↓ {formatSize(iface["rx-byte"])} / ↑ {formatSize(iface["tx-byte"])}</div>
-                    {iface.type && <div>{iface.type}</div>}
+                  <div className="text-[10px] text-muted-foreground">
+                    ↓ {formatSize(iface["rx-byte"])} / ↑ {formatSize(iface["tx-byte"])}
                   </div>
                 </div>
               );
