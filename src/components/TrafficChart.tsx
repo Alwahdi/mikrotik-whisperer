@@ -1,4 +1,4 @@
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 interface TrafficChartProps {
   interfaces: any[] | undefined;
@@ -16,8 +16,8 @@ function formatTraffic(bytes: string | number | undefined): string {
 export default function TrafficChart({ interfaces }: TrafficChartProps) {
   if (!Array.isArray(interfaces) || interfaces.length === 0) {
     return (
-      <div className="rounded-xl border border-border bg-card shadow-card p-5">
-        <h3 className="text-sm font-semibold text-foreground mb-4">📊 حركة البيانات</h3>
+      <div className="rounded-lg border border-border bg-card shadow-card p-5">
+        <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide mb-4">حركة البيانات</h3>
         <p className="text-muted-foreground text-xs text-center py-8">لا توجد بيانات</p>
       </div>
     );
@@ -37,30 +37,36 @@ export default function TrafficChart({ interfaces }: TrafficChartProps) {
     }));
 
   return (
-    <div className="rounded-xl border border-border bg-card shadow-card p-5">
-      <h3 className="text-sm font-semibold text-foreground mb-4">📊 حركة البيانات (MB)</h3>
-      <div className="h-56" dir="ltr">
+    <div className="rounded-lg border border-border bg-card shadow-card p-5">
+      <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide mb-4">حركة البيانات (MB)</h3>
+      <div className="h-52" dir="ltr">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} barGap={2}>
-            <XAxis dataKey="name" tick={{ fontSize: 11 }} tickLine={false} className="text-muted-foreground" />
-            <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v.toFixed(0)}`} />
+            <XAxis dataKey="name" tick={{ fontSize: 10 }} tickLine={false} stroke="hsl(30, 5%, 50%)" />
+            <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v.toFixed(0)}`} stroke="hsl(30, 5%, 50%)" />
             <Tooltip
               formatter={(value: number, name: string) => [
                 formatTraffic(value * 1048576),
                 name === "rx" ? "تحميل ↓" : "رفع ↑",
               ]}
+              contentStyle={{
+                fontSize: 12,
+                borderRadius: 8,
+                border: "1px solid hsl(35, 15%, 89%)",
+                background: "hsl(40, 25%, 99%)",
+              }}
             />
-            <Bar dataKey="rx" name="rx" radius={[4, 4, 0, 0]} maxBarSize={28} fill="hsl(217, 91%, 60%)" fillOpacity={0.8} />
-            <Bar dataKey="tx" name="tx" radius={[4, 4, 0, 0]} maxBarSize={28} fill="hsl(172, 66%, 50%)" fillOpacity={0.8} />
+            <Bar dataKey="rx" name="rx" radius={[3, 3, 0, 0]} maxBarSize={24} fill="hsl(30, 10%, 25%)" fillOpacity={0.7} />
+            <Bar dataKey="tx" name="tx" radius={[3, 3, 0, 0]} maxBarSize={24} fill="hsl(35, 30%, 72%)" fillOpacity={0.8} />
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="flex gap-4 mt-3 justify-center text-xs text-muted-foreground">
+      <div className="flex gap-5 mt-3 justify-center text-[11px] text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-sm bg-primary" /> تحميل (RX)
+          <span className="w-2 h-2 rounded-sm" style={{ background: "hsl(30, 10%, 25%)" }} /> تحميل (RX)
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-sm bg-accent" /> رفع (TX)
+          <span className="w-2 h-2 rounded-sm" style={{ background: "hsl(35, 30%, 72%)" }} /> رفع (TX)
         </span>
       </div>
     </div>

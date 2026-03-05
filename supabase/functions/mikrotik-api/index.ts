@@ -109,6 +109,8 @@ class MikroTikApiClient {
     const type = sentence[0];
 
     if (type === "!trap") {
+      // Read the !done that follows !trap
+      await this.readSentence();
       throw new Error(parseAttrs(sentence).message || "Authentication failed");
     }
 
@@ -119,6 +121,7 @@ class MikroTikApiClient {
         await this.writeSentence(["/login", `=name=${user}`, `=response=${response}`]);
         const s2 = await this.readSentence();
         if (s2[0] === "!trap") {
+          await this.readSentence(); // read !done after !trap
           throw new Error(parseAttrs(s2).message || "Authentication failed");
         }
       }
@@ -131,6 +134,7 @@ class MikroTikApiClient {
     const words = [command, ...(args || [])];
     await this.writeSentence(words);
     const results: Record<string, string>[] = [];
+    let trapError: string | null = null;
 
     while (true) {
       const sentence = await this.readSentence();
@@ -140,10 +144,13 @@ class MikroTikApiClient {
 
       if (type === "!re") {
         results.push(attrs);
-      } else if (type === "!done") {
-        break;
       } else if (type === "!trap") {
-        throw new Error(attrs.message || "Command failed");
+        // Store the error but keep reading until !done to keep connection clean
+        trapError = attrs.message || "Command failed";
+      } else if (type === "!done") {
+        // Connection is now clean for next command
+        if (trapError) throw new Error(trapError);
+        break;
       } else if (type === "!fatal") {
         throw new Error(attrs.message || "Fatal error");
       }
@@ -279,7 +286,15 @@ async function handleApi(
       const fallback = getV6FallbackCommand(command);
       if (fallback && (err.message?.includes("no such command") || err.message?.includes("unknown command"))) {
         console.log(`Retrying with v6 path: ${fallback}`);
-        return await client.execute(fallback, args);
+        try {
+          return await client.execute(fallback, args);
+        } catch (e2: any) {
+          // Both v7 and v6 failed - User Manager likely not installed
+          if (e2.message?.includes("no such command")) {
+            throw new Error("User Manager غير مثبّت على هذا الراوتر. يرجى تثبيت حزمة user-manager وإعادة التشغيل.");
+          }
+          throw e2;
+        }
       }
       throw err;
     }

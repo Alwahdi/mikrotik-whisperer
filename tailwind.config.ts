@@ -14,7 +14,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ["IBM Plex Sans Arabic", "sans-serif"],
+        sans: ["Cairo", "sans-serif"],
         mono: ["JetBrains Mono", "monospace"],
       },
       colors: {

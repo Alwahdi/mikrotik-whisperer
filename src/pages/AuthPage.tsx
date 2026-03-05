@@ -41,31 +41,25 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4" dir="rtl">
-      {/* Background decoration */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-primary/5 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 rounded-full bg-accent/5 blur-3xl" />
-      </div>
-
-      <div className="w-full max-w-sm relative z-10">
+      <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex p-3.5 rounded-2xl gradient-primary mb-4 shadow-glow">
-            <Router className="h-8 w-8 text-primary-foreground" />
+          <div className="inline-flex p-3 rounded-xl gradient-primary mb-4">
+            <Router className="h-7 w-7 text-primary-foreground" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground">MikroTik Manager</h1>
-          <p className="text-muted-foreground text-sm mt-1.5">إدارة أجهزة المايكروتيك بسهولة</p>
+          <h1 className="text-xl font-bold text-foreground">MikroTik Manager</h1>
+          <p className="text-muted-foreground text-xs mt-1.5">إدارة أجهزة المايكروتيك بسهولة</p>
         </div>
 
         {/* Form Card */}
-        <div className="rounded-2xl border border-border bg-card shadow-card p-6">
-          {/* Toggle tabs */}
-          <div className="flex rounded-xl bg-muted p-1 mb-6">
+        <div className="rounded-xl border border-border bg-card shadow-card p-6">
+          {/* Toggle */}
+          <div className="flex rounded-lg bg-muted p-0.5 mb-6">
             <button
               type="button"
               onClick={() => setIsLogin(true)}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
-                isLogin ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+              className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
+                isLogin ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               تسجيل الدخول
@@ -73,8 +67,8 @@ export default function AuthPage() {
             <button
               type="button"
               onClick={() => setIsLogin(false)}
-              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
-                !isLogin ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+              className={`flex-1 py-2 rounded-md text-sm font-medium transition-all ${
+                !isLogin ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
               }`}
             >
               حساب جديد
@@ -84,7 +78,7 @@ export default function AuthPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">الاسم الكامل</label>
+                <label className="block text-xs font-medium text-foreground mb-1.5">الاسم الكامل</label>
                 <div className="relative">
                   <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <input
@@ -92,14 +86,14 @@ export default function AuthPage() {
                     value={form.fullName}
                     onChange={(e) => setForm(f => ({ ...f, fullName: e.target.value }))}
                     placeholder="الاسم الكامل"
-                    className="w-full bg-muted border border-border rounded-xl pr-10 pl-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
+                    className="w-full bg-muted border border-border rounded-lg pr-10 pl-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
                   />
                 </div>
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">البريد الإلكتروني</label>
+              <label className="block text-xs font-medium text-foreground mb-1.5">البريد الإلكتروني</label>
               <div className="relative">
                 <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
@@ -107,14 +101,14 @@ export default function AuthPage() {
                   value={form.email}
                   onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))}
                   placeholder="email@example.com"
-                  className="w-full bg-muted border border-border rounded-xl pr-10 pl-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
+                  className="w-full bg-muted border border-border rounded-lg pr-10 pl-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
                   dir="ltr"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1.5">كلمة المرور</label>
+              <label className="block text-xs font-medium text-foreground mb-1.5">كلمة المرور</label>
               <div className="relative">
                 <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
@@ -122,7 +116,7 @@ export default function AuthPage() {
                   value={form.password}
                   onChange={(e) => setForm(f => ({ ...f, password: e.target.value }))}
                   placeholder="••••••••"
-                  className="w-full bg-muted border border-border rounded-xl pr-10 pl-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
+                  className="w-full bg-muted border border-border rounded-lg pr-10 pl-10 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
                   dir="ltr"
                 />
                 <button
@@ -138,7 +132,7 @@ export default function AuthPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full gradient-primary text-primary-foreground font-medium py-2.5 rounded-xl text-sm transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2 shadow-glow"
+              className="w-full gradient-primary text-primary-foreground font-medium py-2.5 rounded-lg text-sm transition-all hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <><Loader2 className="h-4 w-4 animate-spin" />جاري المعالجة...</>
@@ -147,7 +141,7 @@ export default function AuthPage() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-6">
+        <p className="text-center text-[10px] text-muted-foreground mt-6">
           يدعم RouterOS v6 و v7+ • REST API و MikroTik API
         </p>
       </div>
