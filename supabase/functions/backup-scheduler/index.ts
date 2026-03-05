@@ -18,7 +18,6 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get user from auth header
     let userId: string | null = null;
     if (authHeader) {
       const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -30,14 +29,13 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { action, router_id, router_label, backup_id } = body;
+    const { action, router_id, router_label, backup_id, restore_type } = body;
 
     // ─── CREATE BACKUP ──────────────────────────────────────────
     if (action === "create") {
       if (!userId) throw new Error("Authentication required");
       if (!router_id) throw new Error("Router ID required");
 
-      // Get router config
       const { data: router, error: routerErr } = await supabase
         .from("routers")
         .select("*")
@@ -47,7 +45,6 @@ serve(async (req) => {
 
       if (routerErr || !router) throw new Error("Router not found");
 
-      // Fetch users from router via mikrotik-api
       const mikrotikUrl = `${supabaseUrl}/functions/v1/mikrotik-api`;
       const baseBody = {
         host: router.host,
@@ -58,7 +55,6 @@ serve(async (req) => {
         mode: router.mode,
       };
 
-      // Fetch hotspot users, user-manager users, and profiles
       const [hotspotRes, umUsersRes, umProfilesRes, hotspotProfilesRes] = await Promise.allSettled([
         fetch(mikrotikUrl, {
           method: "POST",
@@ -94,14 +90,12 @@ serve(async (req) => {
       const fileName = `${userId}/${router_id}/${Date.now()}.json`;
       const fileContent = JSON.stringify(backupData, null, 2);
 
-      // Upload to storage
       const { error: uploadErr } = await supabase.storage
         .from("router-backups")
         .upload(fileName, fileContent, { contentType: "application/json" });
 
       if (uploadErr) throw new Error(`Upload failed: ${uploadErr.message}`);
 
-      // Record in database
       const metadata = {
         hotspot_users: Array.isArray(backupData.hotspot_users) ? backupData.hotspot_users.length : 0,
         um_users: Array.isArray(backupData.um_users) ? backupData.um_users.length : 0,
@@ -135,7 +129,6 @@ serve(async (req) => {
       if (!userId) throw new Error("Authentication required");
       if (!backup_id) throw new Error("Backup ID required");
 
-      // Get backup record
       const { data: backup, error: backupErr } = await supabase
         .from("backups")
         .select("*")
@@ -145,7 +138,6 @@ serve(async (req) => {
 
       if (backupErr || !backup) throw new Error("Backup not found");
 
-      // Download backup file
       const { data: fileData, error: downloadErr } = await supabase.storage
         .from("router-backups")
         .download(backup.file_path!);
@@ -154,7 +146,6 @@ serve(async (req) => {
 
       const backupContent = JSON.parse(await fileData.text());
 
-      // Get router config
       const { data: router, error: routerErr } = await supabase
         .from("routers")
         .select("*")
@@ -164,7 +155,6 @@ serve(async (req) => {
 
       if (routerErr || !router) throw new Error("Router not found for restore");
 
-      // Restore via batch commands
       const mikrotikUrl = `${supabaseUrl}/functions/v1/mikrotik-api`;
       const baseBody = {
         host: router.host,
@@ -176,25 +166,28 @@ serve(async (req) => {
       };
 
       const commands: { command: string; args: string[] }[] = [];
+      const selectedType = restore_type || "all";
 
       // Restore user-manager users
-      if (Array.isArray(backupContent.um_users)) {
+      if ((selectedType === "all" || selectedType === "um") && Array.isArray(backupContent.um_users)) {
         for (const u of backupContent.um_users) {
-          if (!u.name) continue;
-          const args = [`=name=${u.name}`];
+          const username = u.name || u.username;
+          if (!username) continue;
+          const args = [`=name=${username}`];
           if (u.password) args.push(`=password=${u.password}`);
           if (u.group) args.push(`=group=${u.group}`);
-          if (u.profile) args.push(`=group=${u.profile}`);
+          else if (u.profile) args.push(`=group=${u.profile}`);
           if (u.comment) args.push(`=comment=${u.comment}`);
           commands.push({ command: "/user-manager/user/add", args });
         }
       }
 
       // Restore hotspot users
-      if (Array.isArray(backupContent.hotspot_users)) {
+      if ((selectedType === "all" || selectedType === "hotspot") && Array.isArray(backupContent.hotspot_users)) {
         for (const u of backupContent.hotspot_users) {
-          if (!u.name) continue;
-          const args = [`=name=${u.name}`];
+          const username = u.name || u.user;
+          if (!username) continue;
+          const args = [`=name=${username}`];
           if (u.password) args.push(`=password=${u.password}`);
           if (u.profile) args.push(`=profile=${u.profile}`);
           if (u.comment) args.push(`=comment=${u.comment}`);
@@ -203,29 +196,37 @@ serve(async (req) => {
       }
 
       if (commands.length === 0) {
-        return new Response(JSON.stringify({ success: true, restored: 0, message: "No users to restore" }), {
+        return new Response(JSON.stringify({ success: true, restored: 0, failed: 0, total: 0, message: "No users to restore" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Execute batch
-      const batchRes = await fetch(mikrotikUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
-        body: JSON.stringify({ ...baseBody, action: "batch", commands }),
-      });
-      const batchResult = await batchRes.json();
+      // Execute in chunks for reliability
+      const CHUNK_SIZE = 50;
+      let totalRestored = 0;
+      let totalFailed = 0;
+      const allErrors: string[] = [];
 
-      const errors = batchResult?.errors?.filter((e: string) => e) || [];
-      const total = commands.length;
-      const succeeded = total - errors.length;
+      for (let i = 0; i < commands.length; i += CHUNK_SIZE) {
+        const chunk = commands.slice(i, i + CHUNK_SIZE);
+        const batchRes = await fetch(mikrotikUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${supabaseKey}` },
+          body: JSON.stringify({ ...baseBody, action: "batch", commands: chunk }),
+        });
+        const batchResult = await batchRes.json();
+        const errors = batchResult?.errors?.filter((e: string) => e) || [];
+        totalRestored += chunk.length - errors.length;
+        totalFailed += errors.length;
+        allErrors.push(...errors);
+      }
 
       return new Response(JSON.stringify({
         success: true,
-        restored: succeeded,
-        failed: errors.length,
-        total,
-        errors: errors.slice(0, 5),
+        restored: totalRestored,
+        failed: totalFailed,
+        total: commands.length,
+        errors: allErrors.slice(0, 10),
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -245,12 +246,10 @@ serve(async (req) => {
 
       if (backupErr || !backup) throw new Error("Backup not found");
 
-      // Delete file from storage
       if (backup.file_path) {
         await supabase.storage.from("router-backups").remove([backup.file_path]);
       }
 
-      // Delete record
       await supabase.from("backups").delete().eq("id", backup_id);
 
       return new Response(JSON.stringify({ success: true }), {

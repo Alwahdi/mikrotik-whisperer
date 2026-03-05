@@ -572,11 +572,20 @@ async function handleRest(
   method?: string, restBody?: Record<string, any>
 ): Promise<any> {
   const effectiveMethod = method || getRestMethod(command);
-  const path = command.replace(/\/print$/, "").replace(/\/set$/, "").replace(/\/add$/, "").replace(/\/remove$/, "");
-  const url = `${protocol}://${host}:${port}/rest${path}`;
+  let path = command.replace(/\/print$/, "").replace(/\/set$/, "").replace(/\/add$/, "").replace(/\/remove$/, "");
   const credentials = btoa(`${user}:${pass}`);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
+
+  // For DELETE requests, append .id to URL path (MikroTik REST requires it)
+  let effectiveBody = restBody;
+  if (effectiveMethod === "DELETE" && restBody?.[".id"]) {
+    path = `${path}/${restBody[".id"]}`;
+    const { ".id": _, ...rest } = restBody;
+    effectiveBody = Object.keys(rest).length > 0 ? rest : undefined;
+  }
+
+  const url = `${protocol}://${host}:${port}/rest${path}`;
   try {
     const fetchOpts: RequestInit = {
       method: effectiveMethod,
@@ -586,8 +595,8 @@ async function handleRest(
       },
       signal: controller.signal,
     };
-    if (restBody && effectiveMethod !== "GET") {
-      fetchOpts.body = JSON.stringify(restBody);
+    if (effectiveBody && effectiveMethod !== "GET") {
+      fetchOpts.body = JSON.stringify(effectiveBody);
     }
     const response = await fetch(url, fetchOpts);
     if (!response.ok) {

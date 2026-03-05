@@ -209,7 +209,36 @@ export default function SalesPage() {
           <h1 className="text-lg font-semibold text-foreground tracking-tight">المبيعات</h1>
           <p className="text-muted-foreground text-xs mt-0.5">تقارير المبيعات ونقاط البيع</p>
         </div>
+        <Button size="sm" variant="outline" className="text-xs" onClick={exportCSV} disabled={!filteredSales.length}>
+          <Download className="h-3.5 w-3.5 ml-1" />
+          تصدير CSV
+        </Button>
       </div>
+
+      {/* Monthly Comparison */}
+      {monthlyComparison && (
+        <div className="rounded-md border border-border bg-card p-3 mb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] text-muted-foreground">هذا الشهر</p>
+              <p className="text-lg font-semibold text-foreground">{monthlyComparison.thisRevenue.toLocaleString()}</p>
+              <p className="text-[10px] text-muted-foreground">{monthlyComparison.thisCards} كرت</p>
+            </div>
+            <div className="text-center">
+              {monthlyComparison.change !== 0 && (
+                <Badge variant={monthlyComparison.change > 0 ? "default" : "destructive"} className="text-[10px]">
+                  {monthlyComparison.change > 0 ? "+" : ""}{monthlyComparison.change}%
+                </Badge>
+              )}
+              <p className="text-[10px] text-muted-foreground mt-1">مقارنة بالشهر السابق</p>
+            </div>
+            <div className="text-left">
+              <p className="text-[11px] text-muted-foreground">الشهر السابق</p>
+              <p className="text-lg font-semibold text-muted-foreground">{monthlyComparison.lastRevenue.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
