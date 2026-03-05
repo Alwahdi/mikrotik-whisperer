@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
   useUserManagerUsers,
@@ -9,12 +9,14 @@ import {
 import {
   Users, RefreshCw, AlertTriangle, Package, Clock,
   UserCheck, UserX, Search, MoreHorizontal, UserPlus,
-  Ban, Trash2, CheckCircle, XCircle, Eye,
+  Ban, Trash2, CheckCircle, XCircle, Eye, ChevronLeft, ChevronRight,
+  Home,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuTrigger, DropdownMenuSeparator,
@@ -28,7 +30,14 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+  BreadcrumbPage, BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
+
+const PAGE_SIZE = 20;
 
 export default function UserManagerPage() {
   const { data: users, isLoading: loadingUsers, error: usersError } = useUserManagerUsers();
@@ -42,6 +51,8 @@ export default function UserManagerPage() {
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [detailUser, setDetailUser] = useState<any>(null);
   const [newUser, setNewUser] = useState({ name: "", password: "", profile: "" });
+  const [usersPage, setUsersPage] = useState(1);
+  const [sessionsPage, setSessionsPage] = useState(1);
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["mikrotik", "usermanager"] });
@@ -54,15 +65,54 @@ export default function UserManagerPage() {
     (usersError as any)?.message?.includes("no such command")
   );
 
-  const allUsers = Array.isArray(users) ? users : [];
-  const filteredUsers = allUsers.filter((u: any) => {
-    if (!search) return true;
+  // Build profile name lookup map
+  const profileMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (Array.isArray(profiles)) {
+      profiles.forEach((p: any) => {
+        if (p.name) {
+          map[p.name] = p.name;
+          map[p[".id"]] = p.name;
+        }
+      });
+    }
+    return map;
+  }, [profiles]);
+
+  const getProfileName = (user: any): string => {
+    // Try all possible profile field names from v6 and v7
+    const raw = user.group || user.profile || user["actual-profile"] || user.actual_profile || "";
+    if (!raw) return "—";
+    return profileMap[raw] || raw;
+  };
+
+  const allUsers = useMemo(() => Array.isArray(users) ? users : [], [users]);
+  const allSessions = useMemo(() => Array.isArray(sessions) ? sessions : [], [sessions]);
+
+  const filteredUsers = useMemo(() => {
+    if (!search) return allUsers;
     const s = search.toLowerCase();
-    return (u.name || "").toLowerCase().includes(s) ||
-           (u.username || "").toLowerCase().includes(s) ||
-           (u.comment || "").toLowerCase().includes(s) ||
-           (u.group || u.profile || "").toLowerCase().includes(s);
-  });
+    return allUsers.filter((u: any) =>
+      (u.name || "").toLowerCase().includes(s) ||
+      (u.username || "").toLowerCase().includes(s) ||
+      (u.comment || "").toLowerCase().includes(s) ||
+      getProfileName(u).toLowerCase().includes(s)
+    );
+  }, [allUsers, search, profileMap]);
+
+  const filteredSessions = useMemo(() => {
+    if (!search) return allSessions;
+    const s = search.toLowerCase();
+    return allSessions.filter((sess: any) =>
+      (sess.user || sess.customer || sess.name || "").toLowerCase().includes(s)
+    );
+  }, [allSessions, search]);
+
+  // Paginated slices
+  const usersTotalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
+  const sessionsTotalPages = Math.max(1, Math.ceil(filteredSessions.length / PAGE_SIZE));
+  const paginatedUsers = filteredUsers.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE);
+  const paginatedSessions = filteredSessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE);
 
   const activeCount = allUsers.filter((u: any) => u.disabled !== "true" && u.disabled !== true).length;
   const disabledCount = allUsers.filter((u: any) => u.disabled === "true" || u.disabled === true).length;
@@ -88,12 +138,32 @@ export default function UserManagerPage() {
     });
   };
 
+  // Reset page on search change
+  const handleSearch = (val: string) => {
+    setSearch(val);
+    setUsersPage(1);
+    setSessionsPage(1);
+  };
+
   return (
     <DashboardLayout>
+      {/* Breadcrumb */}
+      <Breadcrumb className="mb-4">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild><Link to="/"><Home className="h-3.5 w-3.5" /></Link></BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>يوزر مانجر</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-lg font-bold text-foreground">يوزر مانجر</h2>
+          <h1 className="text-lg font-bold text-foreground">يوزر مانجر</h1>
           <p className="text-muted-foreground text-xs mt-0.5">إدارة المستخدمين والباقات والجلسات</p>
         </div>
         <div className="flex items-center gap-2">
@@ -138,11 +208,11 @@ export default function UserManagerPage() {
 
       {/* Quick Stats */}
       {!isNotInstalled && (
-        <div className="grid grid-cols-4 gap-3 mb-5">
-          <StatBox icon={<Users className="h-3.5 w-3.5 text-foreground" />} label="إجمالي" value={loadingUsers ? "—" : allUsers.length} />
-          <StatBox icon={<UserCheck className="h-3.5 w-3.5 text-success" />} label="نشط" value={loadingUsers ? "—" : activeCount} />
-          <StatBox icon={<UserX className="h-3.5 w-3.5 text-destructive" />} label="معطل" value={loadingUsers ? "—" : disabledCount} />
-          <StatBox icon={<Clock className="h-3.5 w-3.5 text-info" />} label="جلسات" value={loadingSessions ? "—" : (Array.isArray(sessions) ? sessions.length : 0)} />
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+          <StatBox icon={<Users className="h-3.5 w-3.5 text-foreground" />} label="إجمالي" value={loadingUsers ? null : allUsers.length} loading={loadingUsers} />
+          <StatBox icon={<UserCheck className="h-3.5 w-3.5 text-success" />} label="نشط" value={loadingUsers ? null : activeCount} loading={loadingUsers} />
+          <StatBox icon={<UserX className="h-3.5 w-3.5 text-destructive" />} label="معطل" value={loadingUsers ? null : disabledCount} loading={loadingUsers} />
+          <StatBox icon={<Clock className="h-3.5 w-3.5 text-primary" />} label="جلسات" value={loadingSessions ? null : allSessions.length} loading={loadingSessions} />
         </div>
       )}
 
@@ -152,7 +222,7 @@ export default function UserManagerPage() {
         <Input
           placeholder="بحث عن مستخدم، باقة، أو تعليق..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => handleSearch(e.target.value)}
           className="pr-10 text-sm"
         />
       </div>
@@ -160,9 +230,15 @@ export default function UserManagerPage() {
       {/* Tabs */}
       <Tabs defaultValue="users" dir="rtl">
         <TabsList className="bg-muted mb-4 w-full justify-start">
-          <TabsTrigger value="users" className="text-xs">المستخدمين ({allUsers.length})</TabsTrigger>
-          <TabsTrigger value="profiles" className="text-xs">الباقات ({Array.isArray(profiles) ? profiles.length : 0})</TabsTrigger>
-          <TabsTrigger value="sessions" className="text-xs">الجلسات ({Array.isArray(sessions) ? sessions.length : 0})</TabsTrigger>
+          <TabsTrigger value="users" className="text-xs">
+            المستخدمين {!loadingUsers && `(${allUsers.length})`}
+          </TabsTrigger>
+          <TabsTrigger value="profiles" className="text-xs">
+            الباقات {!loadingProfiles && `(${Array.isArray(profiles) ? profiles.length : 0})`}
+          </TabsTrigger>
+          <TabsTrigger value="sessions" className="text-xs">
+            الجلسات {!loadingSessions && `(${allSessions.length})`}
+          </TabsTrigger>
         </TabsList>
 
         {/* Users Tab */}
@@ -175,16 +251,22 @@ export default function UserManagerPage() {
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">المستخدم</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">الباقة</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">الحالة</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">التعليق</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground hidden sm:table-cell">التعليق</th>
                     <th className="text-center p-3 font-medium text-xs text-muted-foreground w-12">إجراء</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingUsers ? (
-                    <tr><td colSpan={5} className="p-10 text-center text-muted-foreground text-sm">
-                      <div className="animate-pulse">جاري التحميل...</div>
-                    </td></tr>
-                  ) : filteredUsers.length === 0 ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={i} className="border-b border-border/50">
+                        <td className="p-3"><Skeleton className="h-4 w-24" /></td>
+                        <td className="p-3"><Skeleton className="h-4 w-20" /></td>
+                        <td className="p-3"><Skeleton className="h-4 w-12" /></td>
+                        <td className="p-3 hidden sm:table-cell"><Skeleton className="h-4 w-16" /></td>
+                        <td className="p-3"><Skeleton className="h-4 w-6 mx-auto" /></td>
+                      </tr>
+                    ))
+                  ) : paginatedUsers.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-10 text-center">
                         <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
@@ -192,19 +274,23 @@ export default function UserManagerPage() {
                       </td>
                     </tr>
                   ) : (
-                    filteredUsers.map((user: any, i: number) => {
+                    paginatedUsers.map((user: any, i: number) => {
                       const isDisabled = user.disabled === "true" || user.disabled === true;
                       return (
                         <tr key={user[".id"] || i} className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
                           <td className="p-3 font-medium text-foreground text-sm">{user.name || user.username || "—"}</td>
-                          <td className="p-3 text-muted-foreground text-xs">{user.group || user.profile || user.actual_profile || "—"}</td>
+                          <td className="p-3 text-muted-foreground text-xs">
+                            <span className="inline-block px-2 py-0.5 rounded bg-muted text-foreground text-[11px]">
+                              {getProfileName(user)}
+                            </span>
+                          </td>
                           <td className="p-3">
                             <span className={`inline-flex items-center gap-1 text-xs ${isDisabled ? "text-destructive" : "text-success"}`}>
                               {isDisabled ? <XCircle className="h-3 w-3" /> : <CheckCircle className="h-3 w-3" />}
                               {isDisabled ? "معطل" : "نشط"}
                             </span>
                           </td>
-                          <td className="p-3 text-muted-foreground text-xs max-w-[150px] truncate">{user.comment || "—"}</td>
+                          <td className="p-3 text-muted-foreground text-xs max-w-[150px] truncate hidden sm:table-cell">{user.comment || "—"}</td>
                           <td className="p-3 text-center">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -240,34 +326,51 @@ export default function UserManagerPage() {
                 </tbody>
               </table>
             </div>
+            {/* Pagination */}
+            {!loadingUsers && filteredUsers.length > PAGE_SIZE && (
+              <PaginationBar page={usersPage} totalPages={usersTotalPages} onPageChange={setUsersPage} total={filteredUsers.length} />
+            )}
           </div>
         </TabsContent>
 
         {/* Profiles Tab */}
         <TabsContent value="profiles">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {Array.isArray(profiles) && profiles.map((profile: any, i: number) => (
-              <div key={i} className="rounded-lg border border-border bg-card shadow-card p-4 hover:border-foreground/10 transition-colors">
-                <div className="flex items-center gap-2 mb-3">
-                  <Package className="h-4 w-4 text-primary" />
-                  <h3 className="font-semibold text-foreground text-sm">{profile.name}</h3>
+          {loadingProfiles ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-lg border border-border bg-card p-4">
+                  <Skeleton className="h-5 w-32 mb-3" />
+                  <Skeleton className="h-4 w-full mb-2" />
+                  <Skeleton className="h-4 w-2/3" />
                 </div>
-                <div className="space-y-2">
-                  {profile["name-for-users"] && <Row label="الاسم" value={profile["name-for-users"]} />}
-                  {profile.validity && <Row label="الصلاحية" value={profile.validity} />}
-                  {profile.price && <Row label="السعر" value={profile.price} highlight />}
-                  {profile["rate-limit"] && <Row label="السرعة" value={profile["rate-limit"]} />}
-                  {profile["shared-users"] && <Row label="مشاركة" value={profile["shared-users"]} />}
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {Array.isArray(profiles) && profiles.map((profile: any, i: number) => (
+                <div key={i} className="rounded-lg border border-border bg-card shadow-card p-4 hover:border-foreground/10 transition-colors">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Package className="h-4 w-4 text-primary" />
+                    <h3 className="font-semibold text-foreground text-sm">{profile.name}</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {profile["name-for-users"] && <Row label="الاسم" value={profile["name-for-users"]} />}
+                    {profile.validity && <Row label="الصلاحية" value={profile.validity} />}
+                    {profile.price && <Row label="السعر" value={profile.price} highlight />}
+                    {profile["rate-limit"] && <Row label="السرعة" value={profile["rate-limit"]} />}
+                    {profile["shared-users"] && <Row label="مشاركة" value={profile["shared-users"]} />}
+                    {profile.override && <Row label="Override" value={JSON.stringify(profile.override).slice(0, 50)} />}
+                  </div>
                 </div>
-              </div>
-            ))}
-            {(!Array.isArray(profiles) || profiles.length === 0) && (
-              <div className="col-span-full text-center py-10">
-                <Package className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                <p className="text-muted-foreground text-sm">لا توجد باقات</p>
-              </div>
-            )}
-          </div>
+              ))}
+              {(!Array.isArray(profiles) || profiles.length === 0) && (
+                <div className="col-span-full text-center py-10">
+                  <Package className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                  <p className="text-muted-foreground text-sm">لا توجد باقات</p>
+                </div>
+              )}
+            </div>
+          )}
         </TabsContent>
 
         {/* Sessions Tab */}
@@ -279,29 +382,35 @@ export default function UserManagerPage() {
                   <tr className="border-b border-border bg-muted/50">
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">المستخدم</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">البداية</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">النهاية</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground hidden sm:table-cell">النهاية</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">↓ تحميل</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">↑ رفع</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingSessions ? (
-                    <tr><td colSpan={5} className="p-10 text-center text-muted-foreground text-sm">
-                      <div className="animate-pulse">جاري التحميل...</div>
-                    </td></tr>
-                  ) : !Array.isArray(sessions) || sessions.length === 0 ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={i} className="border-b border-border/50">
+                        <td className="p-3"><Skeleton className="h-4 w-24" /></td>
+                        <td className="p-3"><Skeleton className="h-4 w-20" /></td>
+                        <td className="p-3 hidden sm:table-cell"><Skeleton className="h-4 w-20" /></td>
+                        <td className="p-3"><Skeleton className="h-4 w-16" /></td>
+                        <td className="p-3"><Skeleton className="h-4 w-16" /></td>
+                      </tr>
+                    ))
+                  ) : paginatedSessions.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-10 text-center">
                         <Clock className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                        <p className="text-muted-foreground text-sm">لا توجد جلسات نشطة</p>
+                        <p className="text-muted-foreground text-sm">لا توجد جلسات</p>
                       </td>
                     </tr>
                   ) : (
-                    sessions.map((s: any, i: number) => (
+                    paginatedSessions.map((s: any, i: number) => (
                       <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                         <td className="p-3 font-medium text-foreground text-sm">{s.user || s.customer || s.name || "—"}</td>
                         <td className="p-3 text-muted-foreground text-xs font-mono">{s["from-time"] || s.started || s["acct-session-id"] || "—"}</td>
-                        <td className="p-3 text-muted-foreground text-xs font-mono">{s["till-time"] || s.ended || "—"}</td>
+                        <td className="p-3 text-muted-foreground text-xs font-mono hidden sm:table-cell">{s["till-time"] || s.ended || "—"}</td>
                         <td className="p-3 text-foreground text-xs font-mono">{formatBytes(s.download || s["bytes-in"] || s["acct-input-octets"])}</td>
                         <td className="p-3 text-foreground text-xs font-mono">{formatBytes(s.upload || s["bytes-out"] || s["acct-output-octets"])}</td>
                       </tr>
@@ -310,6 +419,9 @@ export default function UserManagerPage() {
                 </tbody>
               </table>
             </div>
+            {!loadingSessions && filteredSessions.length > PAGE_SIZE && (
+              <PaginationBar page={sessionsPage} totalPages={sessionsTotalPages} onPageChange={setSessionsPage} total={filteredSessions.length} />
+            )}
           </div>
         </TabsContent>
       </Tabs>
@@ -331,8 +443,17 @@ export default function UserManagerPage() {
               <Input value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} placeholder="****" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">الباقة (اختياري)</label>
-              <Input value={newUser.profile} onChange={e => setNewUser(p => ({ ...p, profile: e.target.value }))} placeholder="اسم الباقة" />
+              <label className="text-xs text-muted-foreground mb-1 block">الباقة</label>
+              <select
+                value={newUser.profile}
+                onChange={e => setNewUser(p => ({ ...p, profile: e.target.value }))}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">اختر باقة</option>
+                {Array.isArray(profiles) && profiles.map((p: any, i: number) => (
+                  <option key={i} value={p.name}>{p.name}</option>
+                ))}
+              </select>
             </div>
           </div>
           <DialogFooter>
@@ -372,7 +493,7 @@ export default function UserManagerPage() {
             <DialogTitle>تفاصيل المستخدم</DialogTitle>
           </DialogHeader>
           {detailUser && (
-            <div className="space-y-2 py-2">
+            <div className="space-y-2 py-2 max-h-80 overflow-y-auto">
               {Object.entries(detailUser).filter(([k]) => !k.startsWith(".")).map(([key, val]) => (
                 <div key={key} className="flex justify-between items-center py-1 border-b border-border/50">
                   <span className="text-xs text-muted-foreground">{key}</span>
@@ -387,14 +508,31 @@ export default function UserManagerPage() {
   );
 }
 
-function StatBox({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
+function PaginationBar({ page, totalPages, onPageChange, total }: { page: number; totalPages: number; onPageChange: (p: number) => void; total: number }) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/30">
+      <span className="text-xs text-muted-foreground">{total} عنصر</span>
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <span className="text-xs text-foreground px-2 min-w-[60px] text-center">{page} / {totalPages}</span>
+        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function StatBox({ icon, label, value, loading }: { icon: React.ReactNode; label: string; value: string | number | null; loading?: boolean }) {
   return (
     <div className="rounded-lg border border-border bg-card p-3">
       <div className="flex items-center gap-2 mb-1">
         {icon}
         <span className="text-xs text-muted-foreground">{label}</span>
       </div>
-      <p className="text-xl font-bold text-foreground">{value}</p>
+      {loading ? <Skeleton className="h-7 w-12" /> : <p className="text-xl font-bold text-foreground">{value}</p>}
     </div>
   );
 }

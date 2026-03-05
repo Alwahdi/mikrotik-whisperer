@@ -1,17 +1,18 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
   useHotspotUsers, useHotspotAllUsers, useHotspotProfiles, useHotspotUserAction,
 } from "@/hooks/useMikrotik";
 import {
-  Wifi, RefreshCw, Users, UserCheck, UserX, Search,
+  Wifi, RefreshCw, Users, Search,
   MoreHorizontal, UserPlus, Ban, Trash2, CheckCircle,
-  XCircle, Eye, LogOut,
+  XCircle, Eye, LogOut, Home, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuTrigger, DropdownMenuSeparator,
@@ -25,7 +26,14 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+  BreadcrumbPage, BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
+
+const PAGE_SIZE = 20;
 
 export default function HotspotPage() {
   const { data: activeUsers, isLoading: loadingActive } = useHotspotUsers();
@@ -39,26 +47,37 @@ export default function HotspotPage() {
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [detailUser, setDetailUser] = useState<any>(null);
   const [newUser, setNewUser] = useState({ name: "", password: "", profile: "default" });
+  const [activePage, setActivePage] = useState(1);
+  const [usersPage, setUsersPage] = useState(1);
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["mikrotik", "hotspot"] });
     toast.success("جاري تحديث البيانات...");
   };
 
-  const allUsersList = Array.isArray(allUsers) ? allUsers : [];
-  const activeList = Array.isArray(activeUsers) ? activeUsers : [];
+  const allUsersList = useMemo(() => Array.isArray(allUsers) ? allUsers : [], [allUsers]);
+  const activeList = useMemo(() => Array.isArray(activeUsers) ? activeUsers : [], [activeUsers]);
 
-  const filteredAll = allUsersList.filter((u: any) => {
-    if (!search) return true;
+  const filteredAll = useMemo(() => {
+    if (!search) return allUsersList;
     const s = search.toLowerCase();
-    return (u.name || "").toLowerCase().includes(s) || (u.profile || "").toLowerCase().includes(s);
-  });
+    return allUsersList.filter((u: any) =>
+      (u.name || "").toLowerCase().includes(s) || (u.profile || "").toLowerCase().includes(s)
+    );
+  }, [allUsersList, search]);
 
-  const filteredActive = activeList.filter((u: any) => {
-    if (!search) return true;
+  const filteredActive = useMemo(() => {
+    if (!search) return activeList;
     const s = search.toLowerCase();
-    return (u.user || "").toLowerCase().includes(s) || (u.address || "").includes(s);
-  });
+    return activeList.filter((u: any) =>
+      (u.user || "").toLowerCase().includes(s) || (u.address || "").includes(s)
+    );
+  }, [activeList, search]);
+
+  const activeTotalPages = Math.max(1, Math.ceil(filteredActive.length / PAGE_SIZE));
+  const usersTotalPages = Math.max(1, Math.ceil(filteredAll.length / PAGE_SIZE));
+  const paginatedActive = filteredActive.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
+  const paginatedAll = filteredAll.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE);
 
   const handleAction = (userAction: string, user: any) => {
     const id = user[".id"] || user.id;
@@ -82,12 +101,31 @@ export default function HotspotPage() {
     });
   };
 
+  const handleSearch = (val: string) => {
+    setSearch(val);
+    setActivePage(1);
+    setUsersPage(1);
+  };
+
   return (
     <DashboardLayout>
+      {/* Breadcrumb */}
+      <Breadcrumb className="mb-4">
+        <BreadcrumbList>
+          <BreadcrumbItem>
+            <BreadcrumbLink asChild><Link to="/"><Home className="h-3.5 w-3.5" /></Link></BreadcrumbLink>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator />
+          <BreadcrumbItem>
+            <BreadcrumbPage>الهوتسبوت</BreadcrumbPage>
+          </BreadcrumbItem>
+        </BreadcrumbList>
+      </Breadcrumb>
+
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-lg font-bold text-foreground">الهوتسبوت</h2>
+          <h1 className="text-lg font-bold text-foreground">الهوتسبوت</h1>
           <p className="text-muted-foreground text-xs mt-0.5">إدارة مستخدمي الهوتسبوت</p>
         </div>
         <div className="flex items-center gap-2">
@@ -108,14 +146,14 @@ export default function HotspotPage() {
             <Wifi className="h-3.5 w-3.5 text-success" />
             <span className="text-xs text-muted-foreground">متصلين</span>
           </div>
-          <p className="text-xl font-bold text-foreground">{loadingActive ? "—" : activeList.length}</p>
+          {loadingActive ? <Skeleton className="h-7 w-12" /> : <p className="text-xl font-bold text-foreground">{activeList.length}</p>}
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
             <Users className="h-3.5 w-3.5 text-foreground" />
             <span className="text-xs text-muted-foreground">إجمالي</span>
           </div>
-          <p className="text-xl font-bold text-foreground">{loadingAll ? "—" : allUsersList.length}</p>
+          {loadingAll ? <Skeleton className="h-7 w-12" /> : <p className="text-xl font-bold text-foreground">{allUsersList.length}</p>}
         </div>
         <div className="rounded-lg border border-border bg-card p-3">
           <div className="flex items-center gap-2 mb-1">
@@ -128,18 +166,13 @@ export default function HotspotPage() {
       {/* Search */}
       <div className="relative mb-4">
         <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="بحث عن مستخدم أو IP..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pr-10 text-sm"
-        />
+        <Input placeholder="بحث عن مستخدم أو IP..." value={search} onChange={(e) => handleSearch(e.target.value)} className="pr-10 text-sm" />
       </div>
 
       <Tabs defaultValue="active" dir="rtl">
         <TabsList className="bg-muted mb-4 w-full justify-start">
-          <TabsTrigger value="active" className="text-xs">المتصلين ({activeList.length})</TabsTrigger>
-          <TabsTrigger value="users" className="text-xs">المستخدمين ({allUsersList.length})</TabsTrigger>
+          <TabsTrigger value="active" className="text-xs">المتصلين {!loadingActive && `(${activeList.length})`}</TabsTrigger>
+          <TabsTrigger value="users" className="text-xs">المستخدمين {!loadingAll && `(${allUsersList.length})`}</TabsTrigger>
           <TabsTrigger value="profiles" className="text-xs">البروفايلات</TabsTrigger>
         </TabsList>
 
@@ -152,7 +185,7 @@ export default function HotspotPage() {
                   <tr className="border-b border-border bg-muted/50">
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">المستخدم</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">IP</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">MAC</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground hidden sm:table-cell">MAC</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">المدة</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">↓</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">↑</th>
@@ -161,8 +194,14 @@ export default function HotspotPage() {
                 </thead>
                 <tbody>
                   {loadingActive ? (
-                    <tr><td colSpan={7} className="p-10 text-center text-muted-foreground text-sm animate-pulse">جاري التحميل...</td></tr>
-                  ) : filteredActive.length === 0 ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={i} className="border-b border-border/50">
+                        {Array.from({ length: 7 }).map((_, j) => (
+                          <td key={j} className="p-3"><Skeleton className="h-4 w-16" /></td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : paginatedActive.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="p-10 text-center">
                         <Wifi className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
@@ -170,21 +209,16 @@ export default function HotspotPage() {
                       </td>
                     </tr>
                   ) : (
-                    filteredActive.map((user: any, i: number) => (
+                    paginatedActive.map((user: any, i: number) => (
                       <tr key={user[".id"] || i} className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
                         <td className="p-3 font-medium text-foreground text-sm">{user.user || "—"}</td>
                         <td className="p-3 font-mono text-xs text-muted-foreground">{user.address || "—"}</td>
-                        <td className="p-3 font-mono text-xs text-muted-foreground">{user["mac-address"] || "—"}</td>
+                        <td className="p-3 font-mono text-xs text-muted-foreground hidden sm:table-cell">{user["mac-address"] || "—"}</td>
                         <td className="p-3 text-muted-foreground text-xs">{user.uptime || "—"}</td>
                         <td className="p-3 font-mono text-xs text-foreground">{formatBytes(user["bytes-in"])}</td>
                         <td className="p-3 font-mono text-xs text-foreground">{formatBytes(user["bytes-out"])}</td>
                         <td className="p-3 text-center">
-                          <Button
-                            variant="ghost" size="icon"
-                            className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
-                            onClick={() => handleAction("kick", user)}
-                            title="فصل"
-                          >
+                          <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => handleAction("kick", user)} title="فصل">
                             <LogOut className="h-3.5 w-3.5" />
                           </Button>
                         </td>
@@ -194,6 +228,9 @@ export default function HotspotPage() {
                 </tbody>
               </table>
             </div>
+            {!loadingActive && filteredActive.length > PAGE_SIZE && (
+              <PaginationBar page={activePage} totalPages={activeTotalPages} onPageChange={setActivePage} total={filteredActive.length} />
+            )}
           </div>
         </TabsContent>
 
@@ -206,15 +243,21 @@ export default function HotspotPage() {
                   <tr className="border-b border-border bg-muted/50">
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">المستخدم</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">البروفايل</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">الحد</th>
+                    <th className="text-right p-3 font-medium text-xs text-muted-foreground hidden sm:table-cell">الحد</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">الحالة</th>
                     <th className="text-center p-3 w-12"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingAll ? (
-                    <tr><td colSpan={5} className="p-10 text-center text-muted-foreground text-sm animate-pulse">جاري التحميل...</td></tr>
-                  ) : filteredAll.length === 0 ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={i} className="border-b border-border/50">
+                        {Array.from({ length: 5 }).map((_, j) => (
+                          <td key={j} className="p-3"><Skeleton className="h-4 w-16" /></td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : paginatedAll.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-10 text-center">
                         <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
@@ -222,13 +265,13 @@ export default function HotspotPage() {
                       </td>
                     </tr>
                   ) : (
-                    filteredAll.map((user: any, i: number) => {
+                    paginatedAll.map((user: any, i: number) => {
                       const isDisabled = user.disabled === "true" || user.disabled === true;
                       return (
                         <tr key={user[".id"] || i} className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
                           <td className="p-3 font-medium text-foreground text-sm">{user.name || "—"}</td>
                           <td className="p-3 text-muted-foreground text-xs">{user.profile || "—"}</td>
-                          <td className="p-3 text-muted-foreground text-xs">{user["limit-uptime"] || "—"}</td>
+                          <td className="p-3 text-muted-foreground text-xs hidden sm:table-cell">{user["limit-uptime"] || "—"}</td>
                           <td className="p-3">
                             <span className={`inline-flex items-center gap-1 text-xs ${isDisabled ? "text-destructive" : "text-success"}`}>
                               {isDisabled ? <XCircle className="h-3 w-3" /> : <CheckCircle className="h-3 w-3" />}
@@ -270,6 +313,9 @@ export default function HotspotPage() {
                 </tbody>
               </table>
             </div>
+            {!loadingAll && filteredAll.length > PAGE_SIZE && (
+              <PaginationBar page={usersPage} totalPages={usersTotalPages} onPageChange={setUsersPage} total={filteredAll.length} />
+            )}
           </div>
         </TabsContent>
 
@@ -280,24 +326,9 @@ export default function HotspotPage() {
               <div key={i} className="rounded-lg border border-border bg-card shadow-card p-4 hover:border-foreground/10 transition-colors">
                 <h3 className="font-semibold text-foreground mb-3 text-sm">{profile.name}</h3>
                 <div className="space-y-2 text-sm">
-                  {profile["rate-limit"] && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground text-xs">السرعة</span>
-                      <span className="font-mono text-foreground text-xs">{profile["rate-limit"]}</span>
-                    </div>
-                  )}
-                  {profile["shared-users"] && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground text-xs">مشاركة</span>
-                      <span className="text-foreground text-xs">{profile["shared-users"]}</span>
-                    </div>
-                  )}
-                  {profile["session-timeout"] && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground text-xs">المدة</span>
-                      <span className="text-foreground text-xs">{profile["session-timeout"]}</span>
-                    </div>
-                  )}
+                  {profile["rate-limit"] && <InfoRow label="السرعة" value={profile["rate-limit"]} />}
+                  {profile["shared-users"] && <InfoRow label="مشاركة" value={profile["shared-users"]} />}
+                  {profile["session-timeout"] && <InfoRow label="المدة" value={profile["session-timeout"]} />}
                 </div>
               </div>
             ))}
@@ -328,7 +359,16 @@ export default function HotspotPage() {
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">البروفايل</label>
-              <Input value={newUser.profile} onChange={e => setNewUser(p => ({ ...p, profile: e.target.value }))} placeholder="default" />
+              <select
+                value={newUser.profile}
+                onChange={e => setNewUser(p => ({ ...p, profile: e.target.value }))}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="default">default</option>
+                {Array.isArray(profiles) && profiles.map((p: any, i: number) => (
+                  <option key={i} value={p.name}>{p.name}</option>
+                ))}
+              </select>
             </div>
           </div>
           <DialogFooter>
@@ -380,6 +420,32 @@ export default function HotspotPage() {
         </DialogContent>
       </Dialog>
     </DashboardLayout>
+  );
+}
+
+function PaginationBar({ page, totalPages, onPageChange, total }: { page: number; totalPages: number; onPageChange: (p: number) => void; total: number }) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-t border-border bg-muted/30">
+      <span className="text-xs text-muted-foreground">{total} عنصر</span>
+      <div className="flex items-center gap-1">
+        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+        <span className="text-xs text-foreground px-2 min-w-[60px] text-center">{page} / {totalPages}</span>
+        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => onPageChange(page + 1)}>
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between">
+      <span className="text-muted-foreground text-xs">{label}</span>
+      <span className="font-mono text-foreground text-xs">{value}</span>
+    </div>
   );
 }
 
