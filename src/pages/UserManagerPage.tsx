@@ -57,6 +57,10 @@ export default function UserManagerPage() {
   const [newUser, setNewUser] = useState({ name: "", password: "", profile: "" });
   const [usersPage, setUsersPage] = useState(1);
   const [sessionsPage, setSessionsPage] = useState(1);
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [userFilter, setUserFilter] = useState<"all" | "expired">("all");
+  const [sessionsPage, setSessionsPage] = useState(1);
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileMode, setProfileMode] = useState<"add" | "edit">("add");
