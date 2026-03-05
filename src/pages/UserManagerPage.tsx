@@ -418,6 +418,13 @@ export default function UserManagerPage() {
 
         {/* Profiles Tab */}
         <TabsContent value="profiles">
+          <div className="flex items-center justify-end mb-3">
+            <Button size="sm" onClick={openAddProfile}>
+              <PackagePlus className="h-3.5 w-3.5 ml-1" />
+              إضافة باقة
+            </Button>
+          </div>
+
           {loadingProfiles ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -432,9 +439,14 @@ export default function UserManagerPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {Array.isArray(profiles) && profiles.map((profile: any, i: number) => (
                 <div key={i} className="rounded-lg border border-border bg-card shadow-card p-4 hover:border-foreground/10 transition-colors">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Package className="h-4 w-4 text-primary" />
-                    <h3 className="font-semibold text-foreground text-sm">{profile.name}</h3>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Package className="h-4 w-4 text-primary shrink-0" />
+                      <h3 className="font-semibold text-foreground text-sm truncate">{profile.name}</h3>
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditProfile(profile)}>
+                      <PencilLine className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                   <div className="space-y-2">
                     {profile["name-for-users"] && <Row label="الاسم" value={profile["name-for-users"]} />}
@@ -442,7 +454,6 @@ export default function UserManagerPage() {
                     {profile.price && <Row label="السعر" value={profile.price} highlight />}
                     {profile["rate-limit"] && <Row label="السرعة" value={profile["rate-limit"]} />}
                     {profile["shared-users"] && <Row label="مشاركة" value={profile["shared-users"]} />}
-                    {profile.override && <Row label="Override" value={JSON.stringify(profile.override).slice(0, 50)} />}
                   </div>
                 </div>
               ))}
