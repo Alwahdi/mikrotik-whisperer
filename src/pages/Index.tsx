@@ -137,7 +137,7 @@ export default function Index() {
       )}
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6 stagger-children">
         <StatCard title="المتصلين" value={loadingH ? "..." : activeCount} subtitle="هوتسبوت" icon={Wifi} variant="primary" />
         <StatCard title="المستخدمين" value={loadingU ? "..." : totalUsers} subtitle="يوزر مانجر" icon={Users} variant="accent" />
         <StatCard title="CPU" value={`${cpuLoad}%`} icon={Cpu} variant={Number(cpuLoad) > 80 ? "warning" : "default"} />
