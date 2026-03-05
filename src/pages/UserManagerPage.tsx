@@ -11,7 +11,7 @@ import {
   Users, RefreshCw, AlertTriangle, Package, Clock,
   UserCheck, UserX, Search, MoreHorizontal, UserPlus,
   Ban, Trash2, CheckCircle, XCircle, Eye, ChevronLeft, ChevronRight,
-  Home,
+  Home, PackagePlus, PencilLine,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
