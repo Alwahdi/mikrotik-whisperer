@@ -1,0 +1,4 @@
+project_id = "chcobxsntmsyfqhtqezq"
+
+[functions.mikrotik-api]
+verify_jwt = false
