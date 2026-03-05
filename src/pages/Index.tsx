@@ -36,6 +36,33 @@ export default function Index() {
   const { data: dhcpLeases } = useDHCPLeases();
   const { data: health } = useRouterHealth();
 
+  // Today's sales from DB
+  const { data: todaySales } = useQuery({
+    queryKey: ["today-sales", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const { data } = await supabase
+        .from("sales")
+        .select("success_count, total_amount, profile_name")
+        .eq("user_id", user.id)
+        .gte("created_at", today.toISOString());
+      return data || [];
+    },
+    enabled: !!user?.id,
+  });
+
+  const todayCardsCount = useMemo(() => (todaySales || []).reduce((s, r) => s + (r.success_count || 0), 0), [todaySales]);
+  const todayRevenue = useMemo(() => (todaySales || []).reduce((s, r) => s + Number(r.total_amount || 0), 0), [todaySales]);
+  const topPackageToday = useMemo(() => {
+    if (!todaySales || todaySales.length === 0) return null;
+    const map: Record<string, number> = {};
+    todaySales.forEach(s => { map[s.profile_name || ""] = (map[s.profile_name || ""] || 0) + (s.success_count || 0); });
+    const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
+    return entries[0] ? entries[0][0] : null;
+  }, [todaySales]);
+
   // Alerts - must be before conditional returns
   const cpuLoad = sysResource?.["cpu-load"] ?? "—";
   const totalMem = Number(sysResource?.["total-memory"] || 0);
