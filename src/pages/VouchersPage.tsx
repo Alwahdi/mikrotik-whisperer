@@ -23,13 +23,14 @@ import {
 import {
   Printer, CreditCard, Plus, Trash2, Download, Home, Upload, Loader2,
   History, ChevronLeft, ChevronRight, Check, X, Save, FolderOpen, GripVertical,
-  Settings2, BarChart3,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ─── Types ────────────────────────────────────
 interface VoucherCard {
@@ -129,6 +130,7 @@ export default function VouchersPage() {
   const { data: hotspotProfiles } = useHotspotProfiles();
   const { data: umProfiles } = useUserManagerProfiles();
   const rawBatch = useRawBatchAction();
+  const { user } = useAuth();
 
   // Generation settings
   const [type, setType] = useState<"hotspot" | "usermanager">("hotspot");
@@ -144,6 +146,7 @@ export default function VouchersPage() {
   const [cards, setCards] = useState<VoucherCard[]>([]);
   const [pushing, setPushing] = useState(false);
   const [pushProgress, setPushProgress] = useState(0);
+  const pushingRef = useRef(false); // Keep push alive across renders
 
   // Print settings
   const [cardTitle, setCardTitle] = useState("WiFi Card");
@@ -164,11 +167,15 @@ export default function VouchersPage() {
   const [batches, setBatches] = useState<VoucherBatch[]>(loadBatches);
   const [activeTab, setActiveTab] = useState<"generate" | "history">("generate");
   const [deleteBatchId, setDeleteBatchId] = useState<string | null>(null);
+  const [deletingFromRouter, setDeletingFromRouter] = useState<string | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
   const HISTORY_PAGE_SIZE = 5;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+
+  const config = getMikrotikConfig();
+  const currentRouterHost = config?.host || "";
 
   // Persist
   useEffect(() => { saveBatches(batches); }, [batches]);
@@ -194,6 +201,12 @@ export default function VouchersPage() {
     return Array.isArray(raw) ? raw : [];
   }, [type, hotspotProfiles, umProfiles]);
 
+  // Filter batches for current router only
+  const routerBatches = useMemo(() => {
+    if (!currentRouterHost) return batches;
+    return batches.filter(b => !b.routerHost || b.routerHost === currentRouterHost);
+  }, [batches, currentRouterHost]);
+
   const generateVouchers = () => {
     const newCards: VoucherCard[] = [];
     const prof = selectedProfile || profiles[0]?.name || "default";
@@ -205,12 +218,10 @@ export default function VouchersPage() {
       } else if (passwordMode === "same") {
         password = username;
       }
-      // "empty" = password stays ""
       newCards.push({ username, password, profile: prof, status: "pending" });
     }
     setCards(newCards);
 
-    const config = getMikrotikConfig();
     const batch: VoucherBatch = {
       id: crypto.randomUUID(),
       type,
@@ -218,7 +229,7 @@ export default function VouchersPage() {
       cards: newCards,
       createdAt: new Date().toISOString(),
       pushed: false,
-      routerHost: config?.host,
+      routerHost: currentRouterHost,
     };
     setBatches(prev => [batch, ...prev]);
     toast.success(`تم توليد ${count} كرت`);
@@ -227,52 +238,63 @@ export default function VouchersPage() {
   const pushToRouter = async () => {
     if (cards.length === 0) return;
     setPushing(true);
+    pushingRef.current = true;
     setPushProgress(0);
 
     const addEndpoint = type === "hotspot"
       ? "/ip/hotspot/user/add"
       : "/user-manager/user/add";
 
-    const CHUNK_SIZE = 20; // Smaller chunks = faster feedback
+    // Send cards one by one for real-time feedback, but use concurrency for speed
+    const CONCURRENCY = 5; // 5 parallel requests
     let totalSuccess = 0;
     let totalFailed = 0;
     const updatedCards = [...cards];
+    let completedCount = 0;
 
-    for (let i = 0; i < cards.length; i += CHUNK_SIZE) {
-      const chunk = cards.slice(i, i + CHUNK_SIZE);
-      const commands = chunk.map(card => {
-        const args: string[] = type === "hotspot"
-          ? [`=name=${card.username}`, `=password=${card.password}`, `=profile=${card.profile}`]
-          : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`, "=owner=admin"];
-        return { command: addEndpoint, args };
-      });
+    const processCard = async (idx: number) => {
+      if (!pushingRef.current) return;
+      const card = cards[idx];
+      const args: string[] = type === "hotspot"
+        ? [`=name=${card.username}`, `=password=${card.password}`, `=profile=${card.profile}`]
+        : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`, "=owner=admin"];
 
       try {
-        const result = await rawBatch.mutateAsync({ commands });
+        const result = await rawBatch.mutateAsync({
+          commands: [{ command: addEndpoint, args }],
+        });
         const errors = result?.errors || [];
-        for (let j = 0; j < chunk.length; j++) {
-          const idx = i + j;
-          if (errors[j] && errors[j] !== "") {
-            updatedCards[idx] = { ...updatedCards[idx], status: "error", error: errors[j] };
-            totalFailed++;
-          } else {
-            updatedCards[idx] = { ...updatedCards[idx], status: "success" };
-            totalSuccess++;
-          }
+        if (errors[0] && errors[0] !== "") {
+          updatedCards[idx] = { ...updatedCards[idx], status: "error", error: errors[0] };
+          totalFailed++;
+        } else {
+          updatedCards[idx] = { ...updatedCards[idx], status: "success" };
+          totalSuccess++;
         }
       } catch (err: any) {
-        for (let j = 0; j < chunk.length; j++) {
-          updatedCards[i + j] = { ...updatedCards[i + j], status: "error", error: err.message };
-          totalFailed++;
-        }
+        updatedCards[idx] = { ...updatedCards[idx], status: "error", error: err.message };
+        totalFailed++;
       }
 
+      completedCount++;
+      // Update state for real-time feedback
       setCards([...updatedCards]);
-      setPushProgress(Math.round(((i + chunk.length) / cards.length) * 100));
-    }
+      setPushProgress(Math.round((completedCount / cards.length) * 100));
+    };
 
+    // Process with concurrency pool
+    const queue = Array.from({ length: cards.length }, (_, i) => i);
+    const workers = Array.from({ length: Math.min(CONCURRENCY, cards.length) }, async () => {
+      while (queue.length > 0 && pushingRef.current) {
+        const idx = queue.shift();
+        if (idx !== undefined) await processCard(idx);
+      }
+    });
+
+    await Promise.all(workers);
+
+    pushingRef.current = false;
     setPushing(false);
-    setPushProgress(0);
 
     // Update batch
     setBatches(prev => {
@@ -286,11 +308,85 @@ export default function VouchersPage() {
       return updated;
     });
 
+    // Record sale
+    if (totalSuccess > 0 && user?.id) {
+      const profileData = profiles.find((p: any) => p.name === cards[0]?.profile);
+      const unitPrice = Number(profileData?.price) || 0;
+      try {
+        await supabase.from("sales").insert({
+          user_id: user.id,
+          batch_id: crypto.randomUUID(),
+          profile_name: cards[0]?.profile || "",
+          card_count: cards.length,
+          success_count: totalSuccess,
+          failed_count: totalFailed,
+          unit_price: unitPrice,
+          total_amount: totalSuccess * unitPrice,
+          voucher_type: type,
+          router_host: currentRouterHost,
+          notes: `دفعة ${cards.length} كرت`,
+        });
+      } catch {}
+    }
+
     if (totalFailed === 0) {
       toast.success(`تم إضافة ${totalSuccess} كرت بنجاح`);
     } else {
       toast.warning(`نجح ${totalSuccess} — فشل ${totalFailed}`);
     }
+  };
+
+  // Delete batch cards from router
+  const deleteBatchFromRouter = async (batchId: string) => {
+    const batch = batches.find(b => b.id === batchId);
+    if (!batch) return;
+    setDeletingFromRouter(batchId);
+
+    const removeEndpoint = batch.type === "hotspot"
+      ? "/ip/hotspot/user/remove"
+      : "/user-manager/user/remove";
+
+    const successCards = batch.cards.filter(c => c.status === "success");
+    if (successCards.length === 0) {
+      toast.error("لا توجد كروت مضافة للحذف");
+      setDeletingFromRouter(null);
+      return;
+    }
+
+    // We need to find the IDs on the router first - remove by name
+    const nameKey = batch.type === "hotspot" ? "name" : "username";
+    let deleted = 0;
+    let failed = 0;
+
+    for (const card of successCards) {
+      try {
+        // Use find + remove approach
+        const findCmd = batch.type === "hotspot"
+          ? "/ip/hotspot/user/print"
+          : "/user-manager/user/print";
+        
+        const result = await rawBatch.mutateAsync({
+          commands: [{ command: findCmd, args: [`=?${nameKey}=${card.username}`] }],
+        });
+        
+        const users = result?.results?.[0];
+        if (Array.isArray(users) && users.length > 0) {
+          const id = users[0][".id"];
+          if (id) {
+            await rawBatch.mutateAsync({
+              commands: [{ command: removeEndpoint, args: [`=.id=${id}`] }],
+            });
+            deleted++;
+          }
+        }
+      } catch {
+        failed++;
+      }
+    }
+
+    setDeletingFromRouter(null);
+    handleDeleteBatch(batchId);
+    toast.success(`تم حذف ${deleted} كرت من الراوتر${failed > 0 ? ` (فشل ${failed})` : ""}`);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -397,9 +493,9 @@ export default function VouchersPage() {
   .page:last-child { page-break-after: auto; }
   .grid { display: grid; grid-template-columns: repeat(${printCols}, 1fr); gap: 3mm; }
   .card {
-    border: 1.5px solid #d0c8be; border-radius: 8px;
+    border: 1.5px solid #E5E7EB; border-radius: 8px;
     padding: 10px 12px; page-break-inside: avoid;
-    background: linear-gradient(135deg, #faf8f5, #f0ede8);
+    background: linear-gradient(135deg, #F9FAFB, #F3F4F6);
     min-height: 80px;
   }
   .card-custom {
@@ -413,14 +509,14 @@ export default function VouchersPage() {
     text-shadow: 0 0 4px rgba(255,255,255,0.9);
     font-family: 'JetBrains Mono', monospace; letter-spacing: 1.5px;
   }
-  .card-title { font-weight: 700; font-size: 10px; color: #1a1814; margin-bottom: 1px; }
-  .card-sub { font-size: 8px; color: #8a7f72; margin-bottom: 6px; }
+  .card-title { font-weight: 700; font-size: 10px; color: #111827; margin-bottom: 1px; }
+  .card-sub { font-size: 8px; color: #6B7280; margin-bottom: 6px; }
   .field { margin-bottom: 3px; }
-  .label { font-size: 7px; color: #8a7f72; }
-  .value { font-size: 11px; font-weight: 600; color: #1a1814; font-family: 'JetBrains Mono', monospace; letter-spacing: 1px; }
+  .label { font-size: 7px; color: #6B7280; }
+  .value { font-size: 11px; font-weight: 600; color: #111827; font-family: 'JetBrains Mono', monospace; letter-spacing: 1px; }
   .profile-badge {
     display: inline-block; margin-top: 4px; padding: 1px 6px;
-    background: #e8e2d9; border-radius: 3px; font-size: 7px; color: #5a5247;
+    background: #E5E7EB; border-radius: 3px; font-size: 7px; color: #6B7280;
   }
   @media print { .page { padding: 5mm; } }
 </style></head><body>${pages.join("")}</body></html>`;
@@ -462,21 +558,13 @@ export default function VouchersPage() {
     toast.success(`تم تحميل ${batch.cards.length} كرت`);
   };
 
-  const paginatedBatches = batches.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE);
-  const historyTotalPages = Math.max(1, Math.ceil(batches.length / HISTORY_PAGE_SIZE));
+  const paginatedBatches = routerBatches.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE);
+  const historyTotalPages = Math.max(1, Math.ceil(routerBatches.length / HISTORY_PAGE_SIZE));
 
   // Card status counts
   const successCount = cards.filter(c => c.status === "success").length;
   const errorCount = cards.filter(c => c.status === "error").length;
   const pendingCount = cards.filter(c => c.status === "pending" || !c.status).length;
-
-  // ─── Sales Stats ─────────────────────────────
-  const todayBatches = batches.filter(b => {
-    const d = new Date(b.createdAt);
-    const today = new Date();
-    return d.toDateString() === today.toDateString() && b.pushed;
-  });
-  const todayCards = todayBatches.reduce((sum, b) => sum + (b.pushResults?.success || b.cards.length), 0);
 
   return (
     <DashboardLayout>
@@ -496,29 +584,23 @@ export default function VouchersPage() {
           <p className="text-muted-foreground text-xs mt-0.5">إنشاء وطباعة كروت الهوتسبوت ويوزر مانجر</p>
         </div>
         <div className="flex items-center gap-2">
-          {todayCards > 0 && (
-            <Badge variant="outline" className="gap-1 text-xs">
-              <BarChart3 className="h-3 w-3" />
-              مبيعات اليوم: {todayCards}
-            </Badge>
-          )}
           <Button size="sm" variant={activeTab === "generate" ? "default" : "outline"} onClick={() => setActiveTab("generate")}>
             <CreditCard className="h-3.5 w-3.5 ml-1" />
             <span className="hidden sm:inline">توليد</span>
           </Button>
           <Button size="sm" variant={activeTab === "history" ? "default" : "outline"} onClick={() => setActiveTab("history")}>
             <History className="h-3.5 w-3.5 ml-1" />
-            <span className="hidden sm:inline">السجل</span> ({batches.length})
+            <span className="hidden sm:inline">السجل</span> ({routerBatches.length})
           </Button>
         </div>
       </div>
 
       {activeTab === "history" ? (
         <div className="space-y-3">
-          {batches.length === 0 ? (
+          {routerBatches.length === 0 ? (
             <div className="rounded-lg border border-border bg-card p-10 text-center">
               <History className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
-              <p className="text-muted-foreground text-sm">لا توجد دفعات سابقة</p>
+              <p className="text-muted-foreground text-sm">لا توجد دفعات سابقة لهذا الراوتر</p>
             </div>
           ) : (
             <>
@@ -543,22 +625,33 @@ export default function VouchersPage() {
                   </div>
                   <div className="text-xs text-muted-foreground mb-2">
                     الباقة: <span className="text-foreground font-medium">{batch.profile}</span>
-                    {batch.routerHost && <> • <span className="font-mono">{batch.routerHost}</span></>}
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => loadBatchCards(batch)}>تحميل</Button>
                     <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => handlePrint(batch.cards)}>
                       <Printer className="h-3 w-3 ml-1" /> طباعة
                     </Button>
+                    {batch.pushed && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-8 text-destructive"
+                        disabled={deletingFromRouter === batch.id}
+                        onClick={() => deleteBatchFromRouter(batch.id)}
+                      >
+                        {deletingFromRouter === batch.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3 ml-1" />}
+                        حذف من الراوتر
+                      </Button>
+                    )}
                     <Button size="sm" variant="ghost" className="text-xs text-destructive h-8" onClick={() => setDeleteBatchId(batch.id)}>
                       <Trash2 className="h-3 w-3 ml-1" /> حذف
                     </Button>
                   </div>
                 </div>
               ))}
-              {batches.length > HISTORY_PAGE_SIZE && (
+              {routerBatches.length > HISTORY_PAGE_SIZE && (
                 <div className="flex items-center justify-between px-2 py-2">
-                  <span className="text-xs text-muted-foreground">{batches.length} دفعة</span>
+                  <span className="text-xs text-muted-foreground">{routerBatches.length} دفعة</span>
                   <div className="flex items-center gap-1">
                     <Button variant="ghost" size="icon" className="h-7 w-7" disabled={historyPage <= 1} onClick={() => setHistoryPage(p => p - 1)}>
                       <ChevronRight className="h-4 w-4" />
@@ -788,12 +881,14 @@ export default function VouchersPage() {
                     <><Download className="h-3.5 w-3.5 ml-1" /> إضافة {cards.length} كرت</>
                   )}
                 </Button>
-                {pushing && <Progress value={pushProgress} className="h-1.5" />}
+                {(pushing || successCount > 0 || errorCount > 0) && (
+                  <Progress value={pushProgress} className="h-2" />
+                )}
                 {(successCount > 0 || errorCount > 0) && (
                   <div className="flex gap-2 text-xs">
                     {successCount > 0 && <Badge variant="outline" className="gap-1 text-success border-success/30"><Check className="h-2.5 w-2.5" />{successCount}</Badge>}
                     {errorCount > 0 && <Badge variant="outline" className="gap-1 text-destructive border-destructive/30"><X className="h-2.5 w-2.5" />{errorCount}</Badge>}
-                    {pendingCount > 0 && <Badge variant="outline" className="gap-1">{pendingCount} معلق</Badge>}
+                    {pushing && pendingCount > 0 && <Badge variant="outline" className="gap-1">{pendingCount} معلق</Badge>}
                   </div>
                 )}
                 <Button onClick={() => handlePrint()} size="sm" variant="outline" className="w-full">
