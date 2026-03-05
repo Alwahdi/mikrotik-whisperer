@@ -6,7 +6,7 @@ import TrafficChart from "@/components/TrafficChart";
 import {
   Wifi, Users, Cpu, HardDrive, Clock, Activity, Settings,
   Network, Gauge, MemoryStick, CreditCard, UserPlus, AlertTriangle,
-  Zap, ArrowRight,
+  Zap, ArrowRight, DollarSign, TrendingUp,
 } from "lucide-react";
 import {
   useHotspotUsers, useUserManagerUsers,
@@ -17,6 +17,9 @@ import {
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
 
 export default function Index() {
   const config = getMikrotikConfig();
