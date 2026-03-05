@@ -274,6 +274,11 @@ function isUserManagerUserAddCommand(command: string): boolean {
   return /\/user-manager\/user\/add$/.test(command);
 }
 
+function isUserManagerProfileCommand(command: string): boolean {
+  return /\/user-manager\/profile\/(add|set)$/.test(command) ||
+         /\/tool\/user-manager\/profile\/(add|set)$/.test(command);
+}
+
 function getUserManagerRoots(command: string): string[] {
   const fromTool = command.startsWith("/tool/user-manager/");
   const roots = fromTool
@@ -301,6 +306,21 @@ function buildUserManagerArgVariants(command: string, args?: string[]): (string[
     remapArgs(remapArgs(args, { group: "profile" }), { name: "username" }),
     remapArgs(remapArgs(args, { profile: "group" }), { username: "name" }),
   ];
+
+  // For profile add/set: try stripping unknown params one by one
+  if (isUserManagerProfileCommand(command)) {
+    const parsed = argsListToObject(args);
+    const optionalKeys = ["name-for-users", "override-shared-users", "transfer-limit", "uptime-limit", "price"];
+    // Try without each optional key
+    for (const key of optionalKeys) {
+      if (parsed[key]) {
+        baseVariants.push(omitArgsKeys(args, [key]));
+      }
+    }
+    // Try with only essential keys
+    const essentialOnly = omitArgsKeys(args, optionalKeys);
+    baseVariants.push(essentialOnly);
+  }
 
   if (isUserManagerUserAddCommand(command)) {
     const parsed = argsListToObject(args);
@@ -599,6 +619,17 @@ function buildRestBodyVariants(command: string, body?: Record<string, any>): (Re
     remapBody(remapBody(body, { group: "profile" }), { name: "username" }),
   ];
 
+  // For profile add/set: try stripping unknown params one by one
+  if (isUserManagerProfileCommand(command)) {
+    const optionalKeys = ["name-for-users", "override-shared-users", "transfer-limit", "uptime-limit", "price"];
+    for (const key of optionalKeys) {
+      if (body[key] !== undefined) {
+        variants.push(omitBodyKeys(body, [key]));
+      }
+    }
+    variants.push(omitBodyKeys(body, optionalKeys)!);
+  }
+
   if (isUserManagerUserAddCommand(command)) {
     const username = body.username || body.name || body.user;
     const password = body.password;
@@ -723,6 +754,7 @@ async function handleRestWithCompat(
     return addResult;
   }
 
+  // Try primary command with all body variants
   let lastError: Error | null = null;
   for (const bodyVariant of buildRestBodyVariants(command, restBody)) {
     try {
@@ -731,6 +763,20 @@ async function handleRestWithCompat(
       const errorObj = err instanceof Error ? err : new Error(String(err));
       lastError = errorObj;
       if (!isCompatibilityError(errorObj.message)) throw errorObj;
+    }
+  }
+
+  // Try v6 fallback path (/tool/user-manager/...)
+  const fallbackCmd = getV6FallbackCommand(command);
+  if (fallbackCmd) {
+    for (const bodyVariant of buildRestBodyVariants(fallbackCmd, restBody)) {
+      try {
+        return await handleRest(host, port, protocol, user, pass, fallbackCmd, method, bodyVariant);
+      } catch (err: any) {
+        const errorObj = err instanceof Error ? err : new Error(String(err));
+        lastError = errorObj;
+        if (!isCompatibilityError(errorObj.message)) throw errorObj;
+      }
     }
   }
 
