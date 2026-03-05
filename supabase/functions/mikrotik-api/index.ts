@@ -16,11 +16,9 @@ class MikroTikApiClient {
     const connectPromise = useTls
       ? (Deno as any).connectTls({ hostname: host, port })
       : Deno.connect({ hostname: host, port });
-    
     const timer = new Promise((_, reject) =>
       setTimeout(() => reject(new Error(`Connection timeout after ${timeout}ms`)), timeout)
     );
-    
     this.conn = await Promise.race([connectPromise, timer]) as Deno.Conn;
   }
 
@@ -104,16 +102,12 @@ class MikroTikApiClient {
   async login(user: string, pass: string): Promise<void> {
     await this.writeSentence(["/login", `=name=${user}`, `=password=${pass}`]);
     const sentence = await this.readSentence();
-
     if (sentence.length === 0) throw new Error("Empty login response");
     const type = sentence[0];
-
     if (type === "!trap") {
-      // Read the !done that follows !trap
       await this.readSentence();
       throw new Error(parseAttrs(sentence).message || "Authentication failed");
     }
-
     if (type === "!done") {
       const attrs = parseAttrs(sentence);
       if (attrs.ret) {
@@ -121,7 +115,7 @@ class MikroTikApiClient {
         await this.writeSentence(["/login", `=name=${user}`, `=response=${response}`]);
         const s2 = await this.readSentence();
         if (s2[0] === "!trap") {
-          await this.readSentence(); // read !done after !trap
+          await this.readSentence();
           throw new Error(parseAttrs(s2).message || "Authentication failed");
         }
       }
@@ -135,20 +129,16 @@ class MikroTikApiClient {
     await this.writeSentence(words);
     const results: Record<string, string>[] = [];
     let trapError: string | null = null;
-
     while (true) {
       const sentence = await this.readSentence();
       if (sentence.length === 0) continue;
       const type = sentence[0];
       const attrs = parseAttrs(sentence);
-
       if (type === "!re") {
         results.push(attrs);
       } else if (type === "!trap") {
-        // Store the error but keep reading until !done to keep connection clean
         trapError = attrs.message || "Command failed";
       } else if (type === "!done") {
-        // Connection is now clean for next command
         if (trapError) throw new Error(trapError);
         break;
       } else if (type === "!fatal") {
@@ -208,7 +198,6 @@ async function scanPorts(host: string, ports: number[]): Promise<{ port: number;
     8080: "HTTP Proxy", 161: "SNMP", 179: "BGP",
     1723: "PPTP", 500: "IKE/IPSec",
   };
-
   const results = await Promise.allSettled(
     ports.map(async (port) => {
       try {
@@ -223,10 +212,17 @@ async function scanPorts(host: string, ports: number[]): Promise<{ port: number;
       }
     })
   );
-
   return results
     .filter((r): r is PromiseFulfilledResult<{ port: number; open: boolean; service: string }> => r.status === "fulfilled")
     .map((r) => r.value);
+}
+
+// ─── Create a fresh API connection ──────────────────────────────────────
+async function createApiClient(host: string, port: string, useTls: boolean, user: string, pass: string): Promise<MikroTikApiClient> {
+  const client = new MikroTikApiClient();
+  await client.connect(host, parseInt(port), useTls);
+  await client.login(user, pass);
+  return client;
 }
 
 // ─── REST API Handler (v7+) ─────────────────────────────────────────────
@@ -235,13 +231,11 @@ async function handleRest(
   user: string, pass: string, command: string,
   method: string = "GET", body?: any
 ): Promise<any> {
-  const path = command.replace(/\/print$/, "");
+  const path = command.replace(/\/print$/, "").replace(/\/set$/, "").replace(/\/add$/, "").replace(/\/remove$/, "");
   const url = `${protocol}://${host}:${port}/rest${path}`;
   const credentials = btoa(`${user}:${pass}`);
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
-
   try {
     const fetchOpts: RequestInit = {
       method,
@@ -254,52 +248,53 @@ async function handleRest(
     if (body && method !== "GET") {
       fetchOpts.body = JSON.stringify(body);
     }
-
     const response = await fetch(url, fetchOpts);
-
     if (!response.ok) {
       const text = await response.text();
       throw new Error(`REST API [${response.status}]: ${text.substring(0, 200)}`);
     }
-
     return response.json();
   } finally {
     clearTimeout(timeout);
   }
 }
 
-// ─── API Protocol Handler (v6/v7) ───────────────────────────────────────
+// ─── API Protocol Handler (v6/v7) with FRESH connection for fallback ───
 async function handleApi(
   host: string, port: string, useTls: boolean,
   user: string, pass: string, command: string,
   args?: string[]
 ): Promise<any> {
-  const client = new MikroTikApiClient();
+  // First try: v7 command
+  const client1 = await createApiClient(host, port, useTls, user, pass);
   try {
-    await client.connect(host, parseInt(port), useTls);
-    await client.login(user, pass);
+    const result = await client1.execute(command, args);
+    return result;
+  } catch (err: any) {
+    const fallback = getV6FallbackCommand(command);
+    const isNoSuchCommand = err.message?.includes("no such command") || err.message?.includes("unknown command");
     
-    try {
-      return await client.execute(command, args);
-    } catch (err: any) {
-      // If command fails, try v6 fallback path
-      const fallback = getV6FallbackCommand(command);
-      if (fallback && (err.message?.includes("no such command") || err.message?.includes("unknown command"))) {
-        console.log(`Retrying with v6 path: ${fallback}`);
-        try {
-          return await client.execute(fallback, args);
-        } catch (e2: any) {
-          // Both v7 and v6 failed - User Manager likely not installed
-          if (e2.message?.includes("no such command")) {
-            throw new Error("User Manager غير مثبّت على هذا الراوتر. يرجى تثبيت حزمة user-manager وإعادة التشغيل.");
-          }
-          throw e2;
-        }
-      }
+    if (!fallback || !isNoSuchCommand) {
       throw err;
     }
+    
+    console.log(`v7 failed, trying v6 fallback with NEW connection: ${fallback}`);
   } finally {
-    client.close();
+    client1.close();
+  }
+
+  // Second try: v6 fallback with a FRESH connection
+  const fallbackCmd = getV6FallbackCommand(command)!;
+  const client2 = await createApiClient(host, port, useTls, user, pass);
+  try {
+    return await client2.execute(fallbackCmd, args);
+  } catch (e2: any) {
+    if (e2.message?.includes("no such command")) {
+      throw new Error("User Manager غير مثبّت على هذا الراوتر. يرجى تثبيت حزمة user-manager وإعادة التشغيل.");
+    }
+    throw e2;
+  } finally {
+    client2.close();
   }
 }
 

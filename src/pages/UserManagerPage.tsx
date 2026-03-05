@@ -1,17 +1,51 @@
+import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { useUserManagerUsers, useUserManagerProfiles, useUserManagerSessions } from "@/hooks/useMikrotik";
-import { Users, RefreshCw, AlertTriangle, Package, Clock, UserCheck, UserX } from "lucide-react";
+import {
+  useUserManagerUsers,
+  useUserManagerProfiles,
+  useUserManagerSessions,
+  useUserManagerAction,
+} from "@/hooks/useMikrotik";
+import {
+  Users, RefreshCw, AlertTriangle, Package, Clock,
+  UserCheck, UserX, Search, MoreHorizontal, UserPlus,
+  Ban, Trash2, CheckCircle, XCircle, Eye,
+} from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuTrigger, DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+  DialogFooter, DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 export default function UserManagerPage() {
   const { data: users, isLoading: loadingUsers, error: usersError } = useUserManagerUsers();
   const { data: profiles, isLoading: loadingProfiles, error: profilesError } = useUserManagerProfiles();
   const { data: sessions, isLoading: loadingSessions, error: sessionsError } = useUserManagerSessions();
   const queryClient = useQueryClient();
+  const action = useUserManagerAction();
+
+  const [search, setSearch] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [detailUser, setDetailUser] = useState<any>(null);
+  const [newUser, setNewUser] = useState({ name: "", password: "", profile: "" });
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["mikrotik", "usermanager"] });
+    toast.success("جاري تحديث البيانات...");
   };
 
   const hasError = usersError || profilesError || sessionsError;
@@ -20,8 +54,39 @@ export default function UserManagerPage() {
     (usersError as any)?.message?.includes("no such command")
   );
 
-  const activeUsers = Array.isArray(users) ? users.filter((u: any) => u.disabled !== "true" && u.disabled !== true) : [];
-  const disabledUsers = Array.isArray(users) ? users.filter((u: any) => u.disabled === "true" || u.disabled === true) : [];
+  const allUsers = Array.isArray(users) ? users : [];
+  const filteredUsers = allUsers.filter((u: any) => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return (u.name || "").toLowerCase().includes(s) ||
+           (u.username || "").toLowerCase().includes(s) ||
+           (u.comment || "").toLowerCase().includes(s) ||
+           (u.group || u.profile || "").toLowerCase().includes(s);
+  });
+
+  const activeCount = allUsers.filter((u: any) => u.disabled !== "true" && u.disabled !== true).length;
+  const disabledCount = allUsers.filter((u: any) => u.disabled === "true" || u.disabled === true).length;
+
+  const handleAction = (userAction: string, user: any) => {
+    const id = user[".id"] || user.id;
+    if (!id) { toast.error("لا يمكن تحديد المستخدم"); return; }
+    action.mutate({ action: userAction, id });
+  };
+
+  const handleAddUser = () => {
+    if (!newUser.name || !newUser.password) {
+      toast.error("اسم المستخدم وكلمة المرور مطلوبان");
+      return;
+    }
+    const data: Record<string, any> = { name: newUser.name, password: newUser.password };
+    if (newUser.profile) data.group = newUser.profile;
+    action.mutate({ action: "add", data }, {
+      onSuccess: () => {
+        setAddOpen(false);
+        setNewUser({ name: "", password: "", profile: "" });
+      }
+    });
+  };
 
   return (
     <DashboardLayout>
@@ -31,15 +96,18 @@ export default function UserManagerPage() {
           <h2 className="text-lg font-bold text-foreground">يوزر مانجر</h2>
           <p className="text-muted-foreground text-xs mt-0.5">إدارة المستخدمين والباقات والجلسات</p>
         </div>
-        <button
-          onClick={refresh}
-          className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-colors"
-        >
-          <RefreshCw className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setAddOpen(true)}>
+            <UserPlus className="h-3.5 w-3.5 ml-1" />
+            إضافة
+          </Button>
+          <Button size="icon" variant="outline" onClick={refresh}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
-      {/* Not installed warning */}
+      {/* Warnings */}
       {isNotInstalled && (
         <div className="mb-5 p-4 rounded-lg bg-warning/5 border border-warning/20">
           <div className="flex items-start gap-3">
@@ -47,19 +115,13 @@ export default function UserManagerPage() {
             <div>
               <p className="font-semibold text-foreground text-sm">User Manager غير مثبّت</p>
               <p className="text-muted-foreground text-xs mt-1 leading-relaxed">
-                حزمة User Manager غير مثبّتة أو غير مفعّلة على هذا الراوتر.
-                لتفعيلها، حمّل الحزمة من موقع MikroTik المناسبة لإصدار نظامك ثم أعد تشغيل الراوتر.
+                حزمة User Manager غير مثبّتة على هذا الراوتر. حمّل الحزمة من موقع MikroTik ثم أعد تشغيل الراوتر.
               </p>
-              <div className="flex gap-4 mt-3 text-xs text-muted-foreground">
-                <span>v7: <code className="font-mono text-foreground">/user-manager/</code></span>
-                <span>v6: <code className="font-mono text-foreground">/tool/user-manager/</code></span>
-              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Error but not "not installed" */}
       {hasError && !isNotInstalled && (
         <div className="mb-5 p-4 rounded-lg bg-destructive/5 border border-destructive/20">
           <div className="flex items-start gap-3">
@@ -76,39 +138,34 @@ export default function UserManagerPage() {
 
       {/* Quick Stats */}
       {!isNotInstalled && (
-        <div className="grid grid-cols-3 gap-3 mb-5">
-          <div className="rounded-lg border border-border bg-card p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <UserCheck className="h-3.5 w-3.5 text-success" />
-              <span className="text-xs text-muted-foreground">نشط</span>
-            </div>
-            <p className="text-xl font-bold text-foreground">{loadingUsers ? "—" : activeUsers.length}</p>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Package className="h-3.5 w-3.5 text-primary" />
-              <span className="text-xs text-muted-foreground">باقات</span>
-            </div>
-            <p className="text-xl font-bold text-foreground">{loadingProfiles ? "—" : (Array.isArray(profiles) ? profiles.length : 0)}</p>
-          </div>
-          <div className="rounded-lg border border-border bg-card p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Clock className="h-3.5 w-3.5 text-info" />
-              <span className="text-xs text-muted-foreground">جلسات</span>
-            </div>
-            <p className="text-xl font-bold text-foreground">{loadingSessions ? "—" : (Array.isArray(sessions) ? sessions.length : 0)}</p>
-          </div>
+        <div className="grid grid-cols-4 gap-3 mb-5">
+          <StatBox icon={<Users className="h-3.5 w-3.5 text-foreground" />} label="إجمالي" value={loadingUsers ? "—" : allUsers.length} />
+          <StatBox icon={<UserCheck className="h-3.5 w-3.5 text-success" />} label="نشط" value={loadingUsers ? "—" : activeCount} />
+          <StatBox icon={<UserX className="h-3.5 w-3.5 text-destructive" />} label="معطل" value={loadingUsers ? "—" : disabledCount} />
+          <StatBox icon={<Clock className="h-3.5 w-3.5 text-info" />} label="جلسات" value={loadingSessions ? "—" : (Array.isArray(sessions) ? sessions.length : 0)} />
         </div>
       )}
+
+      {/* Search */}
+      <div className="relative mb-4">
+        <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="بحث عن مستخدم، باقة، أو تعليق..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="pr-10 text-sm"
+        />
+      </div>
 
       {/* Tabs */}
       <Tabs defaultValue="users" dir="rtl">
         <TabsList className="bg-muted mb-4 w-full justify-start">
-          <TabsTrigger value="users" className="text-xs">المستخدمين</TabsTrigger>
-          <TabsTrigger value="profiles" className="text-xs">الباقات</TabsTrigger>
-          <TabsTrigger value="sessions" className="text-xs">الجلسات</TabsTrigger>
+          <TabsTrigger value="users" className="text-xs">المستخدمين ({allUsers.length})</TabsTrigger>
+          <TabsTrigger value="profiles" className="text-xs">الباقات ({Array.isArray(profiles) ? profiles.length : 0})</TabsTrigger>
+          <TabsTrigger value="sessions" className="text-xs">الجلسات ({Array.isArray(sessions) ? sessions.length : 0})</TabsTrigger>
         </TabsList>
 
+        {/* Users Tab */}
         <TabsContent value="users">
           <div className="rounded-lg border border-border bg-card shadow-card overflow-hidden">
             <div className="overflow-x-auto">
@@ -119,38 +176,66 @@ export default function UserManagerPage() {
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">الباقة</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">الحالة</th>
                     <th className="text-right p-3 font-medium text-xs text-muted-foreground">التعليق</th>
+                    <th className="text-center p-3 font-medium text-xs text-muted-foreground w-12">إجراء</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingUsers ? (
-                    <tr><td colSpan={4} className="p-10 text-center text-muted-foreground text-sm">جاري التحميل...</td></tr>
-                  ) : !Array.isArray(users) || users.length === 0 ? (
+                    <tr><td colSpan={5} className="p-10 text-center text-muted-foreground text-sm">
+                      <div className="animate-pulse">جاري التحميل...</div>
+                    </td></tr>
+                  ) : filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="p-10 text-center">
+                      <td colSpan={5} className="p-10 text-center">
                         <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                        <p className="text-muted-foreground text-sm">لا يوجد مستخدمين</p>
-                        <p className="text-muted-foreground/60 text-xs mt-1">تأكد من تثبيت User Manager على الراوتر</p>
+                        <p className="text-muted-foreground text-sm">{search ? "لا توجد نتائج" : "لا يوجد مستخدمين"}</p>
                       </td>
                     </tr>
                   ) : (
-                    users.map((user: any, i: number) => (
-                      <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                        <td className="p-3 font-medium text-foreground text-sm">{user.name || user.username || "—"}</td>
-                        <td className="p-3 text-muted-foreground text-xs">{user.group || user.profile || user.actual_profile || "—"}</td>
-                        <td className="p-3">
-                          {user.disabled === "true" || user.disabled === true ? (
-                            <span className="inline-flex items-center gap-1 text-xs text-destructive">
-                              <UserX className="h-3 w-3" /> معطل
+                    filteredUsers.map((user: any, i: number) => {
+                      const isDisabled = user.disabled === "true" || user.disabled === true;
+                      return (
+                        <tr key={user[".id"] || i} className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
+                          <td className="p-3 font-medium text-foreground text-sm">{user.name || user.username || "—"}</td>
+                          <td className="p-3 text-muted-foreground text-xs">{user.group || user.profile || user.actual_profile || "—"}</td>
+                          <td className="p-3">
+                            <span className={`inline-flex items-center gap-1 text-xs ${isDisabled ? "text-destructive" : "text-success"}`}>
+                              {isDisabled ? <XCircle className="h-3 w-3" /> : <CheckCircle className="h-3 w-3" />}
+                              {isDisabled ? "معطل" : "نشط"}
                             </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-xs text-success">
-                              <UserCheck className="h-3 w-3" /> نشط
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3 text-muted-foreground text-xs max-w-[200px] truncate">{user.comment || "—"}</td>
-                      </tr>
-                    ))
+                          </td>
+                          <td className="p-3 text-muted-foreground text-xs max-w-[150px] truncate">{user.comment || "—"}</td>
+                          <td className="p-3 text-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem onClick={() => setDetailUser(user)}>
+                                  <Eye className="h-3.5 w-3.5 ml-2" /> عرض التفاصيل
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                {isDisabled ? (
+                                  <DropdownMenuItem onClick={() => handleAction("enable", user)}>
+                                    <CheckCircle className="h-3.5 w-3.5 ml-2" /> تفعيل
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem onClick={() => handleAction("disable", user)}>
+                                    <Ban className="h-3.5 w-3.5 ml-2" /> تعطيل
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => setDeleteTarget(user)} className="text-destructive">
+                                  <Trash2 className="h-3.5 w-3.5 ml-2" /> حذف
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -158,27 +243,21 @@ export default function UserManagerPage() {
           </div>
         </TabsContent>
 
+        {/* Profiles Tab */}
         <TabsContent value="profiles">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {Array.isArray(profiles) && profiles.map((profile: any, i: number) => (
-              <div key={i} className="rounded-lg border border-border bg-card shadow-card p-4">
+              <div key={i} className="rounded-lg border border-border bg-card shadow-card p-4 hover:border-foreground/10 transition-colors">
                 <div className="flex items-center gap-2 mb-3">
                   <Package className="h-4 w-4 text-primary" />
                   <h3 className="font-semibold text-foreground text-sm">{profile.name}</h3>
                 </div>
                 <div className="space-y-2">
-                  {profile["name-for-users"] && (
-                    <Row label="الاسم" value={profile["name-for-users"]} />
-                  )}
-                  {profile.validity && (
-                    <Row label="الصلاحية" value={profile.validity} />
-                  )}
-                  {profile.price && (
-                    <Row label="السعر" value={profile.price} highlight />
-                  )}
-                  {profile["rate-limit"] && (
-                    <Row label="السرعة" value={profile["rate-limit"]} />
-                  )}
+                  {profile["name-for-users"] && <Row label="الاسم" value={profile["name-for-users"]} />}
+                  {profile.validity && <Row label="الصلاحية" value={profile.validity} />}
+                  {profile.price && <Row label="السعر" value={profile.price} highlight />}
+                  {profile["rate-limit"] && <Row label="السرعة" value={profile["rate-limit"]} />}
+                  {profile["shared-users"] && <Row label="مشاركة" value={profile["shared-users"]} />}
                 </div>
               </div>
             ))}
@@ -191,6 +270,7 @@ export default function UserManagerPage() {
           </div>
         </TabsContent>
 
+        {/* Sessions Tab */}
         <TabsContent value="sessions">
           <div className="rounded-lg border border-border bg-card shadow-card overflow-hidden">
             <div className="overflow-x-auto">
@@ -206,22 +286,24 @@ export default function UserManagerPage() {
                 </thead>
                 <tbody>
                   {loadingSessions ? (
-                    <tr><td colSpan={5} className="p-10 text-center text-muted-foreground text-sm">جاري التحميل...</td></tr>
+                    <tr><td colSpan={5} className="p-10 text-center text-muted-foreground text-sm">
+                      <div className="animate-pulse">جاري التحميل...</div>
+                    </td></tr>
                   ) : !Array.isArray(sessions) || sessions.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="p-10 text-center">
                         <Clock className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                        <p className="text-muted-foreground text-sm">لا توجد جلسات</p>
+                        <p className="text-muted-foreground text-sm">لا توجد جلسات نشطة</p>
                       </td>
                     </tr>
                   ) : (
                     sessions.map((s: any, i: number) => (
                       <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                        <td className="p-3 font-medium text-foreground text-sm">{s.user || s.customer || "—"}</td>
-                        <td className="p-3 text-muted-foreground text-xs font-mono">{s["from-time"] || s.started || "—"}</td>
+                        <td className="p-3 font-medium text-foreground text-sm">{s.user || s.customer || s.name || "—"}</td>
+                        <td className="p-3 text-muted-foreground text-xs font-mono">{s["from-time"] || s.started || s["acct-session-id"] || "—"}</td>
                         <td className="p-3 text-muted-foreground text-xs font-mono">{s["till-time"] || s.ended || "—"}</td>
-                        <td className="p-3 text-foreground text-xs font-mono">{formatBytes(s.download || s["bytes-in"])}</td>
-                        <td className="p-3 text-foreground text-xs font-mono">{formatBytes(s.upload || s["bytes-out"])}</td>
+                        <td className="p-3 text-foreground text-xs font-mono">{formatBytes(s.download || s["bytes-in"] || s["acct-input-octets"])}</td>
+                        <td className="p-3 text-foreground text-xs font-mono">{formatBytes(s.upload || s["bytes-out"] || s["acct-output-octets"])}</td>
                       </tr>
                     ))
                   )}
@@ -231,7 +313,89 @@ export default function UserManagerPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Add User Dialog */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>إضافة مستخدم جديد</DialogTitle>
+            <DialogDescription>أدخل بيانات المستخدم الجديد</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">اسم المستخدم</label>
+              <Input value={newUser.name} onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))} placeholder="user01" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">كلمة المرور</label>
+              <Input value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} placeholder="****" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">الباقة (اختياري)</label>
+              <Input value={newUser.profile} onChange={e => setNewUser(p => ({ ...p, profile: e.target.value }))} placeholder="اسم الباقة" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>إلغاء</Button>
+            <Button onClick={handleAddUser} disabled={action.isPending}>
+              {action.isPending ? "جاري الإضافة..." : "إضافة"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>حذف المستخدم</AlertDialogTitle>
+            <AlertDialogDescription>
+              هل أنت متأكد من حذف "{deleteTarget?.name || deleteTarget?.username}"؟ لا يمكن التراجع عن هذا الإجراء.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>إلغاء</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => { handleAction("remove", deleteTarget); setDeleteTarget(null); }}
+            >
+              حذف
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Detail Dialog */}
+      <Dialog open={!!detailUser} onOpenChange={() => setDetailUser(null)}>
+        <DialogContent className="sm:max-w-md" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>تفاصيل المستخدم</DialogTitle>
+          </DialogHeader>
+          {detailUser && (
+            <div className="space-y-2 py-2">
+              {Object.entries(detailUser).filter(([k]) => !k.startsWith(".")).map(([key, val]) => (
+                <div key={key} className="flex justify-between items-center py-1 border-b border-border/50">
+                  <span className="text-xs text-muted-foreground">{key}</span>
+                  <span className="text-xs font-mono text-foreground max-w-[200px] truncate">{String(val || "—")}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
+  );
+}
+
+function StatBox({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
+  return (
+    <div className="rounded-lg border border-border bg-card p-3">
+      <div className="flex items-center gap-2 mb-1">
+        {icon}
+        <span className="text-xs text-muted-foreground">{label}</span>
+      </div>
+      <p className="text-xl font-bold text-foreground">{value}</p>
+    </div>
   );
 }
 
@@ -247,6 +411,7 @@ function Row({ label, value, highlight }: { label: string; value: string; highli
 function formatBytes(bytes: string | number | undefined): string {
   if (!bytes) return "0 B";
   const b = Number(bytes);
+  if (isNaN(b)) return "0 B";
   if (b < 1024) return b + " B";
   if (b < 1048576) return (b / 1024).toFixed(1) + " KB";
   if (b < 1073741824) return (b / 1048576).toFixed(1) + " MB";

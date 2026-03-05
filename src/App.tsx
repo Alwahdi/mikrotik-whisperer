@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import HotspotPage from "./pages/HotspotPage";
 import UserManagerPage from "./pages/UserManagerPage";
 import SettingsPage from "./pages/SettingsPage";
+import VouchersPage from "./pages/VouchersPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/hotspot" element={<ProtectedRoute><HotspotPage /></ProtectedRoute>} />
             <Route path="/usermanager" element={<ProtectedRoute><UserManagerPage /></ProtectedRoute>} />
+            <Route path="/vouchers" element={<ProtectedRoute><VouchersPage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>

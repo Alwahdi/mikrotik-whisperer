@@ -2,7 +2,7 @@ import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Wifi, Users, Settings, Menu, X,
-  Router, Moon, Sun, LogOut, ChevronLeft, Activity,
+  Router, Moon, Sun, LogOut, ChevronLeft, Activity, CreditCard,
 } from "lucide-react";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,6 +11,7 @@ const navItems = [
   { path: "/", icon: LayoutDashboard, label: "لوحة التحكم" },
   { path: "/hotspot", icon: Wifi, label: "الهوتسبوت" },
   { path: "/usermanager", icon: Users, label: "يوزر مانجر" },
+  { path: "/vouchers", icon: CreditCard, label: "الكروت" },
   { path: "/settings", icon: Settings, label: "الإعدادات" },
 ];
 
