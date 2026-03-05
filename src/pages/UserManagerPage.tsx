@@ -163,7 +163,8 @@ export default function UserManagerPage() {
     setProfileForm({
       name: "", nameForUsers: "", validity: "30d", price: "",
       rateLimit: "", sharedUsers: "1", rxRateLimit: "", txRateLimit: "",
-      overrideSharedUsers: "",
+      overrideSharedUsers: "", transferLimit: "", rxTransferLimit: "",
+      txTransferLimit: "", uptimeLimit: "",
     });
     setProfileOpen(true);
   };
