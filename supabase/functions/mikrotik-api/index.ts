@@ -632,8 +632,13 @@ function buildRestBodyVariants(command: string, body?: Record<string, any>): (Re
     remapBody(remapBody(body, { group: "profile" }), { name: "username" }),
   ];
 
-  // For profile add/set: try stripping unknown params one by one
   if (isUserManagerProfileCommand(command)) {
+    const owner = body.owner || body.customer || "admin";
+    variants.unshift(
+      { ...body, owner },
+      { ...body, customer: owner },
+    );
+
     const optionalKeys = ["name-for-users", "override-shared-users", "transfer-limit", "uptime-limit", "price"];
     for (const key of optionalKeys) {
       if (body[key] !== undefined) {
@@ -645,22 +650,25 @@ function buildRestBodyVariants(command: string, body?: Record<string, any>): (Re
 
   if (isUserManagerUserAddCommand(command)) {
     const username = body.username || body.name || body.user;
-    const password = body.password;
+    const hasPassword = Object.prototype.hasOwnProperty.call(body, "password");
+    const password = hasPassword ? body.password : "";
     const profile = body.profile || body.group;
     const customer = body.customer || body.owner || "admin";
 
-    if (username && password) {
+    if (username && hasPassword) {
       variants.unshift(
+        { username, password, profile, owner: customer },
+        { username, password, group: profile, owner: customer },
         { username, password, profile, customer },
         { username, password, group: profile, customer },
-        { username, password, profile },
-        { username, password, group: profile },
+        { username, password, owner: customer },
         { username, password, customer },
         { username, password },
+        { name: username, password, profile, owner: customer },
+        { name: username, password, group: profile, owner: customer },
         { name: username, password, profile, customer },
         { name: username, password, group: profile, customer },
-        { name: username, password, profile },
-        { name: username, password, group: profile },
+        { name: username, password, owner: customer },
         { name: username, password, customer },
         { name: username, password },
       );
