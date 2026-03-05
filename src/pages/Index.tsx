@@ -177,6 +177,22 @@ export default function Index() {
         <StatCard title="جلسات UM" value={activeSessions} subtitle="نشطة" icon={Zap} />
       </div>
 
+      {/* Today's Sales Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+        <StatCard title="مبيعات اليوم" value={todayRevenue.toLocaleString()} icon={DollarSign} variant="accent" />
+        <StatCard title="كروت اليوم" value={todayCardsCount} icon={CreditCard} />
+        <Link to="/sales" className="col-span-2 sm:col-span-1">
+          <div className="rounded-lg border border-border bg-card p-4 hover:border-primary/30 transition-colors h-full flex flex-col justify-center">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+              <TrendingUp className="h-3.5 w-3.5" />
+              أفضل باقة اليوم
+            </div>
+            <p className="text-sm font-semibold text-foreground truncate">{topPackageToday || "—"}</p>
+            <p className="text-[10px] text-primary mt-1 flex items-center gap-1">عرض التقارير <ArrowRight className="h-2.5 w-2.5" /></p>
+          </div>
+        </Link>
+      </div>
+
       {/* System Info + Uptime */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-6">
         <div className="lg:col-span-2">
