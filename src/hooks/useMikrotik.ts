@@ -24,8 +24,73 @@ async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>
   return data;
 }
 
+async function callMikrotikAction(action: string, extraBody?: Record<string, any>) {
+  const config = getMikrotikConfig();
+  if (!config) throw new Error("لم يتم إعداد بيانات الاتصال بالمايكروتيك");
+
+  const { data, error } = await supabase.functions.invoke("mikrotik-api", {
+    body: {
+      action,
+      host: config.host,
+      user: config.user,
+      pass: config.pass,
+      port: config.port,
+      protocol: config.protocol,
+      mode: config.mode,
+      ...extraBody,
+    },
+  });
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
 function useEnabled() {
   return !!getMikrotikConfig();
+}
+
+const CACHE_OPTIONS = {
+  staleTime: 30000, // 30s before data is considered stale
+  gcTime: 5 * 60 * 1000, // 5 min garbage collection
+};
+
+// ─── Health Check ──────────────────────────────
+export function useRouterHealth() {
+  return useQuery({
+    queryKey: ["mikrotik", "health"],
+    queryFn: () => callMikrotikAction("health-check"),
+    refetchInterval: 30000,
+    enabled: useEnabled(),
+    ...CACHE_OPTIONS,
+  });
+}
+
+// ─── Batch Operations ──────────────────────────
+export function useBatchAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ commands, invalidateKeys }: {
+      commands: { command: string; args?: string[] }[];
+      invalidateKeys?: string[];
+    }) => {
+      return callMikrotikAction("batch", { commands });
+    },
+    onSuccess: (data, variables) => {
+      const keys = variables.invalidateKeys || [];
+      keys.forEach(key => qc.invalidateQueries({ queryKey: ["mikrotik", key] }));
+      const errors = data?.errors?.filter((e: string) => e) || [];
+      const total = data?.results?.length || 0;
+      const failed = errors.length;
+      if (failed === 0) {
+        toast.success(`تم تنفيذ ${total} عملية بنجاح`);
+      } else {
+        toast.warning(`نجح ${total - failed} من ${total} — فشل ${failed}`);
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "فشلت العملية");
+    },
+  });
 }
 
 // ─── Hotspot ───────────────────────────────
@@ -35,6 +100,7 @@ export function useHotspotUsers() {
     queryFn: () => callMikrotikApi("/ip/hotspot/active/print"),
     refetchInterval: 10000,
     enabled: useEnabled(),
+    ...CACHE_OPTIONS,
   });
 }
 export function useHotspotProfiles() {
@@ -42,6 +108,8 @@ export function useHotspotProfiles() {
     queryKey: ["mikrotik", "hotspot", "profiles"],
     queryFn: () => callMikrotikApi("/ip/hotspot/user/profile/print"),
     enabled: useEnabled(),
+    staleTime: 60000,
+    gcTime: 10 * 60 * 1000,
   });
 }
 export function useHotspotAllUsers() {
@@ -49,6 +117,7 @@ export function useHotspotAllUsers() {
     queryKey: ["mikrotik", "hotspot", "users"],
     queryFn: () => callMikrotikApi("/ip/hotspot/user/print"),
     enabled: useEnabled(),
+    ...CACHE_OPTIONS,
   });
 }
 
@@ -95,6 +164,7 @@ export function useUserManagerUsers() {
     refetchInterval: 15000,
     enabled: useEnabled(),
     retry: 2,
+    ...CACHE_OPTIONS,
   });
 }
 export function useUserManagerProfiles() {
@@ -103,6 +173,8 @@ export function useUserManagerProfiles() {
     queryFn: () => callMikrotikApi("/user-manager/profile/print"),
     enabled: useEnabled(),
     retry: 2,
+    staleTime: 60000,
+    gcTime: 10 * 60 * 1000,
   });
 }
 export function useUserManagerSessions() {
@@ -112,6 +184,7 @@ export function useUserManagerSessions() {
     refetchInterval: 10000,
     enabled: useEnabled(),
     retry: 2,
+    ...CACHE_OPTIONS,
   });
 }
 
@@ -131,7 +204,6 @@ export function useUserManagerAction() {
         enable: "/user-manager/user/set",
         remove: "/user-manager/user/remove",
         add: "/user-manager/user/add",
-        "create-vouchers": "/user-manager/user/add",
       };
 
       const finalArgs = [...args];
@@ -160,6 +232,7 @@ export function useSystemResources() {
     },
     refetchInterval: 15000,
     enabled: useEnabled(),
+    ...CACHE_OPTIONS,
   });
 }
 export function useSystemIdentity() {
@@ -170,6 +243,7 @@ export function useSystemIdentity() {
       return Array.isArray(data) ? data[0] || {} : data;
     },
     enabled: useEnabled(),
+    staleTime: 120000,
   });
 }
 export function useRouterboard() {
@@ -180,6 +254,7 @@ export function useRouterboard() {
       return Array.isArray(data) ? data[0] || {} : data;
     },
     enabled: useEnabled(),
+    staleTime: 120000,
   });
 }
 
@@ -190,6 +265,7 @@ export function useInterfaces() {
     queryFn: () => callMikrotikApi("/interface/print"),
     refetchInterval: 10000,
     enabled: useEnabled(),
+    ...CACHE_OPTIONS,
   });
 }
 
@@ -200,6 +276,7 @@ export function useDHCPLeases() {
     queryFn: () => callMikrotikApi("/ip/dhcp-server/lease/print"),
     refetchInterval: 30000,
     enabled: useEnabled(),
+    ...CACHE_OPTIONS,
   });
 }
 
@@ -209,6 +286,7 @@ export function useIPAddresses() {
     queryKey: ["mikrotik", "ip", "address"],
     queryFn: () => callMikrotikApi("/ip/address/print"),
     enabled: useEnabled(),
+    ...CACHE_OPTIONS,
   });
 }
 
