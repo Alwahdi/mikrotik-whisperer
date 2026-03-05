@@ -181,12 +181,47 @@ async function computeChallengeResponse(password: string, challengeHex: string):
   return "00" + bytesToHex(hash);
 }
 
+// ─── Convert API-style args to REST body object ─────────────────────────
+function argsToRestBody(args?: string[]): Record<string, string> | undefined {
+  if (!args || args.length === 0) return undefined;
+  const body: Record<string, string> = {};
+  for (const arg of args) {
+    if (arg.startsWith("=")) {
+      const idx = arg.indexOf("=", 1);
+      if (idx > 0) {
+        body[arg.substring(1, idx)] = arg.substring(idx + 1);
+      }
+    }
+  }
+  return Object.keys(body).length > 0 ? body : undefined;
+}
+
+// ─── Determine REST method from command ─────────────────────────────────
+function getRestMethod(command: string): string {
+  if (command.endsWith("/add")) return "PUT";
+  if (command.endsWith("/set")) return "PATCH";
+  if (command.endsWith("/remove")) return "DELETE";
+  return "GET";
+}
+
 // ─── v6/v7 command mapping ──────────────────────────────────────────────
 function getV6FallbackCommand(command: string): string | null {
   if (command.startsWith("/user-manager/")) {
     return "/tool" + command;
   }
   return null;
+}
+
+// ─── v6 parameter name mapping for user-manager ─────────────────────────
+function mapArgsForV6(command: string, args?: string[]): string[] | undefined {
+  if (!args || !command.includes("user-manager")) return args;
+  return args.map(arg => {
+    // v7 uses "group", v6 uses "profile" for user-manager
+    if (arg.startsWith("=group=")) {
+      return arg.replace("=group=", "=profile=");
+    }
+    return arg;
+  });
 }
 
 // ─── Port Scanner ───────────────────────────────────────────────────────
@@ -229,8 +264,9 @@ async function createApiClient(host: string, port: string, useTls: boolean, user
 async function handleRest(
   host: string, port: string, protocol: string,
   user: string, pass: string, command: string,
-  method: string = "GET", body?: any
+  method?: string, restBody?: Record<string, any>
 ): Promise<any> {
+  const effectiveMethod = method || getRestMethod(command);
   const path = command.replace(/\/print$/, "").replace(/\/set$/, "").replace(/\/add$/, "").replace(/\/remove$/, "");
   const url = `${protocol}://${host}:${port}/rest${path}`;
   const credentials = btoa(`${user}:${pass}`);
@@ -238,15 +274,15 @@ async function handleRest(
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {
     const fetchOpts: RequestInit = {
-      method,
+      method: effectiveMethod,
       headers: {
         Authorization: `Basic ${credentials}`,
         "Content-Type": "application/json",
       },
       signal: controller.signal,
     };
-    if (body && method !== "GET") {
-      fetchOpts.body = JSON.stringify(body);
+    if (restBody && effectiveMethod !== "GET") {
+      fetchOpts.body = JSON.stringify(restBody);
     }
     const response = await fetch(url, fetchOpts);
     if (!response.ok) {
@@ -259,7 +295,7 @@ async function handleRest(
   }
 }
 
-// ─── API Protocol Handler (v6/v7) with FRESH connection for fallback ───
+// ─── API Protocol Handler (v6/v7) with fallback ────────────────────────
 async function handleApi(
   host: string, port: string, useTls: boolean,
   user: string, pass: string, command: string,
@@ -283,9 +319,10 @@ async function handleApi(
   }
 
   const fallbackCmd = getV6FallbackCommand(command)!;
+  const v6Args = mapArgsForV6(fallbackCmd, args);
   const client2 = await createApiClient(host, port, useTls, user, pass);
   try {
-    return await client2.execute(fallbackCmd, args);
+    return await client2.execute(fallbackCmd, v6Args);
   } catch (e2: any) {
     if (e2.message?.includes("no such command")) {
       throw new Error("User Manager غير مثبّت على هذا الراوتر. يرجى تثبيت حزمة user-manager وإعادة التشغيل.");
@@ -311,6 +348,7 @@ async function handleBatch(
       try {
         const result = await client.execute(cmd.command, cmd.args);
         results.push(result);
+        errors.push("");
       } catch (err: any) {
         // Try v6 fallback for user-manager commands
         const fallback = getV6FallbackCommand(cmd.command);
@@ -318,8 +356,10 @@ async function handleBatch(
         
         if (fallback && isNoSuchCommand) {
           try {
-            const result = await client.execute(fallback, cmd.args);
+            const v6Args = mapArgsForV6(fallback, cmd.args);
+            const result = await client.execute(fallback, v6Args);
             results.push(result);
+            errors.push("");
           } catch (e2: any) {
             errors.push(e2.message || "Command failed");
             results.push(null);
@@ -332,6 +372,31 @@ async function handleBatch(
     }
   } finally {
     client.close();
+  }
+  
+  return { results, errors };
+}
+
+// ─── Batch Handler for REST mode ────────────────────────────────────────
+async function handleBatchRest(
+  host: string, port: string, protocol: string,
+  user: string, pass: string,
+  commands: { command: string; args?: string[] }[]
+): Promise<{ results: any[]; errors: string[] }> {
+  const results: any[] = [];
+  const errors: string[] = [];
+  
+  for (const cmd of commands) {
+    try {
+      const restBody = argsToRestBody(cmd.args);
+      const method = getRestMethod(cmd.command);
+      const r = await handleRest(host, port, protocol, user, pass, cmd.command, method, restBody);
+      results.push(r);
+      errors.push("");
+    } catch (e: any) {
+      errors.push(e.message);
+      results.push(null);
+    }
   }
   
   return { results, errors };
@@ -387,7 +452,6 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } else {
-        // REST health check
         const start = Date.now();
         const actualPort2 = port || (protocol === "https" ? "443" : "80");
         const actualProtocol = protocol || "https";
@@ -414,21 +478,10 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       } else {
-        // REST batch: execute sequentially (REST doesn't support persistent connections well)
-        const results: any[] = [];
-        const errors: string[] = [];
         const actualPort = port || (protocol === "https" ? "443" : "80");
         const actualProtocol = protocol || "https";
-        for (const cmd of commands) {
-          try {
-            const r = await handleRest(host, actualPort, actualProtocol, user, pass, cmd.command, "POST", cmd.args);
-            results.push(r);
-          } catch (e: any) {
-            errors.push(e.message);
-            results.push(null);
-          }
-        }
-        return new Response(JSON.stringify({ results, errors }), {
+        const result = await handleBatchRest(host, actualPort, actualProtocol, user, pass, commands);
+        return new Response(JSON.stringify(result), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -448,8 +501,10 @@ serve(async (req) => {
     } else {
       const actualPort = port || (protocol === "https" ? "443" : "80");
       const actualProtocol = protocol || "https";
-      const method = body.method || "GET";
-      data = await handleRest(host, actualPort, actualProtocol, user, pass, endpoint, method, body.body);
+      // Convert args to REST body for non-GET requests
+      const restBody = argsToRestBody(args) || body.body;
+      const method = body.method || getRestMethod(endpoint);
+      data = await handleRest(host, actualPort, actualProtocol, user, pass, endpoint, method, restBody);
     }
 
     return new Response(JSON.stringify(data), {
