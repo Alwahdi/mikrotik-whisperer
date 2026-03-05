@@ -212,7 +212,39 @@ function getV6FallbackCommand(command: string): string | null {
   return null;
 }
 
-// ─── v6 parameter name mapping for user-manager ─────────────────────────
+// ─── v6/v7 parameter compatibility for user-manager ─────────────────────
+function argsListToObject(args?: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!args) return out;
+
+  for (const arg of args) {
+    if (!arg.startsWith("=")) continue;
+    const idx = arg.indexOf("=", 1);
+    if (idx <= 0) continue;
+    out[arg.substring(1, idx)] = arg.substring(idx + 1);
+  }
+
+  return out;
+}
+
+function objectToArgsList(obj: Record<string, any>): string[] {
+  return Object.entries(obj)
+    .filter(([, v]) => v !== undefined && v !== null && `${v}` !== "")
+    .map(([k, v]) => `=${k}=${v}`);
+}
+
+function omitArgsKeys(args: string[] | undefined, keys: string[]): string[] | undefined {
+  if (!args || args.length === 0) return args;
+  const keySet = new Set(keys);
+  return args.filter((arg) => {
+    if (!arg.startsWith("=")) return true;
+    const idx = arg.indexOf("=", 1);
+    if (idx <= 0) return true;
+    const key = arg.substring(1, idx);
+    return !keySet.has(key);
+  });
+}
+
 function remapArgs(args: string[] | undefined, map: Record<string, string>): string[] | undefined {
   if (!args) return args;
   return args.map((arg) => {
@@ -238,22 +270,75 @@ function uniqueArgVariants(variants: (string[] | undefined)[]): (string[] | unde
   return out;
 }
 
-function buildUserManagerArgVariants(args?: string[]): (string[] | undefined)[] {
+function isUserManagerUserAddCommand(command: string): boolean {
+  return /\/user-manager\/user\/add$/.test(command);
+}
+
+function getUserManagerRoots(command: string): string[] {
+  const fromTool = command.startsWith("/tool/user-manager/");
+  const roots = fromTool
+    ? ["/tool/user-manager", "/user-manager"]
+    : ["/user-manager", "/tool/user-manager"];
+
+  return Array.from(new Set(roots));
+}
+
+function buildUserManagerArgVariants(command: string, args?: string[]): (string[] | undefined)[] {
   if (!args || args.length === 0) return [args];
-  return uniqueArgVariants([
+
+  const baseVariants: (string[] | undefined)[] = [
     args,
     remapArgs(args, { group: "profile" }),
     remapArgs(args, { profile: "group" }),
     remapArgs(args, { name: "username" }),
     remapArgs(args, { username: "name" }),
+    remapArgs(args, { user: "username" }),
+    remapArgs(args, { username: "user" }),
+    remapArgs(args, { ".id": "numbers" }),
+    remapArgs(args, { numbers: ".id" }),
+    remapArgs(args, { owner: "customer" }),
+    remapArgs(args, { customer: "owner" }),
     remapArgs(remapArgs(args, { group: "profile" }), { name: "username" }),
     remapArgs(remapArgs(args, { profile: "group" }), { username: "name" }),
-  ]);
+  ];
+
+  if (isUserManagerUserAddCommand(command)) {
+    const parsed = argsListToObject(args);
+    const username = parsed.username || parsed.name || parsed.user;
+    const password = parsed.password;
+    const profile = parsed.profile || parsed.group;
+    const customer = parsed.customer || parsed.owner || "admin";
+
+    if (username && password) {
+      baseVariants.unshift(
+        objectToArgsList({ username, password, profile, customer }),
+        objectToArgsList({ username, password, group: profile, customer }),
+        objectToArgsList({ username, password, profile }),
+        objectToArgsList({ username, password, group: profile }),
+        objectToArgsList({ username, password, customer }),
+        objectToArgsList({ username, password }),
+        objectToArgsList({ name: username, password, profile, customer }),
+        objectToArgsList({ name: username, password, group: profile, customer }),
+        objectToArgsList({ name: username, password, profile }),
+        objectToArgsList({ name: username, password, group: profile }),
+        objectToArgsList({ name: username, password, customer }),
+        objectToArgsList({ name: username, password }),
+      );
+    }
+  }
+
+  return uniqueArgVariants(baseVariants);
 }
 
 function mapArgsForV6(command: string, args?: string[]): string[] | undefined {
   if (!args || !command.includes("user-manager")) return args;
-  return remapArgs(args, { group: "profile", name: "username" });
+  return remapArgs(args, {
+    group: "profile",
+    name: "username",
+    ".id": "numbers",
+    owner: "customer",
+    user: "username",
+  });
 }
 
 function isCompatibilityError(message: string): boolean {
@@ -266,25 +351,31 @@ function isCompatibilityError(message: string): boolean {
   );
 }
 
-async function executeUserManagerCompatible(
-  client: MikroTikApiClient,
+function buildUserManagerCommandAttempts(
   command: string,
   args?: string[],
-): Promise<Record<string, string>[]> {
+): { command: string; args?: string[] }[] {
   const attempts: { command: string; args?: string[] }[] = [];
 
-  for (const variant of buildUserManagerArgVariants(args)) {
+  for (const variant of buildUserManagerArgVariants(command, args)) {
     attempts.push({ command, args: variant });
   }
 
   const fallback = getV6FallbackCommand(command);
   if (fallback) {
     const v6Base = mapArgsForV6(fallback, args);
-    for (const variant of buildUserManagerArgVariants(v6Base)) {
+    for (const variant of buildUserManagerArgVariants(fallback, v6Base)) {
       attempts.push({ command: fallback, args: variant });
     }
   }
 
+  return attempts;
+}
+
+async function executeCompatibilityAttempts(
+  client: MikroTikApiClient,
+  attempts: { command: string; args?: string[] }[],
+): Promise<Record<string, string>[]> {
   const seen = new Set<string>();
   let lastError: Error | null = null;
 
@@ -305,6 +396,104 @@ async function executeUserManagerCompatible(
   }
 
   throw lastError || new Error("User Manager command failed");
+}
+
+async function findUserManagerUserId(
+  client: MikroTikApiClient,
+  command: string,
+  username: string,
+): Promise<string | null> {
+  const roots = getUserManagerRoots(command);
+
+  for (const root of roots) {
+    try {
+      const rows = await client.execute(`${root}/user/print`);
+      const hit = rows.find((row) =>
+        row.username === username ||
+        row.name === username ||
+        row.user === username,
+      );
+      const id = hit?.[".id"] || hit?.id;
+      if (id) return id;
+    } catch {
+      // ignore compatibility failures here
+    }
+  }
+
+  return null;
+}
+
+function buildProfileActivationAttempts(
+  command: string,
+  username: string,
+  profile: string,
+  customer: string,
+  userId: string | null,
+): { command: string; args?: string[] }[] {
+  const attempts: { command: string; args?: string[] }[] = [];
+
+  for (const root of getUserManagerRoots(command)) {
+    const activateCommand = `${root}/user/create-and-activate-profile`;
+    const setCommand = `${root}/user/set`;
+
+    if (userId) {
+      attempts.push({ command: activateCommand, args: objectToArgsList({ profile, customer, numbers: userId }) });
+      attempts.push({ command: activateCommand, args: objectToArgsList({ profile, customer, ".id": userId }) });
+      attempts.push({ command: setCommand, args: objectToArgsList({ ".id": userId, profile }) });
+      attempts.push({ command: setCommand, args: objectToArgsList({ ".id": userId, group: profile }) });
+      attempts.push({ command: setCommand, args: objectToArgsList({ numbers: userId, profile }) });
+      attempts.push({ command: setCommand, args: objectToArgsList({ numbers: userId, group: profile }) });
+    }
+
+    attempts.push({ command: activateCommand, args: objectToArgsList({ profile, customer, username }) });
+    attempts.push({ command: activateCommand, args: objectToArgsList({ profile, customer, name: username }) });
+    attempts.push({ command: activateCommand, args: objectToArgsList({ profile, customer, user: username }) });
+    attempts.push({ command: setCommand, args: objectToArgsList({ username, profile }) });
+    attempts.push({ command: setCommand, args: objectToArgsList({ username, group: profile }) });
+    attempts.push({ command: setCommand, args: objectToArgsList({ name: username, profile }) });
+  }
+
+  return attempts;
+}
+
+async function activateUserManagerProfileCompatible(
+  client: MikroTikApiClient,
+  command: string,
+  username: string,
+  profile: string,
+  customer: string,
+): Promise<void> {
+  const userId = await findUserManagerUserId(client, command, username);
+  const attempts = buildProfileActivationAttempts(command, username, profile, customer, userId);
+  await executeCompatibilityAttempts(client, attempts);
+}
+
+async function executeUserManagerCompatible(
+  client: MikroTikApiClient,
+  command: string,
+  args?: string[],
+): Promise<Record<string, string>[]> {
+  if (isUserManagerUserAddCommand(command)) {
+    const parsed = argsListToObject(args);
+    const username = parsed.username || parsed.name || parsed.user;
+    const profile = parsed.profile || parsed.group;
+    const customer = parsed.customer || parsed.owner || "admin";
+
+    // First: create user with best-effort compatibility without profile/group params.
+    const addArgs = omitArgsKeys(args, ["profile", "group"]);
+    const addAttempts = buildUserManagerCommandAttempts(command, addArgs);
+    const addResult = await executeCompatibilityAttempts(client, addAttempts);
+
+    // Second: attach profile/package if provided.
+    if (username && profile) {
+      await activateUserManagerProfileCompatible(client, command, username, profile, customer);
+    }
+
+    return addResult;
+  }
+
+  const attempts = buildUserManagerCommandAttempts(command, args);
+  return executeCompatibilityAttempts(client, attempts);
 }
 
 // ─── Port Scanner ───────────────────────────────────────────────────────
