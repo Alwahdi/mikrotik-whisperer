@@ -619,6 +619,17 @@ function buildRestBodyVariants(command: string, body?: Record<string, any>): (Re
     remapBody(remapBody(body, { group: "profile" }), { name: "username" }),
   ];
 
+  // For profile add/set: try stripping unknown params one by one
+  if (isUserManagerProfileCommand(command)) {
+    const optionalKeys = ["name-for-users", "override-shared-users", "transfer-limit", "uptime-limit", "price"];
+    for (const key of optionalKeys) {
+      if (body[key] !== undefined) {
+        variants.push(omitBodyKeys(body, [key]));
+      }
+    }
+    variants.push(omitBodyKeys(body, optionalKeys)!);
+  }
+
   if (isUserManagerUserAddCommand(command)) {
     const username = body.username || body.name || body.user;
     const password = body.password;
