@@ -257,27 +257,41 @@ ${pages.join("")}
   const handlePrint = (cardsToPrint?: VoucherCard[]) => {
     const toPrint = cardsToPrint || cards;
     if (toPrint.length === 0) return;
-    
+
     const html = buildPrintHtml(toPrint);
     const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
-    
-    // Use hidden iframe for reliable printing
-    const iframe = printFrameRef.current;
-    if (iframe) {
-      iframe.src = url;
-      iframe.onload = () => {
-        try {
-          iframe.contentWindow?.print();
-        } catch {
-          // Fallback: open in new tab
-          window.open(url, "_blank");
-        }
-        setTimeout(() => URL.revokeObjectURL(url), 60000);
-      };
-    } else {
-      window.open(url, "_blank");
-    }
+
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "1px";
+    iframe.style.height = "1px";
+    iframe.style.opacity = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+      iframe.remove();
+    };
+
+    iframe.onload = () => {
+      try {
+        const win = iframe.contentWindow;
+        if (!win) throw new Error("تعذر فتح معاينة الطباعة");
+        win.focus();
+        setTimeout(() => win.print(), 120);
+        win.onafterprint = cleanup;
+        setTimeout(cleanup, 60000);
+      } catch {
+        cleanup();
+        toast.error("تعذر فتح نافذة الطباعة. حاول مرة أخرى.");
+      }
+    };
+
+    iframe.src = url;
   };
 
   const handleDeleteBatch = (batchId: string) => {
