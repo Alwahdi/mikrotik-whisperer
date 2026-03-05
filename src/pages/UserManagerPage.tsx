@@ -207,17 +207,24 @@ export default function UserManagerPage() {
       rateLimit = `${profileForm.rxRateLimit || "0"}/${profileForm.txRateLimit || "0"}`;
     }
 
+    // Build transfer-limit from rx/tx
+    let transferLimit = profileForm.transferLimit;
+    if (profileForm.rxTransferLimit || profileForm.txTransferLimit) {
+      transferLimit = `${profileForm.rxTransferLimit || "0"}/${profileForm.txTransferLimit || "0"}`;
+    }
+
     const data: Record<string, any> = {
       name: profileForm.name.trim(),
-      validity: profileForm.validity,
-      price: profileForm.price,
-      "rate-limit": rateLimit,
-      "shared-users": profileForm.sharedUsers,
-      "name-for-users": profileForm.nameForUsers,
     };
-    if (profileForm.overrideSharedUsers) {
-      data["override-shared-users"] = profileForm.overrideSharedUsers;
-    }
+    // Only send non-empty values to avoid unknown parameter errors
+    if (profileForm.validity) data.validity = profileForm.validity;
+    if (profileForm.price) data.price = profileForm.price;
+    if (rateLimit) data["rate-limit"] = rateLimit;
+    if (profileForm.sharedUsers) data["shared-users"] = profileForm.sharedUsers;
+    if (profileForm.nameForUsers) data["name-for-users"] = profileForm.nameForUsers;
+    if (profileForm.overrideSharedUsers) data["override-shared-users"] = profileForm.overrideSharedUsers;
+    if (transferLimit) data["transfer-limit"] = transferLimit;
+    if (profileForm.uptimeLimit) data["uptime-limit"] = profileForm.uptimeLimit;
 
     if (profileMode === "edit") {
       const id = editingProfile?.[".id"] || editingProfile?.id;
