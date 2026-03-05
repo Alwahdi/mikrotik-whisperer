@@ -1,10 +1,11 @@
-import { ReactNode, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { ReactNode, useState, useEffect } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Wifi, Users, Settings, Menu, X,
-  Router, Activity, ChevronLeft,
+  Router, Activity, ChevronLeft, Moon, Sun, LogOut, ArrowRight,
 } from "lucide-react";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { path: "/", icon: LayoutDashboard, label: "لوحة التحكم" },
@@ -15,8 +16,32 @@ const navItems = [
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      return document.documentElement.classList.contains("dark");
+    }
+    return true;
+  });
   const config = getMikrotikConfig();
+
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+    localStorage.setItem("theme", isDark ? "dark" : "light");
+  }, [isDark]);
+
+  // Init theme from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved === "light") setIsDark(false);
+    else if (saved === "dark") setIsDark(true);
+  }, []);
 
   return (
     <div className="flex min-h-screen" dir="rtl">
@@ -79,17 +104,42 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        {/* Connection info at bottom */}
-        {config && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-sidebar-border">
+        {/* Bottom actions */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-sidebar-border space-y-3">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => setIsDark(!isDark)}
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {isDark ? "وضع نهاري" : "وضع ليلي"}
+            </button>
+          </div>
+          <div className="flex items-center justify-between">
+            <Link
+              to="/routers"
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowRight className="h-3 w-3" />
+              تغيير الراوتر
+            </Link>
+            <button
+              onClick={() => { signOut(); navigate("/auth"); }}
+              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <LogOut className="h-3 w-3" />
+              خروج
+            </button>
+          </div>
+          {config && (
             <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-              <Activity className="h-3 w-3 text-success animate-pulse-glow" />
+              <Activity className="h-3 w-3 text-success animate-pulse" />
               <span>{config.mode === "rest" ? "REST API" : "MikroTik API"}</span>
               <span>•</span>
               <span>{config.protocol.toUpperCase()}</span>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </aside>
 
       {/* Main */}
@@ -103,12 +153,20 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </button>
           {config && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="h-2 w-2 rounded-full bg-success animate-pulse-glow" />
+              <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
               متصل
             </div>
           )}
+          <div className="mr-auto">
+            <button
+              onClick={() => setIsDark(!isDark)}
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            >
+              {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+          </div>
         </header>
-        <div className="p-4 sm:p-6 animate-slide-up">{children}</div>
+        <div className="p-4 sm:p-6">{children}</div>
       </main>
     </div>
   );
