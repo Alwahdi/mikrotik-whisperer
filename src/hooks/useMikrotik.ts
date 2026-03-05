@@ -3,6 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import { toast } from "sonner";
 
+// Router-scoped cache key prefix to prevent cross-router data leaks
+function getRouterKey(): string {
+  const config = getMikrotikConfig();
+  return config ? `${config.host}:${config.port}` : "none";
+}
+
 async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>) {
   const config = getMikrotikConfig();
   if (!config) throw new Error("لم يتم إعداد بيانات الاتصال بالمايكروتيك");
@@ -50,14 +56,15 @@ function useEnabled() {
 }
 
 const CACHE_OPTIONS = {
-  staleTime: 30000, // 30s before data is considered stale
-  gcTime: 5 * 60 * 1000, // 5 min garbage collection
+  staleTime: 30000,
+  gcTime: 5 * 60 * 1000,
 };
 
 // ─── Health Check ──────────────────────────────
 export function useRouterHealth() {
+  const routerKey = getRouterKey();
   return useQuery({
-    queryKey: ["mikrotik", "health"],
+    queryKey: ["mikrotik", routerKey, "health"],
     queryFn: () => callMikrotikAction("health-check"),
     refetchInterval: 30000,
     enabled: useEnabled(),
@@ -76,8 +83,9 @@ export function useBatchAction() {
       return callMikrotikAction("batch", { commands });
     },
     onSuccess: (data, variables) => {
+      const routerKey = getRouterKey();
       const keys = variables.invalidateKeys || [];
-      keys.forEach(key => qc.invalidateQueries({ queryKey: ["mikrotik", key] }));
+      keys.forEach(key => qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, key] }));
       const errors = data?.errors?.filter((e: string) => e) || [];
       const total = data?.results?.length || 0;
       const failed = errors.length;
@@ -93,10 +101,22 @@ export function useBatchAction() {
   });
 }
 
+// ─── Raw batch without toast (for voucher page) ─────
+export function useRawBatchAction() {
+  return useMutation({
+    mutationFn: async ({ commands }: {
+      commands: { command: string; args?: string[] }[];
+    }) => {
+      return callMikrotikAction("batch", { commands });
+    },
+  });
+}
+
 // ─── Hotspot ───────────────────────────────
 export function useHotspotUsers() {
+  const routerKey = getRouterKey();
   return useQuery({
-    queryKey: ["mikrotik", "hotspot", "active"],
+    queryKey: ["mikrotik", routerKey, "hotspot", "active"],
     queryFn: () => callMikrotikApi("/ip/hotspot/active/print"),
     refetchInterval: 10000,
     enabled: useEnabled(),
@@ -104,8 +124,9 @@ export function useHotspotUsers() {
   });
 }
 export function useHotspotProfiles() {
+  const routerKey = getRouterKey();
   return useQuery({
-    queryKey: ["mikrotik", "hotspot", "profiles"],
+    queryKey: ["mikrotik", routerKey, "hotspot", "profiles"],
     queryFn: () => callMikrotikApi("/ip/hotspot/user/profile/print"),
     enabled: useEnabled(),
     staleTime: 60000,
@@ -113,8 +134,9 @@ export function useHotspotProfiles() {
   });
 }
 export function useHotspotAllUsers() {
+  const routerKey = getRouterKey();
   return useQuery({
-    queryKey: ["mikrotik", "hotspot", "users"],
+    queryKey: ["mikrotik", routerKey, "hotspot", "users"],
     queryFn: () => callMikrotikApi("/ip/hotspot/user/print"),
     enabled: useEnabled(),
     ...CACHE_OPTIONS,
@@ -147,7 +169,8 @@ export function useHotspotUserAction() {
       return callMikrotikApi(endpointMap[action] || `/ip/hotspot/user/${action}`, { args: finalArgs });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["mikrotik", "hotspot"] });
+      const routerKey = getRouterKey();
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "hotspot"] });
       toast.success("تم تنفيذ العملية بنجاح");
     },
     onError: (err: any) => {
@@ -158,8 +181,9 @@ export function useHotspotUserAction() {
 
 // ─── User Manager ──────────────────────────
 export function useUserManagerUsers() {
+  const routerKey = getRouterKey();
   return useQuery({
-    queryKey: ["mikrotik", "usermanager", "users"],
+    queryKey: ["mikrotik", routerKey, "usermanager", "users"],
     queryFn: () => callMikrotikApi("/user-manager/user/print"),
     refetchInterval: 15000,
     enabled: useEnabled(),
@@ -168,8 +192,9 @@ export function useUserManagerUsers() {
   });
 }
 export function useUserManagerProfiles() {
+  const routerKey = getRouterKey();
   return useQuery({
-    queryKey: ["mikrotik", "usermanager", "profiles"],
+    queryKey: ["mikrotik", routerKey, "usermanager", "profiles"],
     queryFn: () => callMikrotikApi("/user-manager/profile/print"),
     enabled: useEnabled(),
     retry: 2,
@@ -178,8 +203,9 @@ export function useUserManagerProfiles() {
   });
 }
 export function useUserManagerSessions() {
+  const routerKey = getRouterKey();
   return useQuery({
-    queryKey: ["mikrotik", "usermanager", "sessions"],
+    queryKey: ["mikrotik", routerKey, "usermanager", "sessions"],
     queryFn: () => callMikrotikApi("/user-manager/session/print"),
     refetchInterval: 10000,
     enabled: useEnabled(),
@@ -213,7 +239,8 @@ export function useUserManagerAction() {
       return callMikrotikApi(endpointMap[action] || `/user-manager/user/${action}`, { args: finalArgs });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["mikrotik", "usermanager"] });
+      const routerKey = getRouterKey();
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager"] });
       toast.success("تم تنفيذ العملية بنجاح");
     },
     onError: (err: any) => {
@@ -244,8 +271,9 @@ export function useUserManagerProfileAction() {
       return callMikrotikApi(endpointMap[action] || `/user-manager/profile/${action}`, { args });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["mikrotik", "usermanager", "profiles"] });
-      qc.invalidateQueries({ queryKey: ["mikrotik", "usermanager", "users"] });
+      const routerKey = getRouterKey();
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager", "profiles"] });
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager", "users"] });
       toast.success("تم حفظ الباقة بنجاح");
     },
     onError: (err: any) => {
@@ -256,8 +284,9 @@ export function useUserManagerProfileAction() {
 
 // ─── System ────────────────────────────────
 export function useSystemResources() {
+  const routerKey = getRouterKey();
   return useQuery({
-    queryKey: ["mikrotik", "system", "resource"],
+    queryKey: ["mikrotik", routerKey, "system", "resource"],
     queryFn: async () => {
       const data = await callMikrotikApi("/system/resource/print");
       return Array.isArray(data) ? data[0] || {} : data;
@@ -268,8 +297,9 @@ export function useSystemResources() {
   });
 }
 export function useSystemIdentity() {
+  const routerKey = getRouterKey();
   return useQuery({
-    queryKey: ["mikrotik", "system", "identity"],
+    queryKey: ["mikrotik", routerKey, "system", "identity"],
     queryFn: async () => {
       const data = await callMikrotikApi("/system/identity/print");
       return Array.isArray(data) ? data[0] || {} : data;
@@ -279,8 +309,9 @@ export function useSystemIdentity() {
   });
 }
 export function useRouterboard() {
+  const routerKey = getRouterKey();
   return useQuery({
-    queryKey: ["mikrotik", "system", "routerboard"],
+    queryKey: ["mikrotik", routerKey, "system", "routerboard"],
     queryFn: async () => {
       const data = await callMikrotikApi("/system/routerboard/print");
       return Array.isArray(data) ? data[0] || {} : data;
@@ -292,8 +323,9 @@ export function useRouterboard() {
 
 // ─── Interfaces ────────────────────────────
 export function useInterfaces() {
+  const routerKey = getRouterKey();
   return useQuery({
-    queryKey: ["mikrotik", "interface"],
+    queryKey: ["mikrotik", routerKey, "interface"],
     queryFn: () => callMikrotikApi("/interface/print"),
     refetchInterval: 10000,
     enabled: useEnabled(),
@@ -303,8 +335,9 @@ export function useInterfaces() {
 
 // ─── DHCP ──────────────────────────────────
 export function useDHCPLeases() {
+  const routerKey = getRouterKey();
   return useQuery({
-    queryKey: ["mikrotik", "dhcp", "leases"],
+    queryKey: ["mikrotik", routerKey, "dhcp", "leases"],
     queryFn: () => callMikrotikApi("/ip/dhcp-server/lease/print"),
     refetchInterval: 30000,
     enabled: useEnabled(),
@@ -314,8 +347,9 @@ export function useDHCPLeases() {
 
 // ─── IP Addresses ──────────────────────────
 export function useIPAddresses() {
+  const routerKey = getRouterKey();
   return useQuery({
-    queryKey: ["mikrotik", "ip", "address"],
+    queryKey: ["mikrotik", routerKey, "ip", "address"],
     queryFn: () => callMikrotikApi("/ip/address/print"),
     enabled: useEnabled(),
     ...CACHE_OPTIONS,
