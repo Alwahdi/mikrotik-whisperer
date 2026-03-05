@@ -12,18 +12,22 @@ class MikroTikApiClient {
   private buf = new Uint8Array(0);
 
   async connect(host: string, port: number, useTls: boolean) {
-    if (useTls) {
-      this.conn = await (Deno as any).connectTls({ hostname: host, port });
-    } else {
-      this.conn = await Deno.connect({ hostname: host, port });
-    }
+    const timeout = 10000;
+    const connectPromise = useTls
+      ? (Deno as any).connectTls({ hostname: host, port })
+      : Deno.connect({ hostname: host, port });
+    
+    const timer = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Connection timeout after ${timeout}ms`)), timeout)
+    );
+    
+    this.conn = await Promise.race([connectPromise, timer]) as Deno.Conn;
   }
 
   async close() {
     try { this.conn.close(); } catch { /* ignore */ }
   }
 
-  // ── Read helpers ──
   private async readExact(n: number): Promise<Uint8Array> {
     while (this.buf.length < n) {
       const chunk = new Uint8Array(8192);
@@ -65,7 +69,6 @@ class MikroTikApiClient {
     return new TextDecoder().decode(data);
   }
 
-  // ── Write helpers ──
   private encodeLength(len: number): Uint8Array {
     if (len < 0x80) return new Uint8Array([len]);
     if (len < 0x4000) return new Uint8Array([((len >> 8) & 0x3F) | 0x80, len & 0xFF]);
@@ -83,7 +86,6 @@ class MikroTikApiClient {
     await this.conn.write(combined);
   }
 
-  // ── Sentence I/O ──
   private async readSentence(): Promise<string[]> {
     const words: string[] = [];
     while (true) {
@@ -96,12 +98,10 @@ class MikroTikApiClient {
 
   private async writeSentence(words: string[]) {
     for (const w of words) await this.writeWord(w);
-    await this.conn.write(new Uint8Array([0])); // end of sentence
+    await this.conn.write(new Uint8Array([0]));
   }
 
-  // ── Login (supports v6 challenge + v6.43+ / v7 plain) ──
   async login(user: string, pass: string): Promise<void> {
-    // Try new-style login (v6.43+, v7)
     await this.writeSentence(["/login", `=name=${user}`, `=password=${pass}`]);
     const sentence = await this.readSentence();
 
@@ -109,15 +109,12 @@ class MikroTikApiClient {
     const type = sentence[0];
 
     if (type === "!trap") {
-      const msg = parseAttrs(sentence).message || "Authentication failed";
-      throw new Error(msg);
+      throw new Error(parseAttrs(sentence).message || "Authentication failed");
     }
 
     if (type === "!done") {
-      // Check for old-style challenge
       const attrs = parseAttrs(sentence);
       if (attrs.ret) {
-        // Old v6 challenge-response
         const response = await computeChallengeResponse(pass, attrs.ret);
         await this.writeSentence(["/login", `=name=${user}`, `=response=${response}`]);
         const s2 = await this.readSentence();
@@ -127,11 +124,9 @@ class MikroTikApiClient {
       }
       return;
     }
-
     throw new Error(`Unexpected login response: ${type}`);
   }
 
-  // ── Execute command ──
   async execute(command: string): Promise<Record<string, string>[]> {
     await this.writeSentence([command]);
     const results: Record<string, string>[] = [];
@@ -188,6 +183,16 @@ async function computeChallengeResponse(password: string, challengeHex: string):
   return "00" + bytesToHex(hash);
 }
 
+// ─── v6/v7 command mapping ──────────────────────────────────────────────
+// RouterOS v6 uses /tool/user-manager/... while v7 uses /user-manager/...
+// We detect by trying v7 first, then falling back to v6 path
+function getV6FallbackCommand(command: string): string | null {
+  if (command.startsWith("/user-manager/")) {
+    return "/tool" + command;
+  }
+  return null;
+}
+
 // ─── REST API Handler (v7+) ─────────────────────────────────────────────
 async function handleRest(
   host: string, port: string, protocol: string,
@@ -197,20 +202,28 @@ async function handleRest(
   const url = `${protocol}://${host}:${port}/rest${path}`;
   const credentials = btoa(`${user}:${pass}`);
 
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      Authorization: `Basic ${credentials}`,
-      "Content-Type": "application/json",
-    },
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`REST API [${response.status}]: ${text.substring(0, 200)}`);
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        "Content-Type": "application/json",
+      },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`REST API [${response.status}]: ${text.substring(0, 200)}`);
+    }
+
+    return response.json();
+  } finally {
+    clearTimeout(timeout);
   }
-
-  return response.json();
 }
 
 // ─── API Protocol Handler (v6/v7) ───────────────────────────────────────
@@ -222,8 +235,18 @@ async function handleApi(
   try {
     await client.connect(host, parseInt(port), useTls);
     await client.login(user, pass);
-    const results = await client.execute(command);
-    return results;
+    
+    try {
+      return await client.execute(command);
+    } catch (err: any) {
+      // If command fails, try v6 fallback path
+      const fallback = getV6FallbackCommand(command);
+      if (fallback && err.message?.includes("no such command")) {
+        console.log(`Retrying with v6 path: ${fallback}`);
+        return await client.execute(fallback);
+      }
+      throw err;
+    }
   } finally {
     client.close();
   }
@@ -247,12 +270,10 @@ serve(async (req) => {
     let data: any;
 
     if (mode === "api") {
-      // MikroTik API protocol (TCP port 8728/8729)
       const actualPort = port || "8728";
       const useTls = protocol === "api-ssl";
       data = await handleApi(host, actualPort, useTls, user, pass, endpoint);
     } else {
-      // REST API (HTTP/HTTPS)
       const actualPort = port || (protocol === "https" ? "443" : "80");
       const actualProtocol = protocol || "https";
       data = await handleRest(host, actualPort, actualProtocol, user, pass, endpoint);
@@ -265,7 +286,7 @@ serve(async (req) => {
     console.error("MikroTik error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: message }), {
-      status: 500,
+      status: 200, // Return 200 with error in body to avoid Edge Function error
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
