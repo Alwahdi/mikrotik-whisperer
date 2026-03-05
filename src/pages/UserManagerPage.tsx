@@ -152,6 +152,75 @@ export default function UserManagerPage() {
     });
   };
 
+  const openAddProfile = () => {
+    setProfileMode("add");
+    setEditingProfile(null);
+    setProfileForm({
+      name: "",
+      nameForUsers: "",
+      validity: "30d",
+      price: "",
+      rateLimit: "",
+      sharedUsers: "1",
+    });
+    setProfileOpen(true);
+  };
+
+  const openEditProfile = (profile: any) => {
+    setProfileMode("edit");
+    setEditingProfile(profile);
+    setProfileForm({
+      name: profile.name || "",
+      nameForUsers: profile["name-for-users"] || "",
+      validity: profile.validity || "",
+      price: profile.price || "",
+      rateLimit: profile["rate-limit"] || "",
+      sharedUsers: profile["shared-users"] || "1",
+    });
+    setProfileOpen(true);
+  };
+
+  const handleSaveProfile = () => {
+    if (!profileForm.name.trim()) {
+      toast.error("اسم الباقة مطلوب");
+      return;
+    }
+
+    const data: Record<string, any> = {
+      name: profileForm.name.trim(),
+      validity: profileForm.validity,
+      price: profileForm.price,
+      "rate-limit": profileForm.rateLimit,
+      "shared-users": profileForm.sharedUsers,
+      "name-for-users": profileForm.nameForUsers,
+    };
+
+    if (profileMode === "edit") {
+      const id = editingProfile?.[".id"] || editingProfile?.id;
+      if (!id) {
+        toast.error("تعذر تحديد الباقة للتعديل");
+        return;
+      }
+      profileAction.mutate(
+        { action: "set", id, data },
+        {
+          onSuccess: () => {
+            setProfileOpen(false);
+            setEditingProfile(null);
+          },
+        },
+      );
+      return;
+    }
+
+    profileAction.mutate(
+      { action: "add", data },
+      {
+        onSuccess: () => setProfileOpen(false),
+      },
+    );
+  };
+
   // Reset page on search change
   const handleSearch = (val: string) => {
     setSearch(val);
