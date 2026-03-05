@@ -473,6 +473,8 @@ export default function UserManagerPage() {
                     {profile.validity && <Row label="الصلاحية" value={profile.validity} />}
                     {profile.price && <Row label="السعر" value={profile.price} highlight />}
                     {profile["rate-limit"] && <Row label="السرعة" value={profile["rate-limit"]} />}
+                    {profile["transfer-limit"] && <Row label="حد النقل" value={profile["transfer-limit"]} />}
+                    {(profile["uptime-limit"] || profile.uptime) && <Row label="حد التشغيل" value={profile["uptime-limit"] || profile.uptime} />}
                     {profile["shared-users"] && <Row label="أجهزة" value={profile["shared-users"]} />}
                     {profile["override-shared-users"] && <Row label="Override" value={profile["override-shared-users"]} />}
                   </div>
