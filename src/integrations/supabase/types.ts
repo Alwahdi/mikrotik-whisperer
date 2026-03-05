@@ -130,6 +130,54 @@ export type Database = {
         }
         Relationships: []
       }
+      sales: {
+        Row: {
+          batch_id: string
+          card_count: number
+          created_at: string | null
+          failed_count: number
+          id: string
+          notes: string | null
+          profile_name: string
+          router_host: string
+          success_count: number
+          total_amount: number | null
+          unit_price: number | null
+          user_id: string
+          voucher_type: string
+        }
+        Insert: {
+          batch_id: string
+          card_count?: number
+          created_at?: string | null
+          failed_count?: number
+          id?: string
+          notes?: string | null
+          profile_name?: string
+          router_host?: string
+          success_count?: number
+          total_amount?: number | null
+          unit_price?: number | null
+          user_id: string
+          voucher_type?: string
+        }
+        Update: {
+          batch_id?: string
+          card_count?: number
+          created_at?: string | null
+          failed_count?: number
+          id?: string
+          notes?: string | null
+          profile_name?: string
+          router_host?: string
+          success_count?: number
+          total_amount?: number | null
+          unit_price?: number | null
+          user_id?: string
+          voucher_type?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
