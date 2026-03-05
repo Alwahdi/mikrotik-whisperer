@@ -23,6 +23,7 @@ import {
 import {
   Printer, CreditCard, Plus, Trash2, Download, Home, Upload, Loader2,
   History, ChevronLeft, ChevronRight, Check, X, Save, FolderOpen, GripVertical,
+  Store,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -50,6 +51,8 @@ interface VoucherBatch {
   pushed: boolean;
   routerHost?: string;
   pushResults?: { success: number; failed: number };
+  salesPoint?: string;
+  unitPrice?: number;
 }
 
 type CharType = "alphanumeric" | "letters" | "numbers";
@@ -69,7 +72,7 @@ interface PrintTemplate {
 
 interface FieldPosition {
   id: string;
-  type: "username" | "password" | "profile" | "title" | "subtitle";
+  type: "username" | "password" | "profile" | "title" | "subtitle" | "price";
   label: string;
   x: number;
   y: number;
@@ -82,6 +85,7 @@ interface FieldPosition {
 const BATCHES_KEY = "mikrotik_voucher_batches";
 const TEMPLATES_KEY = "mikrotik_print_templates";
 const GEN_SETTINGS_KEY = "mikrotik_gen_settings";
+const SALES_POINTS_KEY = "mikrotik_sales_points";
 
 function loadBatches(): VoucherBatch[] {
   try { return JSON.parse(localStorage.getItem(BATCHES_KEY) || "[]"); } catch { return []; }
@@ -100,6 +104,12 @@ function loadGenSettings(): Record<string, any> {
 }
 function saveGenSettings(settings: Record<string, any>) {
   localStorage.setItem(GEN_SETTINGS_KEY, JSON.stringify(settings));
+}
+function loadSalesPoints(): string[] {
+  try { return JSON.parse(localStorage.getItem(SALES_POINTS_KEY) || '["الرئيسي"]'); } catch { return ["الرئيسي"]; }
+}
+function saveSalesPoints(points: string[]) {
+  localStorage.setItem(SALES_POINTS_KEY, JSON.stringify(points));
 }
 
 // ─── Random String Generators ──────────────────
@@ -122,6 +132,7 @@ function defaultFields(): FieldPosition[] {
     { id: "f3", type: "profile", label: "الباقة", x: 50, y: 90, fontSize: 9, color: "#666666", visible: false },
     { id: "f4", type: "title", label: "العنوان", x: 50, y: 20, fontSize: 14, color: "#000000", visible: false },
     { id: "f5", type: "subtitle", label: "العنوان الفرعي", x: 50, y: 35, fontSize: 10, color: "#666666", visible: false },
+    { id: "f6", type: "price", label: "السعر", x: 85, y: 15, fontSize: 11, color: "#2563EB", visible: false },
   ];
 }
 
@@ -141,12 +152,21 @@ export default function VouchersPage() {
   const [selectedProfile, setSelectedProfile] = useState("");
   const [charType, setCharType] = useState<CharType>("alphanumeric");
   const [passwordMode, setPasswordMode] = useState<PasswordMode>("random");
+  const [unitPrice, setUnitPrice] = useState(0);
+
+  // Sales points
+  const [salesPoints, setSalesPoints] = useState<string[]>(loadSalesPoints);
+  const [selectedSalesPoint, setSelectedSalesPoint] = useState("الرئيسي");
+  const [newSalesPoint, setNewSalesPoint] = useState("");
 
   // Cards & push
   const [cards, setCards] = useState<VoucherCard[]>([]);
   const [pushing, setPushing] = useState(false);
   const [pushProgress, setPushProgress] = useState(0);
-  const pushingRef = useRef(false); // Keep push alive across renders
+  const pushingRef = useRef(false);
+
+  // Delete progress
+  const [deleteProgress, setDeleteProgress] = useState(0);
 
   // Print settings
   const [cardTitle, setCardTitle] = useState("WiFi Card");
@@ -180,6 +200,7 @@ export default function VouchersPage() {
   // Persist
   useEffect(() => { saveBatches(batches); }, [batches]);
   useEffect(() => { saveTemplates(templates); }, [templates]);
+  useEffect(() => { saveSalesPoints(salesPoints); }, [salesPoints]);
 
   // Load saved gen settings
   useEffect(() => {
@@ -189,23 +210,31 @@ export default function VouchersPage() {
     if (saved.prefix) setPrefix(saved.prefix);
     if (saved.nameLength) setNameLength(saved.nameLength);
     if (saved.passLength) setPassLength(saved.passLength);
+    if (saved.unitPrice !== undefined) setUnitPrice(saved.unitPrice);
+    if (saved.salesPoint) setSelectedSalesPoint(saved.salesPoint);
   }, []);
 
-  // Save gen settings on change
   useEffect(() => {
-    saveGenSettings({ charType, passwordMode, prefix, nameLength, passLength });
-  }, [charType, passwordMode, prefix, nameLength, passLength]);
+    saveGenSettings({ charType, passwordMode, prefix, nameLength, passLength, unitPrice, salesPoint: selectedSalesPoint });
+  }, [charType, passwordMode, prefix, nameLength, passLength, unitPrice, selectedSalesPoint]);
 
   const profiles = useMemo(() => {
     const raw = type === "hotspot" ? hotspotProfiles : umProfiles;
     return Array.isArray(raw) ? raw : [];
   }, [type, hotspotProfiles, umProfiles]);
 
-  // Filter batches for current router only
   const routerBatches = useMemo(() => {
     if (!currentRouterHost) return batches;
     return batches.filter(b => !b.routerHost || b.routerHost === currentRouterHost);
   }, [batches, currentRouterHost]);
+
+  const addSalesPoint = () => {
+    const name = newSalesPoint.trim();
+    if (!name || salesPoints.includes(name)) return;
+    setSalesPoints(prev => [...prev, name]);
+    setNewSalesPoint("");
+    toast.success(`تم إضافة نقطة بيع: ${name}`);
+  };
 
   const generateVouchers = () => {
     const newCards: VoucherCard[] = [];
@@ -230,6 +259,8 @@ export default function VouchersPage() {
       createdAt: new Date().toISOString(),
       pushed: false,
       routerHost: currentRouterHost,
+      salesPoint: selectedSalesPoint,
+      unitPrice,
     };
     setBatches(prev => [batch, ...prev]);
     toast.success(`تم توليد ${count} كرت`);
@@ -245,8 +276,7 @@ export default function VouchersPage() {
       ? "/ip/hotspot/user/add"
       : "/user-manager/user/add";
 
-    // Send cards one by one for real-time feedback, but use concurrency for speed
-    const CONCURRENCY = 5; // 5 parallel requests
+    const CONCURRENCY = 5;
     let totalSuccess = 0;
     let totalFailed = 0;
     const updatedCards = [...cards];
@@ -277,12 +307,10 @@ export default function VouchersPage() {
       }
 
       completedCount++;
-      // Update state for real-time feedback
       setCards([...updatedCards]);
       setPushProgress(Math.round((completedCount / cards.length) * 100));
     };
 
-    // Process with concurrency pool
     const queue = Array.from({ length: cards.length }, (_, i) => i);
     const workers = Array.from({ length: Math.min(CONCURRENCY, cards.length) }, async () => {
       while (queue.length > 0 && pushingRef.current) {
@@ -310,8 +338,6 @@ export default function VouchersPage() {
 
     // Record sale
     if (totalSuccess > 0 && user?.id) {
-      const profileData = profiles.find((p: any) => p.name === cards[0]?.profile);
-      const unitPrice = Number(profileData?.price) || 0;
       try {
         await supabase.from("sales").insert({
           user_id: user.id,
@@ -325,7 +351,8 @@ export default function VouchersPage() {
           voucher_type: type,
           router_host: currentRouterHost,
           notes: `دفعة ${cards.length} كرت`,
-        });
+          sales_point: selectedSalesPoint,
+        } as any);
       } catch {}
     }
 
@@ -336,15 +363,12 @@ export default function VouchersPage() {
     }
   };
 
-  // Delete batch cards from router
+  // Delete batch cards from router - with concurrency pool
   const deleteBatchFromRouter = async (batchId: string) => {
     const batch = batches.find(b => b.id === batchId);
     if (!batch) return;
     setDeletingFromRouter(batchId);
-
-    const removeEndpoint = batch.type === "hotspot"
-      ? "/ip/hotspot/user/remove"
-      : "/user-manager/user/remove";
+    setDeleteProgress(0);
 
     const successCards = batch.cards.filter(c => c.status === "success");
     if (successCards.length === 0) {
@@ -353,22 +377,20 @@ export default function VouchersPage() {
       return;
     }
 
-    // We need to find the IDs on the router first - remove by name
     const nameKey = batch.type === "hotspot" ? "name" : "username";
+    const findCmd = batch.type === "hotspot" ? "/ip/hotspot/user/print" : "/user-manager/user/print";
+    const removeEndpoint = batch.type === "hotspot" ? "/ip/hotspot/user/remove" : "/user-manager/user/remove";
+
     let deleted = 0;
     let failed = 0;
+    let completed = 0;
+    const CONCURRENCY = 5;
 
-    for (const card of successCards) {
+    const processDelete = async (card: VoucherCard) => {
       try {
-        // Use find + remove approach
-        const findCmd = batch.type === "hotspot"
-          ? "/ip/hotspot/user/print"
-          : "/user-manager/user/print";
-        
         const result = await rawBatch.mutateAsync({
           commands: [{ command: findCmd, args: [`=?${nameKey}=${card.username}`] }],
         });
-        
         const users = result?.results?.[0];
         if (Array.isArray(users) && users.length > 0) {
           const id = users[0][".id"];
@@ -377,14 +399,25 @@ export default function VouchersPage() {
               commands: [{ command: removeEndpoint, args: [`=.id=${id}`] }],
             });
             deleted++;
-          }
-        }
-      } catch {
-        failed++;
+          } else { failed++; }
+        } else { failed++; }
+      } catch { failed++; }
+      completed++;
+      setDeleteProgress(Math.round((completed / successCards.length) * 100));
+    };
+
+    const queue = [...successCards];
+    const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+      while (queue.length > 0) {
+        const card = queue.shift();
+        if (card) await processDelete(card);
       }
-    }
+    });
+
+    await Promise.all(workers);
 
     setDeletingFromRouter(null);
+    setDeleteProgress(0);
     handleDeleteBatch(batchId);
     toast.success(`تم حذف ${deleted} كرت من الراوتر${failed > 0 ? ` (فشل ${failed})` : ""}`);
   };
@@ -397,7 +430,6 @@ export default function VouchersPage() {
     reader.readAsDataURL(file);
   };
 
-  // ─── Drag & Drop on preview ──────────────────
   const handlePreviewMouseDown = (fieldId: string) => {
     setDraggingField(fieldId);
   };
@@ -414,7 +446,17 @@ export default function VouchersPage() {
     setDraggingField(null);
   }, []);
 
-  // ─── Template Management ─────────────────────
+  // Touch support for drag
+  const handlePreviewTouchMove = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    if (!draggingField || !previewRef.current) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    const rect = previewRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((touch.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((touch.clientY - rect.top) / rect.height) * 100));
+    setFields(prev => prev.map(f => f.id === draggingField ? { ...f, x: Math.round(x), y: Math.round(y) } : f));
+  }, [draggingField]);
+
   const saveTemplate = () => {
     if (!templateName.trim()) { toast.error("أدخل اسم القالب"); return; }
     const template: PrintTemplate = {
@@ -467,7 +509,8 @@ export default function VouchersPage() {
             else if (f.type === "profile") text = c.profile;
             else if (f.type === "title") text = cardTitle;
             else if (f.type === "subtitle") text = cardSubtitle;
-            return `<div class="overlay-text" style="top:${f.y}%;left:${f.x}%;font-size:${f.fontSize}px;color:${f.color}">${text}</div>`;
+            else if (f.type === "price") text = unitPrice > 0 ? `${unitPrice}` : "";
+            return text ? `<div class="overlay-text" style="top:${f.y}%;left:${f.x}%;font-size:${f.fontSize}px;color:${f.color}">${text}</div>` : "";
           }).join("");
           return `<div class="card card-custom" style="background-image:url('${bgImage}')">${fieldsHtml}</div>`;
         }
@@ -478,6 +521,7 @@ export default function VouchersPage() {
             <div class="field"><div class="label">اسم المستخدم</div><div class="value">${c.username}</div></div>
             ${c.password ? `<div class="field"><div class="label">كلمة المرور</div><div class="value">${c.password}</div></div>` : ""}
             <div class="profile-badge">${c.profile}</div>
+            ${unitPrice > 0 ? `<div class="price-badge">${unitPrice}</div>` : ""}
           </div>`;
       }).join("");
       pages.push(`<div class="page"><div class="grid">${cardHtml}</div></div>`);
@@ -493,10 +537,11 @@ export default function VouchersPage() {
   .page:last-child { page-break-after: auto; }
   .grid { display: grid; grid-template-columns: repeat(${printCols}, 1fr); gap: 3mm; }
   .card {
-    border: 1.5px solid #E5E7EB; border-radius: 8px;
+    border: 1.5px solid #E5E7EB; border-radius: 6px;
     padding: 10px 12px; page-break-inside: avoid;
-    background: linear-gradient(135deg, #F9FAFB, #F3F4F6);
+    background: #FFFFFF;
     min-height: 80px;
+    position: relative;
   }
   .card-custom {
     background-size: cover; background-position: center;
@@ -509,14 +554,18 @@ export default function VouchersPage() {
     text-shadow: 0 0 4px rgba(255,255,255,0.9);
     font-family: 'JetBrains Mono', monospace; letter-spacing: 1.5px;
   }
-  .card-title { font-weight: 700; font-size: 10px; color: #111827; margin-bottom: 1px; }
-  .card-sub { font-size: 8px; color: #6B7280; margin-bottom: 6px; }
+  .card-title { font-weight: 700; font-size: 10px; color: #000; margin-bottom: 1px; }
+  .card-sub { font-size: 8px; color: #666; margin-bottom: 6px; }
   .field { margin-bottom: 3px; }
-  .label { font-size: 7px; color: #6B7280; }
-  .value { font-size: 11px; font-weight: 600; color: #111827; font-family: 'JetBrains Mono', monospace; letter-spacing: 1px; }
+  .label { font-size: 7px; color: #666; }
+  .value { font-size: 11px; font-weight: 600; color: #000; font-family: 'JetBrains Mono', monospace; letter-spacing: 1px; }
   .profile-badge {
     display: inline-block; margin-top: 4px; padding: 1px 6px;
-    background: #E5E7EB; border-radius: 3px; font-size: 7px; color: #6B7280;
+    background: #F3F4F6; border-radius: 3px; font-size: 7px; color: #666;
+  }
+  .price-badge {
+    position: absolute; top: 6px; left: 8px;
+    font-size: 9px; font-weight: 700; color: #2563EB;
   }
   @media print { .page { padding: 5mm; } }
 </style></head><body>${pages.join("")}</body></html>`;
@@ -561,7 +610,6 @@ export default function VouchersPage() {
   const paginatedBatches = routerBatches.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE);
   const historyTotalPages = Math.max(1, Math.ceil(routerBatches.length / HISTORY_PAGE_SIZE));
 
-  // Card status counts
   const successCount = cards.filter(c => c.status === "success").length;
   const errorCount = cards.filter(c => c.status === "error").length;
   const pendingCount = cards.filter(c => c.status === "pending" || !c.status).length;
@@ -580,7 +628,7 @@ export default function VouchersPage() {
 
       <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
         <div>
-          <h1 className="text-lg font-bold text-foreground">توليد الكروت</h1>
+          <h1 className="text-lg font-semibold text-foreground tracking-tight">توليد الكروت</h1>
           <p className="text-muted-foreground text-xs mt-0.5">إنشاء وطباعة كروت الهوتسبوت ويوزر مانجر</p>
         </div>
         <div className="flex items-center gap-2">
@@ -598,22 +646,28 @@ export default function VouchersPage() {
       {activeTab === "history" ? (
         <div className="space-y-3">
           {routerBatches.length === 0 ? (
-            <div className="rounded-lg border border-border bg-card p-10 text-center">
+            <div className="rounded-md border border-border bg-card p-10 text-center">
               <History className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
               <p className="text-muted-foreground text-sm">لا توجد دفعات سابقة لهذا الراوتر</p>
             </div>
           ) : (
             <>
               {paginatedBatches.map(batch => (
-                <div key={batch.id} className="rounded-lg border border-border bg-card p-3 sm:p-4">
+                <div key={batch.id} className="rounded-md border border-border bg-card p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
                       <Badge variant={batch.type === "hotspot" ? "default" : "secondary"} className="text-[10px]">
                         {batch.type === "hotspot" ? "هوتسبوت" : "يوزر مانجر"}
                       </Badge>
                       <span className="text-xs text-muted-foreground">{batch.cards.length} كرت</span>
-                      {batch.pushed && (
+                      {batch.salesPoint && (
                         <Badge variant="outline" className="text-[10px] gap-1">
+                          <Store className="h-2.5 w-2.5" />
+                          {batch.salesPoint}
+                        </Badge>
+                      )}
+                      {batch.pushed && (
+                        <Badge variant="outline" className="text-[10px] gap-1 text-success border-success/30">
                           <Check className="h-2.5 w-2.5" />
                           {batch.pushResults ? `${batch.pushResults.success}✓ ${batch.pushResults.failed ? batch.pushResults.failed + "✗" : ""}` : "تم الرفع"}
                         </Badge>
@@ -625,7 +679,14 @@ export default function VouchersPage() {
                   </div>
                   <div className="text-xs text-muted-foreground mb-2">
                     الباقة: <span className="text-foreground font-medium">{batch.profile}</span>
+                    {batch.unitPrice ? <span className="mr-2">• السعر: {batch.unitPrice}</span> : null}
                   </div>
+                  {deletingFromRouter === batch.id && (
+                    <div className="mb-2">
+                      <Progress value={deleteProgress} className="h-1.5" />
+                      <p className="text-[10px] text-muted-foreground mt-1">جاري الحذف... {deleteProgress}%</p>
+                    </div>
+                  )}
                   <div className="flex gap-2 flex-wrap">
                     <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => loadBatchCards(batch)}>تحميل</Button>
                     <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => handlePrint(batch.cards)}>
@@ -636,7 +697,7 @@ export default function VouchersPage() {
                         size="sm"
                         variant="outline"
                         className="text-xs h-8 text-destructive"
-                        disabled={deletingFromRouter === batch.id}
+                        disabled={!!deletingFromRouter}
                         onClick={() => deleteBatchFromRouter(batch.id)}
                       >
                         {deletingFromRouter === batch.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3 ml-1" />}
@@ -670,7 +731,7 @@ export default function VouchersPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Settings Panel */}
           <div className="lg:col-span-1 space-y-3">
-            <div className="rounded-lg border border-border bg-card p-3 sm:p-4 space-y-3">
+            <div className="rounded-md border border-border bg-card p-3 sm:p-4 space-y-3">
               <h3 className="font-semibold text-foreground text-sm">إعدادات التوليد</h3>
 
               <div>
@@ -744,6 +805,37 @@ export default function VouchersPage() {
                 </select>
               </div>
 
+              {/* Price & Sales Point */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">سعر الكرت</label>
+                  <Input type="number" min={0} value={unitPrice} onChange={e => setUnitPrice(Number(e.target.value) || 0)} className="h-9" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">نقطة البيع</label>
+                  <Select value={selectedSalesPoint} onValueChange={setSelectedSalesPoint}>
+                    <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {salesPoints.map(sp => (
+                        <SelectItem key={sp} value={sp}>{sp}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex gap-1.5">
+                <Input
+                  placeholder="إضافة نقطة بيع جديدة..."
+                  value={newSalesPoint}
+                  onChange={e => setNewSalesPoint(e.target.value)}
+                  className="h-8 text-xs flex-1"
+                  onKeyDown={e => e.key === "Enter" && addSalesPoint()}
+                />
+                <Button size="sm" variant="outline" className="h-8 px-2" onClick={addSalesPoint} disabled={!newSalesPoint.trim()}>
+                  <Plus className="h-3 w-3" />
+                </Button>
+              </div>
+
               {/* Print Customization */}
               <div className="border-t border-border pt-3 space-y-3">
                 <div className="flex items-center justify-between">
@@ -780,11 +872,13 @@ export default function VouchersPage() {
                   <>
                     <div
                       ref={previewRef}
-                      className="mt-2 rounded border border-border overflow-hidden relative cursor-crosshair select-none"
+                      className="mt-2 rounded border border-border overflow-hidden relative cursor-crosshair select-none touch-none"
                       style={{ aspectRatio: "1.6" }}
                       onMouseMove={handlePreviewMouseMove}
                       onMouseUp={handlePreviewMouseUp}
                       onMouseLeave={handlePreviewMouseUp}
+                      onTouchMove={handlePreviewTouchMove}
+                      onTouchEnd={handlePreviewMouseUp}
                     >
                       <img src={bgImage} alt="خلفية" className="w-full h-full object-cover pointer-events-none" />
                       {fields.filter(f => f.visible).map(f => (
@@ -798,6 +892,7 @@ export default function VouchersPage() {
                             color: f.color,
                           }}
                           onMouseDown={(e) => { e.preventDefault(); handlePreviewMouseDown(f.id); }}
+                          onTouchStart={(e) => { handlePreviewMouseDown(f.id); }}
                         >
                           <GripVertical className="h-3 w-3 inline ml-0.5 opacity-50" />
                           {f.label}
@@ -882,7 +977,7 @@ export default function VouchersPage() {
                   )}
                 </Button>
                 {(pushing || successCount > 0 || errorCount > 0) && (
-                  <Progress value={pushProgress} className="h-2" />
+                  <Progress value={pushProgress} className="h-1.5" />
                 )}
                 {(successCount > 0 || errorCount > 0) && (
                   <div className="flex gap-2 text-xs">
@@ -900,7 +995,7 @@ export default function VouchersPage() {
 
           {/* Preview Panel */}
           <div className="lg:col-span-2">
-            <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
+            <div className="rounded-md border border-border bg-card p-3 sm:p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">
                   <CreditCard className="h-4 w-4 text-primary" />
@@ -923,7 +1018,7 @@ export default function VouchersPage() {
                   {cards.slice(0, 100).map((card, i) => (
                     <div key={i} className="relative">
                       {bgImage ? (
-                        <div className="rounded-lg border border-border overflow-hidden relative" style={{ aspectRatio: "1.6" }}>
+                        <div className="rounded-md border border-border overflow-hidden relative" style={{ aspectRatio: "1.6" }}>
                           <img src={bgImage} alt="" className="w-full h-full object-cover" />
                           {fields.filter(f => f.visible).map(f => {
                             let text = "";
@@ -932,7 +1027,8 @@ export default function VouchersPage() {
                             else if (f.type === "profile") text = card.profile;
                             else if (f.type === "title") text = cardTitle;
                             else if (f.type === "subtitle") text = cardSubtitle;
-                            return (
+                            else if (f.type === "price") text = unitPrice > 0 ? `${unitPrice}` : "";
+                            return text ? (
                               <div key={f.id} className="absolute font-mono font-bold"
                                 style={{
                                   top: `${f.y}%`, left: `${f.x}%`,
@@ -941,12 +1037,12 @@ export default function VouchersPage() {
                                   color: f.color,
                                 }}
                               >{text}</div>
-                            );
+                            ) : null;
                           })}
                         </div>
                       ) : (
-                        <div className="rounded-lg border border-border bg-gradient-to-br from-background to-muted/50 p-2.5 text-right">
-                          <p className="font-bold text-foreground text-[10px] mb-0.5">{cardTitle}</p>
+                        <div className="rounded-md border border-border bg-card p-2.5 text-right">
+                          <p className="font-semibold text-foreground text-[10px] mb-0.5">{cardTitle}</p>
                           <p className="text-[9px] text-muted-foreground mb-1.5">{cardSubtitle}</p>
                           <div className="mb-1">
                             <span className="text-[8px] text-muted-foreground">اسم المستخدم</span>
@@ -958,10 +1054,12 @@ export default function VouchersPage() {
                               <p className="font-mono text-[10px] font-semibold text-foreground tracking-wider">{card.password}</p>
                             </div>
                           )}
-                          <span className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[8px] bg-muted text-muted-foreground">{card.profile}</span>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="inline-block px-1.5 py-0.5 rounded text-[8px] bg-muted text-muted-foreground">{card.profile}</span>
+                            {unitPrice > 0 && <span className="text-[9px] font-bold text-primary">{unitPrice}</span>}
+                          </div>
                         </div>
                       )}
-                      {/* Status indicator */}
                       {card.status === "success" && (
                         <div className="absolute top-1 left-1 h-4 w-4 rounded-full bg-success/90 flex items-center justify-center">
                           <Check className="h-2.5 w-2.5 text-white" />

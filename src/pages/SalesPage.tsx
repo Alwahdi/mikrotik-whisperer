@@ -12,8 +12,11 @@ import {
   BreadcrumbPage, BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import {
-  BarChart3, Home, Calendar, TrendingUp, CreditCard,
-  ChevronLeft, ChevronRight, Search, Trash2, DollarSign,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import {
+  BarChart3, Home, TrendingUp, CreditCard,
+  ChevronLeft, ChevronRight, Search, Trash2, DollarSign, Store,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
@@ -22,6 +25,9 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+} from "recharts";
 
 const PAGE_SIZE = 20;
 
@@ -31,6 +37,7 @@ export default function SalesPage() {
   const [page, setPage] = useState(1);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<"today" | "week" | "month" | "all">("today");
+  const [salesPointFilter, setSalesPointFilter] = useState("all");
 
   const { data: sales, isLoading, refetch } = useQuery({
     queryKey: ["sales", user?.id],
@@ -48,11 +55,20 @@ export default function SalesPage() {
     enabled: !!user?.id,
   });
 
+  // Get unique sales points
+  const salesPoints = useMemo(() => {
+    if (!sales) return [];
+    const points = new Set<string>();
+    sales.forEach((s: any) => {
+      if (s.sales_point) points.add(s.sales_point);
+    });
+    return Array.from(points);
+  }, [sales]);
+
   const filteredSales = useMemo(() => {
     if (!sales) return [];
     let filtered = [...sales];
 
-    // Date filter
     const now = new Date();
     if (dateFilter === "today") {
       filtered = filtered.filter(s => new Date(s.created_at).toDateString() === now.toDateString());
@@ -64,7 +80,11 @@ export default function SalesPage() {
       filtered = filtered.filter(s => new Date(s.created_at) >= monthAgo);
     }
 
-    // Search
+    // Sales point filter
+    if (salesPointFilter !== "all") {
+      filtered = filtered.filter((s: any) => s.sales_point === salesPointFilter);
+    }
+
     if (search) {
       const s = search.toLowerCase();
       filtered = filtered.filter(sale =>
@@ -75,15 +95,51 @@ export default function SalesPage() {
     }
 
     return filtered;
-  }, [sales, search, dateFilter]);
+  }, [sales, search, dateFilter, salesPointFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredSales.length / PAGE_SIZE));
   const paginatedSales = filteredSales.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Stats
   const totalCards = filteredSales.reduce((sum, s) => sum + (s.success_count || 0), 0);
   const totalRevenue = filteredSales.reduce((sum, s) => sum + Number(s.total_amount || 0), 0);
   const totalBatches = filteredSales.length;
+
+  // Daily chart data
+  const chartData = useMemo(() => {
+    if (!filteredSales.length) return [];
+    const dayMap: Record<string, { day: string; revenue: number; cards: number }> = {};
+    filteredSales.forEach(s => {
+      const day = new Date(s.created_at).toLocaleDateString("ar", { month: "short", day: "numeric" });
+      if (!dayMap[day]) dayMap[day] = { day, revenue: 0, cards: 0 };
+      dayMap[day].revenue += Number(s.total_amount || 0);
+      dayMap[day].cards += s.success_count || 0;
+    });
+    return Object.values(dayMap).reverse().slice(-14);
+  }, [filteredSales]);
+
+  // Top sales point
+  const topSalesPoint = useMemo(() => {
+    if (!filteredSales.length) return null;
+    const map: Record<string, number> = {};
+    filteredSales.forEach((s: any) => {
+      const sp = s.sales_point || "غير محدد";
+      map[sp] = (map[sp] || 0) + Number(s.total_amount || 0);
+    });
+    const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
+    return entries[0] ? { name: entries[0][0], amount: entries[0][1] } : null;
+  }, [filteredSales]);
+
+  // Top profile
+  const topProfile = useMemo(() => {
+    if (!filteredSales.length) return null;
+    const map: Record<string, number> = {};
+    filteredSales.forEach(s => {
+      const p = s.profile_name || "غير محدد";
+      map[p] = (map[p] || 0) + (s.success_count || 0);
+    });
+    const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
+    return entries[0] ? { name: entries[0][0], count: entries[0][1] } : null;
+  }, [filteredSales]);
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("sales").delete().eq("id", id);
@@ -107,38 +163,71 @@ export default function SalesPage() {
 
       <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
         <div>
-          <h1 className="text-lg font-bold text-foreground">نقطة البيع</h1>
-          <p className="text-muted-foreground text-xs mt-0.5">تقارير المبيعات والدفعات</p>
+          <h1 className="text-lg font-semibold text-foreground tracking-tight">المبيعات</h1>
+          <p className="text-muted-foreground text-xs mt-0.5">تقارير المبيعات ونقاط البيع</p>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="rounded-lg border border-border bg-card p-2.5">
-          <div className="flex items-center gap-1.5 mb-0.5">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+        <div className="rounded-md border border-border bg-card p-3">
+          <div className="flex items-center gap-1.5 mb-1">
             <CreditCard className="h-3.5 w-3.5 text-primary" />
-            <span className="text-[10px] text-muted-foreground">كروت</span>
+            <span className="text-[11px] text-muted-foreground">كروت مباعة</span>
           </div>
-          {isLoading ? <Skeleton className="h-6 w-10" /> : <p className="text-lg font-bold text-foreground">{totalCards}</p>}
+          {isLoading ? <Skeleton className="h-7 w-12" /> : <p className="text-xl font-semibold text-foreground">{totalCards}</p>}
         </div>
-        <div className="rounded-lg border border-border bg-card p-2.5">
-          <div className="flex items-center gap-1.5 mb-0.5">
+        <div className="rounded-md border border-border bg-card p-3">
+          <div className="flex items-center gap-1.5 mb-1">
             <DollarSign className="h-3.5 w-3.5 text-success" />
-            <span className="text-[10px] text-muted-foreground">الإيرادات</span>
+            <span className="text-[11px] text-muted-foreground">الإيرادات</span>
           </div>
-          {isLoading ? <Skeleton className="h-6 w-10" /> : <p className="text-lg font-bold text-foreground">{totalRevenue.toLocaleString()}</p>}
+          {isLoading ? <Skeleton className="h-7 w-12" /> : <p className="text-xl font-semibold text-foreground">{totalRevenue.toLocaleString()}</p>}
         </div>
-        <div className="rounded-lg border border-border bg-card p-2.5">
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <TrendingUp className="h-3.5 w-3.5 text-warning" />
-            <span className="text-[10px] text-muted-foreground">دفعات</span>
+        <div className="rounded-md border border-border bg-card p-3">
+          <div className="flex items-center gap-1.5 mb-1">
+            <TrendingUp className="h-3.5 w-3.5 text-primary" />
+            <span className="text-[11px] text-muted-foreground">دفعات</span>
           </div>
-          {isLoading ? <Skeleton className="h-6 w-10" /> : <p className="text-lg font-bold text-foreground">{totalBatches}</p>}
+          {isLoading ? <Skeleton className="h-7 w-12" /> : <p className="text-xl font-semibold text-foreground">{totalBatches}</p>}
+        </div>
+        <div className="rounded-md border border-border bg-card p-3">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Store className="h-3.5 w-3.5 text-accent" />
+            <span className="text-[11px] text-muted-foreground">أفضل نقطة بيع</span>
+          </div>
+          {isLoading ? <Skeleton className="h-7 w-12" /> : (
+            <p className="text-sm font-semibold text-foreground truncate">{topSalesPoint?.name || "—"}</p>
+          )}
         </div>
       </div>
 
+      {/* Chart */}
+      {chartData.length > 1 && (
+        <div className="rounded-md border border-border bg-card p-3 mb-4">
+          <h3 className="text-xs font-medium text-muted-foreground mb-2">الإيرادات اليومية</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="day" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
+              <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} width={40} />
+              <Tooltip
+                contentStyle={{
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                }}
+                labelStyle={{ color: "hsl(var(--foreground))" }}
+              />
+              <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} name="الإيرادات" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
       {/* Filters */}
-      <div className="flex gap-2 mb-3 flex-wrap">
+      <div className="flex gap-2 mb-3 flex-wrap items-center">
         {(["today", "week", "month", "all"] as const).map(f => (
           <Button
             key={f}
@@ -150,6 +239,20 @@ export default function SalesPage() {
             {f === "today" ? "اليوم" : f === "week" ? "أسبوع" : f === "month" ? "شهر" : "الكل"}
           </Button>
         ))}
+        {salesPoints.length > 0 && (
+          <Select value={salesPointFilter} onValueChange={v => { setSalesPointFilter(v); setPage(1); }}>
+            <SelectTrigger className="h-7 w-32 text-xs">
+              <Store className="h-3 w-3 ml-1" />
+              <SelectValue placeholder="نقطة البيع" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">الكل</SelectItem>
+              {salesPoints.map(sp => (
+                <SelectItem key={sp} value={sp}>{sp}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <div className="relative mb-3">
@@ -162,17 +265,26 @@ export default function SalesPage() {
         />
       </div>
 
+      {/* Top Profile info */}
+      {topProfile && (
+        <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
+          <span>أكثر باقة مباعة:</span>
+          <Badge variant="outline" className="text-[10px]">{topProfile.name} ({topProfile.count} كرت)</Badge>
+        </div>
+      )}
+
       {/* Sales Table */}
-      <div className="rounded-lg border border-border bg-card shadow-card overflow-hidden">
+      <div className="rounded-md border border-border bg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border bg-muted/50">
+              <tr className="border-b border-border bg-muted/30">
                 <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">التاريخ</th>
                 <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">الباقة</th>
                 <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">كروت</th>
                 <th className="text-right p-2.5 font-medium text-xs text-muted-foreground hidden sm:table-cell">المبلغ</th>
-                <th className="text-right p-2.5 font-medium text-xs text-muted-foreground hidden sm:table-cell">النوع</th>
+                <th className="text-right p-2.5 font-medium text-xs text-muted-foreground hidden sm:table-cell">نقطة البيع</th>
+                <th className="text-right p-2.5 font-medium text-xs text-muted-foreground hidden md:table-cell">النوع</th>
                 <th className="text-center p-2.5 font-medium text-xs text-muted-foreground w-10"></th>
               </tr>
             </thead>
@@ -185,19 +297,20 @@ export default function SalesPage() {
                     <td className="p-2.5"><Skeleton className="h-4 w-10" /></td>
                     <td className="p-2.5 hidden sm:table-cell"><Skeleton className="h-4 w-14" /></td>
                     <td className="p-2.5 hidden sm:table-cell"><Skeleton className="h-4 w-12" /></td>
+                    <td className="p-2.5 hidden md:table-cell"><Skeleton className="h-4 w-12" /></td>
                     <td className="p-2.5"><Skeleton className="h-4 w-6 mx-auto" /></td>
                   </tr>
                 ))
               ) : paginatedSales.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center">
-                    <BarChart3 className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                  <td colSpan={7} className="p-8 text-center">
+                    <BarChart3 className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
                     <p className="text-muted-foreground text-sm">لا توجد مبيعات {dateFilter === "today" ? "اليوم" : ""}</p>
                   </td>
                 </tr>
               ) : (
                 paginatedSales.map((sale: any) => (
-                  <tr key={sale.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
+                  <tr key={sale.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors group">
                     <td className="p-2.5 text-xs text-muted-foreground font-mono">
                       {new Date(sale.created_at).toLocaleString("ar", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                     </td>
@@ -209,7 +322,10 @@ export default function SalesPage() {
                     <td className="p-2.5 text-xs font-mono text-foreground hidden sm:table-cell">
                       {Number(sale.total_amount || 0).toLocaleString()}
                     </td>
-                    <td className="p-2.5 hidden sm:table-cell">
+                    <td className="p-2.5 text-xs text-muted-foreground hidden sm:table-cell">
+                      {sale.sales_point || "—"}
+                    </td>
+                    <td className="p-2.5 hidden md:table-cell">
                       <Badge variant="outline" className="text-[9px]">
                         {sale.voucher_type === "hotspot" ? "هوتسبوت" : "يوزر مانجر"}
                       </Badge>
@@ -226,7 +342,7 @@ export default function SalesPage() {
           </table>
         </div>
         {filteredSales.length > PAGE_SIZE && (
-          <div className="flex items-center justify-between px-3 py-2 border-t border-border bg-muted/30">
+          <div className="flex items-center justify-between px-3 py-2 border-t border-border bg-muted/20">
             <span className="text-xs text-muted-foreground">{filteredSales.length} عملية</span>
             <div className="flex items-center gap-1">
               <Button variant="ghost" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
