@@ -71,6 +71,10 @@ export default function UserManagerPage() {
     rxRateLimit: "",
     txRateLimit: "",
     overrideSharedUsers: "",
+    transferLimit: "",
+    rxTransferLimit: "",
+    txTransferLimit: "",
+    uptimeLimit: "",
   });
 
   const config = getMikrotikConfig();
