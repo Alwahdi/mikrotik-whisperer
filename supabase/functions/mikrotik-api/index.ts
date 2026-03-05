@@ -271,7 +271,7 @@ function uniqueArgVariants(variants: (string[] | undefined)[]): (string[] | unde
 }
 
 function isUserManagerUserAddCommand(command: string): boolean {
-  return /\/user-manager\/user\/add$/.test(command);
+  return /(?:\/tool)?\/user-manager\/user\/add$/.test(command);
 }
 
 function isUserManagerProfileCommand(command: string): boolean {

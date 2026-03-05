@@ -147,7 +147,7 @@ export default function UserManagerPage() {
       toast.error("اسم المستخدم وكلمة المرور مطلوبان");
       return;
     }
-    const data: Record<string, any> = { name: newUser.name, password: newUser.password };
+    const data: Record<string, any> = { username: newUser.name, password: newUser.password, owner: "admin" };
     if (newUser.profile) data.group = newUser.profile;
     action.mutate({ action: "add", data }, {
       onSuccess: () => {
