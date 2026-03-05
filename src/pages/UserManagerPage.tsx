@@ -235,7 +235,7 @@ export default function UserManagerPage() {
       return;
     }
 
-    profileAction.mutate({ action: "add", data }, {
+    profileAction.mutate({ action: "add", data: { ...data, owner: "admin" } }, {
       onSuccess: () => setProfileOpen(false),
     });
   };

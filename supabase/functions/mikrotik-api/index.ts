@@ -749,10 +749,24 @@ async function handleRestWithCompat(
     const username = restBody?.username || restBody?.name || restBody?.user;
     const profile = restBody?.profile || restBody?.group;
     const customer = restBody?.customer || restBody?.owner || "admin";
+
+    // Fast path: try direct add with profile/group first
+    let directError: Error | null = null;
+    for (const bodyVariant of buildRestBodyVariants(command, restBody)) {
+      try {
+        return await handleRest(host, port, protocol, user, pass, command, method, bodyVariant);
+      } catch (err: any) {
+        const errorObj = err instanceof Error ? err : new Error(String(err));
+        directError = errorObj;
+        if (!isCompatibilityError(errorObj.message)) throw errorObj;
+      }
+    }
+
+    // Fallback path: add user then activate profile
     const addBody = omitBodyKeys(restBody, ["profile", "group"]);
 
     let addResult: any;
-    let addError: Error | null = null;
+    let addError: Error | null = directError;
 
     for (const bodyVariant of buildRestBodyVariants(command, addBody)) {
       try {
