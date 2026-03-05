@@ -307,6 +307,21 @@ function buildUserManagerArgVariants(command: string, args?: string[]): (string[
     remapArgs(remapArgs(args, { profile: "group" }), { username: "name" }),
   ];
 
+  // For profile add/set: try stripping unknown params one by one
+  if (isUserManagerProfileCommand(command)) {
+    const parsed = argsListToObject(args);
+    const optionalKeys = ["name-for-users", "override-shared-users", "transfer-limit", "uptime-limit", "price"];
+    // Try without each optional key
+    for (const key of optionalKeys) {
+      if (parsed[key]) {
+        baseVariants.push(omitArgsKeys(args, [key]));
+      }
+    }
+    // Try with only essential keys
+    const essentialOnly = omitArgsKeys(args, optionalKeys);
+    baseVariants.push(essentialOnly);
+  }
+
   if (isUserManagerUserAddCommand(command)) {
     const parsed = argsListToObject(args);
     const username = parsed.username || parsed.name || parsed.user;
