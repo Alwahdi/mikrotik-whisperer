@@ -174,7 +174,7 @@ export default function RoutersPage() {
       }).eq("id", router.id);
 
       toast.success(`متصل بـ ${router.label}`);
-      navigate("/");
+      navigate("/dashboard");
     } catch (err: any) {
       toast.error("فشل الاتصال: " + (err.message || "خطأ"));
       await supabase.from("routers").update({ is_online: false }).eq("id", router.id);

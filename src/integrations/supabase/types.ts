@@ -181,6 +181,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_access: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string | null
+          expires_at: string | null
+          notes: string | null
+          starts_at: string | null
+          status: Database["public"]["Enums"]["access_status"]
+          user_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          notes?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["access_status"]
+          user_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          notes?: string | null
+          starts_at?: string | null
+          status?: Database["public"]["Enums"]["access_status"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string | null
@@ -215,8 +248,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_access_allowed: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
+      access_status: "pending" | "active" | "suspended" | "expired"
       app_role: "admin" | "cashier"
     }
     CompositeTypes: {
@@ -345,6 +380,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      access_status: ["pending", "active", "suspended", "expired"],
       app_role: ["admin", "cashier"],
     },
   },
