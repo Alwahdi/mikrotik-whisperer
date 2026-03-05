@@ -422,6 +422,7 @@ export default function UserManagerPage() {
                   {loadingUsers ? (
                     Array.from({ length: 5 }).map((_, i) => (
                       <tr key={i} className="border-b border-border/50">
+                        <td className="p-2.5"><Skeleton className="h-4 w-4" /></td>
                         <td className="p-2.5"><Skeleton className="h-4 w-24" /></td>
                         <td className="p-2.5"><Skeleton className="h-4 w-20" /></td>
                         <td className="p-2.5"><Skeleton className="h-4 w-12" /></td>
@@ -431,16 +432,22 @@ export default function UserManagerPage() {
                     ))
                   ) : paginatedUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center">
+                      <td colSpan={6} className="p-8 text-center">
                         <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
-                        <p className="text-muted-foreground text-sm">{search ? "لا توجد نتائج" : "لا يوجد مستخدمين"}</p>
+                        <p className="text-muted-foreground text-sm">{search ? "لا توجد نتائج" : userFilter === "expired" ? "لا توجد كروت منتهية" : "لا يوجد مستخدمين"}</p>
                       </td>
                     </tr>
                   ) : (
                     paginatedUsers.map((user: any, i: number) => {
                       const isDisabled = user.disabled === "true" || user.disabled === true;
+                      const uid = user[".id"] || user.id;
                       return (
-                        <tr key={user[".id"] || i} className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
+                        <tr key={uid || i} className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
+                          <td className="p-2.5 text-center">
+                            <button onClick={() => uid && toggleSelectUser(uid)} className="text-muted-foreground hover:text-foreground">
+                              {selectedUsers.has(uid) ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
+                            </button>
+                          </td>
                           <td className="p-2.5 font-medium text-foreground text-sm">{user.name || user.username || "—"}</td>
                           <td className="p-2.5">
                             <span className="inline-block px-1.5 py-0.5 rounded bg-muted text-foreground text-[10px]">
