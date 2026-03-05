@@ -251,13 +251,6 @@ function buildUserManagerArgVariants(args?: string[]): (string[] | undefined)[] 
   ]);
 }
 
-function getV6FallbackCommand(command: string): string | null {
-  if (command.startsWith("/user-manager/")) {
-    return "/tool" + command;
-  }
-  return null;
-}
-
 function mapArgsForV6(command: string, args?: string[]): string[] | undefined {
   if (!args || !command.includes("user-manager")) return args;
   return remapArgs(args, { group: "profile", name: "username" });
