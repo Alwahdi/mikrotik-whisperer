@@ -14,6 +14,7 @@ const navItems = [
   { path: "/hotspot", icon: Wifi, label: "الهوتسبوت", roles: ["admin", "cashier"] },
   { path: "/usermanager", icon: Users, label: "يوزر مانجر", roles: ["admin", "cashier"] },
   { path: "/vouchers", icon: CreditCard, label: "الكروت", roles: ["admin", "cashier"] },
+  { path: "/sales", icon: Activity, label: "المبيعات", roles: ["admin", "cashier"] },
   { path: "/backups", icon: Database, label: "النسخ الاحتياطي", roles: ["admin"] },
   { path: "/settings", icon: Settings, label: "الإعدادات", roles: ["admin"] },
 ];
