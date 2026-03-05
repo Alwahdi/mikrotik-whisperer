@@ -14,6 +14,7 @@ async function callMikrotikApi(endpoint: string) {
       pass: config.pass,
       port: config.port,
       protocol: config.protocol,
+      mode: config.mode,
     },
   });
   if (error) throw error;
@@ -21,82 +22,117 @@ async function callMikrotikApi(endpoint: string) {
   return data;
 }
 
-function useMikrotikEnabled() {
+function useEnabled() {
   return !!getMikrotikConfig();
 }
 
+// ─── Hotspot ───────────────────────────────
 export function useHotspotUsers() {
-  const enabled = useMikrotikEnabled();
   return useQuery({
     queryKey: ["mikrotik", "hotspot", "active"],
     queryFn: () => callMikrotikApi("/ip/hotspot/active/print"),
     refetchInterval: 10000,
-    enabled,
+    enabled: useEnabled(),
   });
 }
-
 export function useHotspotProfiles() {
-  const enabled = useMikrotikEnabled();
   return useQuery({
     queryKey: ["mikrotik", "hotspot", "profiles"],
     queryFn: () => callMikrotikApi("/ip/hotspot/user/profile/print"),
-    enabled,
+    enabled: useEnabled(),
   });
 }
-
 export function useHotspotAllUsers() {
-  const enabled = useMikrotikEnabled();
   return useQuery({
     queryKey: ["mikrotik", "hotspot", "users"],
     queryFn: () => callMikrotikApi("/ip/hotspot/user/print"),
-    enabled,
+    enabled: useEnabled(),
   });
 }
 
+// ─── User Manager ──────────────────────────
 export function useUserManagerUsers() {
-  const enabled = useMikrotikEnabled();
   return useQuery({
     queryKey: ["mikrotik", "usermanager", "users"],
     queryFn: () => callMikrotikApi("/user-manager/user/print"),
     refetchInterval: 15000,
-    enabled,
+    enabled: useEnabled(),
   });
 }
-
 export function useUserManagerProfiles() {
-  const enabled = useMikrotikEnabled();
   return useQuery({
     queryKey: ["mikrotik", "usermanager", "profiles"],
     queryFn: () => callMikrotikApi("/user-manager/profile/print"),
-    enabled,
+    enabled: useEnabled(),
   });
 }
-
 export function useUserManagerSessions() {
-  const enabled = useMikrotikEnabled();
   return useQuery({
     queryKey: ["mikrotik", "usermanager", "sessions"],
     queryFn: () => callMikrotikApi("/user-manager/session/print"),
     refetchInterval: 10000,
-    enabled,
+    enabled: useEnabled(),
   });
 }
 
+// ─── System ────────────────────────────────
 export function useSystemResources() {
-  const enabled = useMikrotikEnabled();
   return useQuery({
     queryKey: ["mikrotik", "system", "resource"],
-    queryFn: () => callMikrotikApi("/system/resource/print"),
-    refetchInterval: 30000,
-    enabled,
+    queryFn: async () => {
+      const data = await callMikrotikApi("/system/resource/print");
+      return Array.isArray(data) ? data[0] || {} : data;
+    },
+    refetchInterval: 15000,
+    enabled: useEnabled(),
+  });
+}
+export function useSystemIdentity() {
+  return useQuery({
+    queryKey: ["mikrotik", "system", "identity"],
+    queryFn: async () => {
+      const data = await callMikrotikApi("/system/identity/print");
+      return Array.isArray(data) ? data[0] || {} : data;
+    },
+    enabled: useEnabled(),
+  });
+}
+export function useRouterboard() {
+  return useQuery({
+    queryKey: ["mikrotik", "system", "routerboard"],
+    queryFn: async () => {
+      const data = await callMikrotikApi("/system/routerboard/print");
+      return Array.isArray(data) ? data[0] || {} : data;
+    },
+    enabled: useEnabled(),
   });
 }
 
-export function useSystemIdentity() {
-  const enabled = useMikrotikEnabled();
+// ─── Interfaces ────────────────────────────
+export function useInterfaces() {
   return useQuery({
-    queryKey: ["mikrotik", "system", "identity"],
-    queryFn: () => callMikrotikApi("/system/identity/print"),
-    enabled,
+    queryKey: ["mikrotik", "interface"],
+    queryFn: () => callMikrotikApi("/interface/print"),
+    refetchInterval: 10000,
+    enabled: useEnabled(),
+  });
+}
+
+// ─── DHCP ──────────────────────────────────
+export function useDHCPLeases() {
+  return useQuery({
+    queryKey: ["mikrotik", "dhcp", "leases"],
+    queryFn: () => callMikrotikApi("/ip/dhcp-server/lease/print"),
+    refetchInterval: 30000,
+    enabled: useEnabled(),
+  });
+}
+
+// ─── IP Addresses ──────────────────────────
+export function useIPAddresses() {
+  return useQuery({
+    queryKey: ["mikrotik", "ip", "address"],
+    queryFn: () => callMikrotikApi("/ip/address/print"),
+    enabled: useEnabled(),
   });
 }
