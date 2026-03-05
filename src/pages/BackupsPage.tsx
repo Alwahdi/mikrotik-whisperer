@@ -3,6 +3,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
   BreadcrumbPage, BreadcrumbSeparator,
@@ -12,14 +13,22 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import {
   Home, Database, Plus, Trash2, RotateCcw, Loader2, Clock,
   CheckCircle, AlertTriangle, HardDrive, Users, Wifi,
+  Download, Filter,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
+import {
+  useHotspotUsers, useUserManagerUsers,
+} from "@/hooks/useMikrotik";
 
 interface BackupRecord {
   id: string;
@@ -32,6 +41,13 @@ interface BackupRecord {
   created_at: string;
 }
 
+interface RestoreResult {
+  restored: number;
+  failed: number;
+  total: number;
+  errors?: string[];
+}
+
 export default function BackupsPage() {
   const { user } = useAuth();
   const config = getMikrotikConfig();
@@ -39,7 +55,16 @@ export default function BackupsPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [restoreProgress, setRestoreProgress] = useState(0);
+  const [restoreResult, setRestoreResult] = useState<RestoreResult | null>(null);
+  const [restoreType, setRestoreType] = useState<"all" | "um" | "hotspot">("all");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  const { data: currentHotspotUsers } = useHotspotUsers();
+  const { data: currentUmUsers } = useUserManagerUsers();
+
+  const currentHotspotCount = Array.isArray(currentHotspotUsers) ? currentHotspotUsers.length : 0;
+  const currentUmCount = Array.isArray(currentUmUsers) ? currentUmUsers.length : 0;
 
   const fetchBackups = async () => {
     if (!user) return;
@@ -60,10 +85,8 @@ export default function BackupsPage() {
       toast.error("يجب أن يكون هناك راوتر متصل");
       return;
     }
-
     setCreating(true);
     try {
-      // Get router_id from config
       const { data: routers } = await supabase
         .from("routers")
         .select("id, label")
@@ -75,11 +98,7 @@ export default function BackupsPage() {
       if (!router) throw new Error("لم يتم العثور على الراوتر");
 
       const { data, error } = await supabase.functions.invoke("backup-scheduler", {
-        body: {
-          action: "create",
-          router_id: router.id,
-          router_label: router.label,
-        },
+        body: { action: "create", router_id: router.id, router_label: router.label },
       });
 
       if (error) throw error;
@@ -96,23 +115,39 @@ export default function BackupsPage() {
 
   const restoreBackup = async (backupId: string) => {
     setRestoring(backupId);
+    setRestoreProgress(10);
+    setRestoreResult(null);
     try {
+      setRestoreProgress(30);
       const { data, error } = await supabase.functions.invoke("backup-scheduler", {
-        body: { action: "restore", backup_id: backupId },
+        body: { action: "restore", backup_id: backupId, restore_type: restoreType },
       });
 
+      setRestoreProgress(80);
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      if (data.failed > 0) {
-        toast.warning(`تمت استعادة ${data.restored} من ${data.total} — فشل ${data.failed}`);
+      setRestoreProgress(100);
+      const result: RestoreResult = {
+        restored: data.restored || 0,
+        failed: data.failed || 0,
+        total: data.total || 0,
+        errors: data.errors,
+      };
+      setRestoreResult(result);
+
+      if (result.failed > 0) {
+        toast.warning(`تمت استعادة ${result.restored} من ${result.total} — فشل ${result.failed}`);
       } else {
-        toast.success(`تمت استعادة ${data.restored} مستخدم بنجاح`);
+        toast.success(`تمت استعادة ${result.restored} مستخدم بنجاح`);
       }
     } catch (err: any) {
       toast.error(err.message || "فشلت الاستعادة");
     } finally {
-      setRestoring(null);
+      setTimeout(() => {
+        setRestoring(null);
+        setRestoreProgress(0);
+      }, 2000);
     }
   };
 
@@ -121,10 +156,8 @@ export default function BackupsPage() {
       const { data, error } = await supabase.functions.invoke("backup-scheduler", {
         body: { action: "delete", backup_id: backupId },
       });
-
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-
       toast.success("تم حذف النسخة الاحتياطية");
       setBackups(prev => prev.filter(b => b.id !== backupId));
     } catch (err: any) {
@@ -141,9 +174,7 @@ export default function BackupsPage() {
             <BreadcrumbLink asChild><Link to="/dashboard"><Home className="h-3.5 w-3.5" /></Link></BreadcrumbLink>
           </BreadcrumbItem>
           <BreadcrumbSeparator />
-          <BreadcrumbItem>
-            <BreadcrumbPage>النسخ الاحتياطي</BreadcrumbPage>
-          </BreadcrumbItem>
+          <BreadcrumbItem><BreadcrumbPage>النسخ الاحتياطي</BreadcrumbPage></BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
 
@@ -161,12 +192,64 @@ export default function BackupsPage() {
         </Button>
       </div>
 
+      {/* Current Router Stats */}
+      {config && (
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <div className="rounded-md border border-border bg-card p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Users className="h-3 w-3 text-primary" />
+              <span className="text-[11px] text-muted-foreground">يوزر مانجر حالياً</span>
+            </div>
+            <p className="text-lg font-semibold text-foreground">{currentUmCount}</p>
+          </div>
+          <div className="rounded-md border border-border bg-card p-3">
+            <div className="flex items-center gap-1.5 mb-1">
+              <Wifi className="h-3 w-3 text-primary" />
+              <span className="text-[11px] text-muted-foreground">هوتسبوت حالياً</span>
+            </div>
+            <p className="text-lg font-semibold text-foreground">{currentHotspotCount}</p>
+          </div>
+        </div>
+      )}
+
       {!config && (
         <div className="mb-5 p-4 rounded-lg bg-warning/5 border border-warning/20">
           <div className="flex items-center gap-2 text-sm">
             <AlertTriangle className="h-4 w-4 text-warning" />
             <span className="text-foreground">يجب الاتصال براوتر أولاً لإنشاء نسخة احتياطية</span>
           </div>
+        </div>
+      )}
+
+      {/* Restore Result */}
+      {restoreResult && (
+        <div className="mb-4 p-4 rounded-lg border border-border bg-card">
+          <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-primary" />
+            نتيجة الاستعادة
+          </h3>
+          <div className="grid grid-cols-3 gap-2 text-center mb-2">
+            <div>
+              <p className="text-lg font-bold text-primary">{restoreResult.restored}</p>
+              <p className="text-[10px] text-muted-foreground">تم استعادتهم</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-destructive">{restoreResult.failed}</p>
+              <p className="text-[10px] text-muted-foreground">فشل</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-foreground">{restoreResult.total}</p>
+              <p className="text-[10px] text-muted-foreground">الإجمالي</p>
+            </div>
+          </div>
+          {restoreResult.errors && restoreResult.errors.length > 0 && (
+            <div className="text-xs text-destructive bg-destructive/5 rounded p-2 mt-2 space-y-1">
+              {restoreResult.errors.map((e, i) => <p key={i}>• {e}</p>)}
+            </div>
+          )}
+          <Button variant="outline" size="sm" className="mt-2 text-xs" onClick={() => setRestoreResult(null)}>
+            إغلاق
+          </Button>
         </div>
       )}
 
@@ -216,15 +299,27 @@ export default function BackupsPage() {
                   </span>
                 </div>
 
-                {/* Stats */}
+                {/* Stats with comparison */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Users className="h-3 w-3" />
                     <span>{meta.um_users || 0} يوزر مانجر</span>
+                    {config && currentUmCount > 0 && (
+                      <Badge variant="outline" className="text-[8px] px-1 py-0">
+                        {currentUmCount > (meta.um_users || 0) ? `+${currentUmCount - (meta.um_users || 0)}` :
+                         currentUmCount < (meta.um_users || 0) ? `${currentUmCount - (meta.um_users || 0)}` : "="}
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Wifi className="h-3 w-3" />
                     <span>{meta.hotspot_users || 0} هوتسبوت</span>
+                    {config && currentHotspotCount > 0 && (
+                      <Badge variant="outline" className="text-[8px] px-1 py-0">
+                        {currentHotspotCount > (meta.hotspot_users || 0) ? `+${currentHotspotCount - (meta.hotspot_users || 0)}` :
+                         currentHotspotCount < (meta.hotspot_users || 0) ? `${currentHotspotCount - (meta.hotspot_users || 0)}` : "="}
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Database className="h-3 w-3" />
@@ -236,8 +331,27 @@ export default function BackupsPage() {
                   </div>
                 </div>
 
+                {/* Restore Progress */}
+                {isRestoring && (
+                  <div className="mb-3">
+                    <Progress value={restoreProgress} className="h-1.5" />
+                    <p className="text-[10px] text-muted-foreground mt-1">جاري الاستعادة... {restoreProgress}%</p>
+                  </div>
+                )}
+
                 {/* Actions */}
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center flex-wrap">
+                  <Select value={restoreType} onValueChange={(v: any) => setRestoreType(v)}>
+                    <SelectTrigger className="h-7 w-32 text-xs">
+                      <Filter className="h-3 w-3 ml-1" />
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">استعادة الكل</SelectItem>
+                      <SelectItem value="um">يوزر مانجر فقط</SelectItem>
+                      <SelectItem value="hotspot">هوتسبوت فقط</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button
                     size="sm"
                     variant="outline"

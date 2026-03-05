@@ -6,7 +6,7 @@ import TrafficChart from "@/components/TrafficChart";
 import {
   Wifi, Users, Cpu, HardDrive, Clock, Activity, Settings,
   Network, Gauge, MemoryStick, CreditCard, UserPlus, AlertTriangle,
-  Zap, ArrowRight,
+  Zap, ArrowRight, DollarSign, TrendingUp,
 } from "lucide-react";
 import {
   useHotspotUsers, useUserManagerUsers,
@@ -17,8 +17,12 @@ import {
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
 
 export default function Index() {
+  const { user } = useAuth();
   const config = getMikrotikConfig();
   const enabled = !!config;
 
@@ -31,6 +35,33 @@ export default function Index() {
   const { data: interfaces } = useInterfaces();
   const { data: dhcpLeases } = useDHCPLeases();
   const { data: health } = useRouterHealth();
+
+  // Today's sales from DB
+  const { data: todaySales } = useQuery({
+    queryKey: ["today-sales", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const { data } = await supabase
+        .from("sales")
+        .select("success_count, total_amount, profile_name")
+        .eq("user_id", user.id)
+        .gte("created_at", today.toISOString());
+      return data || [];
+    },
+    enabled: !!user?.id,
+  });
+
+  const todayCardsCount = useMemo(() => (todaySales || []).reduce((s, r) => s + (r.success_count || 0), 0), [todaySales]);
+  const todayRevenue = useMemo(() => (todaySales || []).reduce((s, r) => s + Number(r.total_amount || 0), 0), [todaySales]);
+  const topPackageToday = useMemo(() => {
+    if (!todaySales || todaySales.length === 0) return null;
+    const map: Record<string, number> = {};
+    todaySales.forEach(s => { map[s.profile_name || ""] = (map[s.profile_name || ""] || 0) + (s.success_count || 0); });
+    const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
+    return entries[0] ? entries[0][0] : null;
+  }, [todaySales]);
 
   // Alerts - must be before conditional returns
   const cpuLoad = sysResource?.["cpu-load"] ?? "—";
@@ -144,6 +175,22 @@ export default function Index() {
         <StatCard title="الذاكرة" value={`${memUsed}%`} subtitle={formatSize(freeMem) + " متاح"} icon={MemoryStick} variant={memUsed > 85 ? "warning" : "default"} />
         <StatCard title="Interfaces" value={totalInterfaces} subtitle="نشط" icon={Network} />
         <StatCard title="جلسات UM" value={activeSessions} subtitle="نشطة" icon={Zap} />
+      </div>
+
+      {/* Today's Sales Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+        <StatCard title="مبيعات اليوم" value={todayRevenue.toLocaleString()} icon={DollarSign} variant="accent" />
+        <StatCard title="كروت اليوم" value={todayCardsCount} icon={CreditCard} />
+        <Link to="/sales" className="col-span-2 sm:col-span-1">
+          <div className="rounded-lg border border-border bg-card p-4 hover:border-primary/30 transition-colors h-full flex flex-col justify-center">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+              <TrendingUp className="h-3.5 w-3.5" />
+              أفضل باقة اليوم
+            </div>
+            <p className="text-sm font-semibold text-foreground truncate">{topPackageToday || "—"}</p>
+            <p className="text-[10px] text-primary mt-1 flex items-center gap-1">عرض التقارير <ArrowRight className="h-2.5 w-2.5" /></p>
+          </div>
+        </Link>
       </div>
 
       {/* System Info + Uptime */}

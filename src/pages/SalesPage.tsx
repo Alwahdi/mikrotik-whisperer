@@ -17,6 +17,7 @@ import {
 import {
   BarChart3, Home, TrendingUp, CreditCard,
   ChevronLeft, ChevronRight, Search, Trash2, DollarSign, Store,
+  Download,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
@@ -141,6 +142,48 @@ export default function SalesPage() {
     return entries[0] ? { name: entries[0][0], count: entries[0][1] } : null;
   }, [filteredSales]);
 
+  // Monthly comparison
+  const monthlyComparison = useMemo(() => {
+    if (!sales || sales.length === 0) return null;
+    const now = new Date();
+    const thisMonth = sales.filter(s => {
+      const d = new Date(s.created_at);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+    const lastMonth = sales.filter(s => {
+      const d = new Date(s.created_at);
+      const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      return d.getMonth() === lm.getMonth() && d.getFullYear() === lm.getFullYear();
+    });
+    const thisRevenue = thisMonth.reduce((s, r) => s + Number(r.total_amount || 0), 0);
+    const lastRevenue = lastMonth.reduce((s, r) => s + Number(r.total_amount || 0), 0);
+    const change = lastRevenue > 0 ? Math.round(((thisRevenue - lastRevenue) / lastRevenue) * 100) : 0;
+    return { thisRevenue, lastRevenue, change, thisCards: thisMonth.reduce((s, r) => s + (r.success_count || 0), 0) };
+  }, [sales]);
+
+  const exportCSV = () => {
+    if (!filteredSales.length) return;
+    const headers = ["التاريخ", "الباقة", "النوع", "كروت ناجحة", "كروت فاشلة", "المبلغ", "نقطة البيع", "ملاحظات"];
+    const rows = filteredSales.map((s: any) => [
+      new Date(s.created_at).toLocaleString("ar"),
+      s.profile_name || "",
+      s.voucher_type === "hotspot" ? "هوتسبوت" : "يوزر مانجر",
+      s.success_count || 0,
+      s.failed_count || 0,
+      s.total_amount || 0,
+      s.sales_point || "",
+      s.notes || "",
+    ]);
+    const csv = "\uFEFF" + [headers, ...rows].map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sales-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("sales").delete().eq("id", id);
     if (error) { toast.error("فشل الحذف"); return; }
@@ -166,7 +209,36 @@ export default function SalesPage() {
           <h1 className="text-lg font-semibold text-foreground tracking-tight">المبيعات</h1>
           <p className="text-muted-foreground text-xs mt-0.5">تقارير المبيعات ونقاط البيع</p>
         </div>
+        <Button size="sm" variant="outline" className="text-xs" onClick={exportCSV} disabled={!filteredSales.length}>
+          <Download className="h-3.5 w-3.5 ml-1" />
+          تصدير CSV
+        </Button>
       </div>
+
+      {/* Monthly Comparison */}
+      {monthlyComparison && (
+        <div className="rounded-md border border-border bg-card p-3 mb-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[11px] text-muted-foreground">هذا الشهر</p>
+              <p className="text-lg font-semibold text-foreground">{monthlyComparison.thisRevenue.toLocaleString()}</p>
+              <p className="text-[10px] text-muted-foreground">{monthlyComparison.thisCards} كرت</p>
+            </div>
+            <div className="text-center">
+              {monthlyComparison.change !== 0 && (
+                <Badge variant={monthlyComparison.change > 0 ? "default" : "destructive"} className="text-[10px]">
+                  {monthlyComparison.change > 0 ? "+" : ""}{monthlyComparison.change}%
+                </Badge>
+              )}
+              <p className="text-[10px] text-muted-foreground mt-1">مقارنة بالشهر السابق</p>
+            </div>
+            <div className="text-left">
+              <p className="text-[11px] text-muted-foreground">الشهر السابق</p>
+              <p className="text-lg font-semibold text-muted-foreground">{monthlyComparison.lastRevenue.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
