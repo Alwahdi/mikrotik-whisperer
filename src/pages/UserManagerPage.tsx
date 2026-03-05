@@ -46,6 +46,7 @@ export default function UserManagerPage() {
   const { data: sessions, isLoading: loadingSessions, error: sessionsError } = useUserManagerSessions();
   const queryClient = useQueryClient();
   const action = useUserManagerAction();
+  const profileAction = useUserManagerProfileAction();
 
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -54,6 +55,18 @@ export default function UserManagerPage() {
   const [newUser, setNewUser] = useState({ name: "", password: "", profile: "" });
   const [usersPage, setUsersPage] = useState(1);
   const [sessionsPage, setSessionsPage] = useState(1);
+
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileMode, setProfileMode] = useState<"add" | "edit">("add");
+  const [editingProfile, setEditingProfile] = useState<any>(null);
+  const [profileForm, setProfileForm] = useState({
+    name: "",
+    nameForUsers: "",
+    validity: "30d",
+    price: "",
+    rateLimit: "",
+    sharedUsers: "1",
+  });
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["mikrotik", "usermanager"] });
