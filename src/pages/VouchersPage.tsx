@@ -267,42 +267,48 @@ export default function VouchersPage() {
   };
 
   const pushToRouter = async () => {
-    if (cards.length === 0) return;
+    if (cards.length === 0 || pushingRef.current) return;
+
     setPushing(true);
     pushingRef.current = true;
-    setPushProgress(0);
+    setPushProgress(1);
+    setPushMessage("تم بدء الإضافة بالخلفية...");
+
+    toast.info(`بدء إضافة ${cards.length} كرت بالخلفية`);
 
     const addEndpoint = type === "hotspot"
       ? "/ip/hotspot/user/add"
       : "/user-manager/user/add";
 
-    // Build ALL commands at once for maximum speed
-    const allCommands = cards.map(card => {
+    const allCommands = cards.map((card) => {
       const args: string[] = type === "hotspot"
         ? [`=name=${card.username}`, `=password=${card.password}`, `=profile=${card.profile}`]
         : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`, "=owner=admin"];
       return { command: addEndpoint, args };
     });
 
+    const CHUNK_SIZE = type === "usermanager" ? 100 : 80;
+    const CONCURRENCY = type === "usermanager" ? 4 : 3;
+
+    const chunks: { start: number; commands: { command: string; args?: string[] }[] }[] = [];
+    for (let i = 0; i < allCommands.length; i += CHUNK_SIZE) {
+      chunks.push({ start: i, commands: allCommands.slice(i, i + CHUNK_SIZE) });
+    }
+
+    const updatedCards = cards.map((c) => ({ ...c, status: "pending" as const, error: undefined }));
     let totalSuccess = 0;
     let totalFailed = 0;
-    const updatedCards = [...cards];
-
-    // Send in chunks of 50 commands per batch for reliability
-    const CHUNK_SIZE = 50;
     let completedCount = 0;
+    let nextChunkIndex = 0;
+    const startedAt = performance.now();
 
-    for (let i = 0; i < allCommands.length; i += CHUNK_SIZE) {
-      if (!pushingRef.current) break;
-      const chunk = allCommands.slice(i, i + CHUNK_SIZE);
-      const chunkStart = i;
-
+    const processChunk = async (chunk: { start: number; commands: { command: string; args?: string[] }[] }) => {
       try {
-        const result = await rawBatch.mutateAsync({ commands: chunk });
+        const result = await rawBatch.mutateAsync({ commands: chunk.commands });
         const errors = result?.errors || [];
-        
-        for (let j = 0; j < chunk.length; j++) {
-          const cardIdx = chunkStart + j;
+
+        for (let j = 0; j < chunk.commands.length; j++) {
+          const cardIdx = chunk.start + j;
           if (errors[j] && errors[j] !== "") {
             updatedCards[cardIdx] = { ...updatedCards[cardIdx], status: "error", error: errors[j] };
             totalFailed++;
@@ -312,23 +318,40 @@ export default function VouchersPage() {
           }
         }
       } catch (err: any) {
-        // Mark all chunk cards as failed
-        for (let j = 0; j < chunk.length; j++) {
-          const cardIdx = chunkStart + j;
-          updatedCards[cardIdx] = { ...updatedCards[cardIdx], status: "error", error: err.message };
+        for (let j = 0; j < chunk.commands.length; j++) {
+          const cardIdx = chunk.start + j;
+          updatedCards[cardIdx] = { ...updatedCards[cardIdx], status: "error", error: err.message || "فشل التنفيذ" };
           totalFailed++;
         }
       }
 
-      completedCount += chunk.length;
-      setCards([...updatedCards]);
-      setPushProgress(Math.round((completedCount / cards.length) * 100));
-    }
+      completedCount += chunk.commands.length;
+      const pct = Math.max(1, Math.round((completedCount / cards.length) * 100));
+      setPushProgress(pct);
+      setPushMessage(`جاري المعالجة بالخلفية: ${completedCount}/${cards.length}`);
 
+      if (completedCount % (CHUNK_SIZE * 2) === 0 || completedCount >= cards.length) {
+        setCards([...updatedCards]);
+      }
+    };
+
+    const worker = async () => {
+      while (pushingRef.current) {
+        const currentIndex = nextChunkIndex;
+        if (currentIndex >= chunks.length) break;
+        nextChunkIndex += 1;
+        await processChunk(chunks[currentIndex]);
+      }
+    };
+
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, () => worker()));
+
+    setCards([...updatedCards]);
+    setPushProgress(100);
+    setPushMessage("اكتملت العملية");
     pushingRef.current = false;
     setPushing(false);
 
-    // Update batch
     setBatches(prev => {
       const updated = [...prev];
       const latest = updated.find(b => b.cards[0]?.username === cards[0]?.username);
@@ -340,7 +363,6 @@ export default function VouchersPage() {
       return updated;
     });
 
-    // Record sale
     if (totalSuccess > 0 && user?.id) {
       try {
         await supabase.from("sales").insert({
@@ -360,10 +382,13 @@ export default function VouchersPage() {
       } catch {}
     }
 
+    const elapsedSec = Math.max(1, (performance.now() - startedAt) / 1000);
+    const rate = Math.round(cards.length / elapsedSec);
+
     if (totalFailed === 0) {
-      toast.success(`تم إضافة ${totalSuccess} كرت بنجاح`);
+      toast.success(`تمت إضافة ${totalSuccess} كرت (${rate} كرت/ث)`);
     } else {
-      toast.warning(`نجح ${totalSuccess} — فشل ${totalFailed}`);
+      toast.warning(`نجح ${totalSuccess} — فشل ${totalFailed} (${rate} كرت/ث)`);
     }
   };
 
