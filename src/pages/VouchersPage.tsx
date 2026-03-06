@@ -615,23 +615,26 @@ export default function VouchersPage() {
     const toPrint = cardsToPrint || cards;
     if (toPrint.length === 0) return;
     const html = buildPrintHtml(toPrint);
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0";
-    document.body.appendChild(iframe);
-    const cleanup = () => { URL.revokeObjectURL(url); iframe.remove(); };
-    iframe.onload = () => {
-      try {
-        const win = iframe.contentWindow;
-        if (!win) throw new Error("تعذر فتح الطباعة");
-        win.focus();
-        setTimeout(() => win.print(), 120);
-        win.onafterprint = cleanup;
-        setTimeout(cleanup, 60000);
-      } catch { cleanup(); toast.error("تعذر فتح نافذة الطباعة"); }
-    };
-    iframe.src = url;
+    // Use window.open for reliable printing on both desktop and mobile (iOS Safari blocks iframe print)
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      toast.error("تعذر فتح نافذة الطباعة — تأكد من السماح بالنوافذ المنبثقة");
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    // Wait for images to load then print
+    const images = printWindow.document.querySelectorAll("img");
+    const imagePromises = Array.from(images).map(img =>
+      img.complete ? Promise.resolve() : new Promise(resolve => { img.onload = resolve; img.onerror = resolve; })
+    );
+    Promise.all(imagePromises).then(() => {
+      setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+      }, 300);
+    });
   };
 
   const handleDeleteBatch = (batchId: string) => {
