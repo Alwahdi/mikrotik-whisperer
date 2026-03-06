@@ -1062,7 +1062,7 @@ export default function VouchersPage() {
                     <div key={i} className="relative">
                       {bgImage ? (
                         <div className="rounded-md border border-border overflow-hidden relative" style={{ aspectRatio: "1.6" }}>
-                          <img src={bgImage} alt="" className="w-full h-full object-cover" />
+                          <img src={bgImage} alt="" className="w-full h-full object-fill" />
                           {fields.filter(f => f.visible).map(f => {
                             let text = "";
                             if (f.type === "username") text = card.username;
