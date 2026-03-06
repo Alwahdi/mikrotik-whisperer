@@ -49,6 +49,7 @@ const App = () => (
             <Route path="/auth" element={<AuthRedirect><AuthPage /></AuthRedirect>} />
             <Route path="/access" element={<AccessGatePage />} />
             <Route path="/routers" element={<ProtectedRoute><RoutersPage /></ProtectedRoute>} />
+            <Route path="/loading" element={<ProtectedRoute><RouterDataLoader /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/hotspot" element={<ProtectedRoute><HotspotPage /></ProtectedRoute>} />
             <Route path="/usermanager" element={<ProtectedRoute><UserManagerPage /></ProtectedRoute>} />
