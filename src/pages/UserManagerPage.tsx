@@ -47,6 +47,7 @@ export default function UserManagerPage() {
   const { data: profiles, isLoading: loadingProfiles, error: profilesError } = useUserManagerProfiles();
   const { data: sessions, isLoading: loadingSessions, error: sessionsError } = useUserManagerSessions({ enabled: activeTab === "sessions" });
   const queryClient = useQueryClient();
+  const action = useUserManagerAction();
   const profileAction = useUserManagerProfileAction();
 
   const [search, setSearch] = useState("");
