@@ -498,13 +498,22 @@ async function executeUserManagerCompatible(
   command: string,
   args?: string[],
 ): Promise<Record<string, string>[]> {
+  // Performance fast-path: execute exactly as received first.
+  // If it fails with a compatibility-style error, fallback to adaptive variants.
+  try {
+    return await client.execute(command, args);
+  } catch (err: any) {
+    const errorObj = err instanceof Error ? err : new Error(String(err));
+    if (!isCompatibilityError(errorObj.message)) throw errorObj;
+  }
+
   if (isUserManagerUserAddCommand(command)) {
     const parsed = argsListToObject(args);
     const username = parsed.username || parsed.name || parsed.user;
     const profile = parsed.profile || parsed.group;
     const customer = parsed.customer || parsed.owner || "admin";
 
-    // Fast path: try creating user with profile/group directly first (faster for most routers)
+    // Fast compatibility path: try creating user with profile/group directly first
     try {
       const directAttempts = buildUserManagerCommandAttempts(command, args);
       return await executeCompatibilityAttempts(client, directAttempts);
