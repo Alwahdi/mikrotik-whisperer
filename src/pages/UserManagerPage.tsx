@@ -180,10 +180,11 @@ export default function UserManagerPage() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedUsers.size === paginatedUsers.length) {
+    // Select ALL filtered users across all pages, not just current page
+    if (selectedUsers.size === filteredUsers.length && filteredUsers.length > 0) {
       setSelectedUsers(new Set());
     } else {
-      setSelectedUsers(new Set(paginatedUsers.map((u: any) => u[".id"] || u.id)));
+      setSelectedUsers(new Set(filteredUsers.map((u: any) => u[".id"] || u.id)));
     }
   };
 
