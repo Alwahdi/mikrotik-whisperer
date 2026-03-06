@@ -167,12 +167,23 @@ export default function UserManagerPage() {
     if (selectedUsers.size === 0) return;
     setBulkDeleting(true);
     const ids = Array.from(selectedUsers);
-    for (const id of ids) {
-      try { await new Promise<void>((resolve, reject) => action.mutate({ action: "remove", id }, { onSuccess: () => resolve(), onError: reject })); } catch {}
+    let success = 0;
+    let failed = 0;
+    // Process in parallel chunks of 10 for speed
+    const CHUNK = 10;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const results = await Promise.allSettled(
+        chunk.map(id => new Promise<void>((resolve, reject) =>
+          action.mutate({ action: "remove", id }, { onSuccess: () => resolve(), onError: reject })
+        ))
+      );
+      results.forEach(r => r.status === "fulfilled" ? success++ : failed++);
     }
     setSelectedUsers(new Set());
     setBulkDeleting(false);
-    toast.success(`تم حذف ${ids.length} مستخدم`);
+    if (failed === 0) toast.success(`تم حذف ${success} مستخدم`);
+    else toast.warning(`نجح ${success} — فشل ${failed}`);
   };
 
   const toggleSelectUser = (id: string) => {

@@ -276,7 +276,7 @@ export default function VouchersPage() {
       ? "/ip/hotspot/user/add"
       : "/user-manager/user/add";
 
-    const CONCURRENCY = 5;
+    const CONCURRENCY = 10;
     let totalSuccess = 0;
     let totalFailed = 0;
     const updatedCards = [...cards];
