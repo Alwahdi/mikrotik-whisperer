@@ -498,13 +498,22 @@ async function executeUserManagerCompatible(
   command: string,
   args?: string[],
 ): Promise<Record<string, string>[]> {
+  // Performance fast-path: execute exactly as received first.
+  // If it fails with a compatibility-style error, fallback to adaptive variants.
+  try {
+    return await client.execute(command, args);
+  } catch (err: any) {
+    const errorObj = err instanceof Error ? err : new Error(String(err));
+    if (!isCompatibilityError(errorObj.message)) throw errorObj;
+  }
+
   if (isUserManagerUserAddCommand(command)) {
     const parsed = argsListToObject(args);
     const username = parsed.username || parsed.name || parsed.user;
     const profile = parsed.profile || parsed.group;
     const customer = parsed.customer || parsed.owner || "admin";
 
-    // Fast path: try creating user with profile/group directly first (faster for most routers)
+    // Fast compatibility path: try creating user with profile/group directly first
     try {
       const directAttempts = buildUserManagerCommandAttempts(command, args);
       return await executeCompatibilityAttempts(client, directAttempts);
@@ -855,21 +864,46 @@ async function handleBatch(
   user: string, pass: string,
   commands: { command: string; args?: string[] }[]
 ): Promise<{ results: any[]; errors: string[] }> {
-  const client = await createApiClient(host, port, useTls, user, pass);
+  let client = await createApiClient(host, port, useTls, user, pass);
   const results: any[] = [];
   const errors: string[] = [];
+
+  const executeWithTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error(`Command timeout: ${label}`)), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  };
+
+  const timeoutFor = (command: string) => (command.endsWith("/print") ? 45000 : 20000);
 
   try {
     for (const cmd of commands) {
       try {
-        const result = cmd.command.includes("user-manager")
-          ? await executeUserManagerCompatible(client, cmd.command, cmd.args)
-          : await client.execute(cmd.command, cmd.args);
+        const execPromise = cmd.command.includes("user-manager")
+          ? executeUserManagerCompatible(client, cmd.command, cmd.args)
+          : client.execute(cmd.command, cmd.args);
+
+        const result = await executeWithTimeout(execPromise, timeoutFor(cmd.command), cmd.command);
         results.push(result);
         errors.push("");
       } catch (err: any) {
-        errors.push(err.message || "Command failed");
+        const message = err?.message || "Command failed";
+        errors.push(message);
         results.push(null);
+
+        // Reset connection on timeouts to avoid stuck connection state for remaining commands.
+        if (message.includes("Command timeout")) {
+          try { client.close(); } catch { /* ignore */ }
+          client = await createApiClient(host, port, useTls, user, pass);
+        }
       }
     }
   } finally {

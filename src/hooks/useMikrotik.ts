@@ -185,12 +185,12 @@ export function useUserManagerUsers(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["mikrotik", routerKey, "usermanager", "users"],
     queryFn: () => callMikrotikApi("/user-manager/user/print", {
-      args: ["=.proplist=.id,username,name,group,actual-profile,disabled,comment,last-seen,download-used,uptime-used,shared-users"],
+      args: ["=.proplist=.id,username,name,group,actual-profile,disabled,comment,last-seen"],
     }),
     enabled: (options?.enabled ?? true) && useEnabled(),
     retry: 2,
     refetchInterval: false,
-    staleTime: 30000,
+    staleTime: 180000,
     gcTime: 10 * 60 * 1000,
   });
 }

@@ -284,12 +284,17 @@ export default function VouchersPage() {
     const allCommands = cards.map((card) => {
       const args: string[] = type === "hotspot"
         ? [`=name=${card.username}`, `=password=${card.password}`, `=profile=${card.profile}`]
-        : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`, "=owner=admin"];
+        : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`];
       return { command: addEndpoint, args };
     });
 
-    const CHUNK_SIZE = type === "usermanager" ? 100 : 80;
-    const CONCURRENCY = type === "usermanager" ? 4 : 3;
+    const isLargeBatch = cards.length >= 800;
+    const CHUNK_SIZE = type === "usermanager"
+      ? (isLargeBatch ? 30 : 50)
+      : (isLargeBatch ? 40 : 70);
+    const CONCURRENCY = type === "usermanager"
+      ? (isLargeBatch ? 3 : 4)
+      : (isLargeBatch ? 4 : 5);
 
     const chunks: { start: number; commands: { command: string; args?: string[] }[] }[] = [];
     for (let i = 0; i < allCommands.length; i += CHUNK_SIZE) {
@@ -302,6 +307,15 @@ export default function VouchersPage() {
     let completedCount = 0;
     let nextChunkIndex = 0;
     const startedAt = performance.now();
+    let progressPulse: ReturnType<typeof setInterval> | null = null;
+
+    progressPulse = setInterval(() => {
+      if (!pushingRef.current) return;
+      setPushProgress((prev) => {
+        if (completedCount === 0 && prev < 12) return prev + 1;
+        return prev;
+      });
+    }, 1200);
 
     const processChunk = async (chunk: { start: number; commands: { command: string; args?: string[] }[] }) => {
       try {
@@ -331,7 +345,7 @@ export default function VouchersPage() {
       setPushProgress(pct);
       setPushMessage(`جاري المعالجة بالخلفية: ${completedCount}/${cards.length}`);
 
-      if (completedCount % (CHUNK_SIZE * 2) === 0 || completedCount >= cards.length) {
+      if (completedCount % CHUNK_SIZE === 0 || completedCount >= cards.length) {
         setCards([...updatedCards]);
       }
     };
@@ -346,6 +360,11 @@ export default function VouchersPage() {
     };
 
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, () => worker()));
+
+    if (progressPulse) {
+      clearInterval(progressPulse);
+      progressPulse = null;
+    }
 
     setCards([...updatedCards]);
     setPushProgress(100);

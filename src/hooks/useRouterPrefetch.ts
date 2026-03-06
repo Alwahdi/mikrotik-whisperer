@@ -28,7 +28,7 @@ const HEAVY_BACKGROUND_STEPS: PrefetchStep[] = [
     label: "مستخدمي يوزر مانجر",
     key: "um-users",
     command: "/user-manager/user/print",
-    proplist: ".id,username,name,group,actual-profile,disabled,comment,last-seen,download-used,uptime-used",
+    proplist: ".id,username,name,group,actual-profile,disabled,comment,last-seen",
   },
   {
     label: "جلسات يوزر مانجر",
