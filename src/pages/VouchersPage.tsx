@@ -923,7 +923,7 @@ export default function VouchersPage() {
                       onTouchMove={handlePreviewTouchMove}
                       onTouchEnd={handlePreviewMouseUp}
                     >
-                      <img src={bgImage} alt="خلفية" className="w-full h-full object-cover pointer-events-none" />
+                      <img src={bgImage} alt="خلفية" className="w-full h-full object-fill pointer-events-none" />
                       {fields.filter(f => f.visible).map(f => (
                         <div
                           key={f.id}
