@@ -575,7 +575,7 @@ export default function VouchersPage() {
   body { background: white; }
   .page { padding: 8mm; page-break-after: always; }
   .page:last-child { page-break-after: auto; }
-  .grid { display: grid; grid-template-columns: repeat(${printCols}, 1fr); gap: 3mm; }
+  .grid { display: grid; grid-template-columns: repeat(${printCols}, 1fr); grid-template-rows: repeat(${printRows}, 1fr); gap: 2mm; height: calc(297mm - 16mm); }
   .card {
     border: 1.5px solid #E5E7EB; border-radius: 6px;
     padding: 10px 12px; page-break-inside: avoid;
