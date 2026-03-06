@@ -296,7 +296,7 @@ export default function VouchersPage() {
       chunks.push({ start: i, commands: allCommands.slice(i, i + CHUNK_SIZE) });
     }
 
-    const updatedCards = cards.map((c) => ({ ...c, status: "pending" as const, error: undefined }));
+    const updatedCards: VoucherCard[] = cards.map((c) => ({ ...c, status: "pending", error: undefined }));
     let totalSuccess = 0;
     let totalFailed = 0;
     let completedCount = 0;
