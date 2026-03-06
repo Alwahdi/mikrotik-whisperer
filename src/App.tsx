@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import PWAInstallBanner from "@/components/PWAInstallBanner";
 import RouterDataLoader from "@/components/RouterDataLoader";
 import LandingPage from "./pages/LandingPage";
 import AuthPage from "./pages/AuthPage";
