@@ -584,9 +584,9 @@ export default function VouchersPage() {
     position: relative;
   }
   .card-custom {
-    background-size: cover; background-position: center;
+    background-size: 100% 100%; background-position: center; background-repeat: no-repeat;
     position: relative; border: none; padding: 0;
-    aspect-ratio: 1.6;
+    overflow: hidden;
   }
   .overlay-text {
     position: absolute; transform: translate(-50%, -50%);
