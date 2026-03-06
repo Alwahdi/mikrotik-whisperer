@@ -180,37 +180,45 @@ export function useHotspotUserAction() {
 }
 
 // ─── User Manager ──────────────────────────
-export function useUserManagerUsers() {
+export function useUserManagerUsers(options?: { enabled?: boolean }) {
   const routerKey = getRouterKey();
   return useQuery({
     queryKey: ["mikrotik", routerKey, "usermanager", "users"],
-    queryFn: () => callMikrotikApi("/user-manager/user/print"),
-    refetchInterval: 15000,
-    enabled: useEnabled(),
+    queryFn: () => callMikrotikApi("/user-manager/user/print", {
+      args: ["=.proplist=.id,username,name,group,actual-profile,disabled,comment,last-seen,download-used,uptime-used,shared-users"],
+    }),
+    enabled: (options?.enabled ?? true) && useEnabled(),
     retry: 2,
-    ...CACHE_OPTIONS,
+    refetchInterval: false,
+    staleTime: 30000,
+    gcTime: 10 * 60 * 1000,
   });
 }
-export function useUserManagerProfiles() {
+export function useUserManagerProfiles(options?: { enabled?: boolean }) {
   const routerKey = getRouterKey();
   return useQuery({
     queryKey: ["mikrotik", routerKey, "usermanager", "profiles"],
-    queryFn: () => callMikrotikApi("/user-manager/profile/print"),
-    enabled: useEnabled(),
+    queryFn: () => callMikrotikApi("/user-manager/profile/print", {
+      args: ["=.proplist=.id,name,name-for-users,validity,price,rate-limit,shared-users,override-shared-users,transfer-limit,uptime-limit"],
+    }),
+    enabled: (options?.enabled ?? true) && useEnabled(),
     retry: 2,
     staleTime: 60000,
     gcTime: 10 * 60 * 1000,
   });
 }
-export function useUserManagerSessions() {
+export function useUserManagerSessions(options?: { enabled?: boolean }) {
   const routerKey = getRouterKey();
   return useQuery({
     queryKey: ["mikrotik", routerKey, "usermanager", "sessions"],
-    queryFn: () => callMikrotikApi("/user-manager/session/print"),
-    refetchInterval: 10000,
-    enabled: useEnabled(),
+    queryFn: () => callMikrotikApi("/user-manager/session/print", {
+      args: ["=.proplist=.id,user,customer,from-time,till-time,download,upload,active,calling-station-id,user-ip"],
+    }),
+    enabled: (options?.enabled ?? true) && useEnabled(),
     retry: 2,
-    ...CACHE_OPTIONS,
+    refetchInterval: false,
+    staleTime: 45000,
+    gcTime: 10 * 60 * 1000,
   });
 }
 

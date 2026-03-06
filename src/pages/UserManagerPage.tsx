@@ -42,9 +42,10 @@ import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 const PAGE_SIZE = 20;
 
 export default function UserManagerPage() {
+  const [activeTab, setActiveTab] = useState<"users" | "profiles" | "sessions">("users");
   const { data: users, isLoading: loadingUsers, error: usersError } = useUserManagerUsers();
   const { data: profiles, isLoading: loadingProfiles, error: profilesError } = useUserManagerProfiles();
-  const { data: sessions, isLoading: loadingSessions, error: sessionsError } = useUserManagerSessions();
+  const { data: sessions, isLoading: loadingSessions, error: sessionsError } = useUserManagerSessions({ enabled: activeTab === "sessions" });
   const queryClient = useQueryClient();
   const action = useUserManagerAction();
   const profileAction = useUserManagerProfileAction();
@@ -387,7 +388,7 @@ export default function UserManagerPage() {
         />
       </div>
 
-      <Tabs defaultValue="users" dir="rtl">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "profiles" | "sessions")} dir="rtl">
         <TabsList className="bg-muted mb-3 w-full justify-start">
           <TabsTrigger value="users" className="text-xs">
             المستخدمين {!loadingUsers && `(${allUsers.length})`}
