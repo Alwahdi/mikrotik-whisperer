@@ -1051,6 +1051,9 @@ export default function VouchersPage() {
                 {(pushing || successCount > 0 || errorCount > 0) && (
                   <Progress value={pushProgress} className="h-1.5" />
                 )}
+                {pushing && (
+                  <p className="text-[10px] text-muted-foreground">{pushMessage}</p>
+                )}
                 {(successCount > 0 || errorCount > 0) && (
                   <div className="flex gap-2 text-xs">
                     {successCount > 0 && <Badge variant="outline" className="gap-1 text-success border-success/30"><Check className="h-2.5 w-2.5" />{successCount}</Badge>}

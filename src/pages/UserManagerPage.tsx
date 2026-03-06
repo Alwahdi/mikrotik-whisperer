@@ -387,7 +387,7 @@ export default function UserManagerPage() {
         />
       </div>
 
-      <Tabs defaultValue="users" dir="rtl">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "profiles" | "sessions")} dir="rtl">
         <TabsList className="bg-muted mb-3 w-full justify-start">
           <TabsTrigger value="users" className="text-xs">
             المستخدمين {!loadingUsers && `(${allUsers.length})`}
