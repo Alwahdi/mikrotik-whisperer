@@ -276,50 +276,54 @@ export default function VouchersPage() {
       ? "/ip/hotspot/user/add"
       : "/user-manager/user/add";
 
-    const CONCURRENCY = 10;
-    let totalSuccess = 0;
-    let totalFailed = 0;
-    const updatedCards = [...cards];
-    let completedCount = 0;
-
-    const processCard = async (idx: number) => {
-      if (!pushingRef.current) return;
-      const card = cards[idx];
+    // Build ALL commands at once for maximum speed
+    const allCommands = cards.map(card => {
       const args: string[] = type === "hotspot"
         ? [`=name=${card.username}`, `=password=${card.password}`, `=profile=${card.profile}`]
         : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`, "=owner=admin"];
-
-      try {
-        const result = await rawBatch.mutateAsync({
-          commands: [{ command: addEndpoint, args }],
-        });
-        const errors = result?.errors || [];
-        if (errors[0] && errors[0] !== "") {
-          updatedCards[idx] = { ...updatedCards[idx], status: "error", error: errors[0] };
-          totalFailed++;
-        } else {
-          updatedCards[idx] = { ...updatedCards[idx], status: "success" };
-          totalSuccess++;
-        }
-      } catch (err: any) {
-        updatedCards[idx] = { ...updatedCards[idx], status: "error", error: err.message };
-        totalFailed++;
-      }
-
-      completedCount++;
-      setCards([...updatedCards]);
-      setPushProgress(Math.round((completedCount / cards.length) * 100));
-    };
-
-    const queue = Array.from({ length: cards.length }, (_, i) => i);
-    const workers = Array.from({ length: Math.min(CONCURRENCY, cards.length) }, async () => {
-      while (queue.length > 0 && pushingRef.current) {
-        const idx = queue.shift();
-        if (idx !== undefined) await processCard(idx);
-      }
+      return { command: addEndpoint, args };
     });
 
-    await Promise.all(workers);
+    let totalSuccess = 0;
+    let totalFailed = 0;
+    const updatedCards = [...cards];
+
+    // Send in chunks of 50 commands per batch for reliability
+    const CHUNK_SIZE = 50;
+    let completedCount = 0;
+
+    for (let i = 0; i < allCommands.length; i += CHUNK_SIZE) {
+      if (!pushingRef.current) break;
+      const chunk = allCommands.slice(i, i + CHUNK_SIZE);
+      const chunkStart = i;
+
+      try {
+        const result = await rawBatch.mutateAsync({ commands: chunk });
+        const errors = result?.errors || [];
+        
+        for (let j = 0; j < chunk.length; j++) {
+          const cardIdx = chunkStart + j;
+          if (errors[j] && errors[j] !== "") {
+            updatedCards[cardIdx] = { ...updatedCards[cardIdx], status: "error", error: errors[j] };
+            totalFailed++;
+          } else {
+            updatedCards[cardIdx] = { ...updatedCards[cardIdx], status: "success" };
+            totalSuccess++;
+          }
+        }
+      } catch (err: any) {
+        // Mark all chunk cards as failed
+        for (let j = 0; j < chunk.length; j++) {
+          const cardIdx = chunkStart + j;
+          updatedCards[cardIdx] = { ...updatedCards[cardIdx], status: "error", error: err.message };
+          totalFailed++;
+        }
+      }
+
+      completedCount += chunk.length;
+      setCards([...updatedCards]);
+      setPushProgress(Math.round((completedCount / cards.length) * 100));
+    }
 
     pushingRef.current = false;
     setPushing(false);
