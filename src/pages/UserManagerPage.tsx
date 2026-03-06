@@ -167,12 +167,23 @@ export default function UserManagerPage() {
     if (selectedUsers.size === 0) return;
     setBulkDeleting(true);
     const ids = Array.from(selectedUsers);
-    for (const id of ids) {
-      try { await new Promise<void>((resolve, reject) => action.mutate({ action: "remove", id }, { onSuccess: () => resolve(), onError: reject })); } catch {}
+    let success = 0;
+    let failed = 0;
+    // Process in parallel chunks of 10 for speed
+    const CHUNK = 10;
+    for (let i = 0; i < ids.length; i += CHUNK) {
+      const chunk = ids.slice(i, i + CHUNK);
+      const results = await Promise.allSettled(
+        chunk.map(id => new Promise<void>((resolve, reject) =>
+          action.mutate({ action: "remove", id }, { onSuccess: () => resolve(), onError: reject })
+        ))
+      );
+      results.forEach(r => r.status === "fulfilled" ? success++ : failed++);
     }
     setSelectedUsers(new Set());
     setBulkDeleting(false);
-    toast.success(`تم حذف ${ids.length} مستخدم`);
+    if (failed === 0) toast.success(`تم حذف ${success} مستخدم`);
+    else toast.warning(`نجح ${success} — فشل ${failed}`);
   };
 
   const toggleSelectUser = (id: string) => {
@@ -180,10 +191,11 @@ export default function UserManagerPage() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedUsers.size === paginatedUsers.length) {
+    // Select ALL filtered users across all pages, not just current page
+    if (selectedUsers.size === filteredUsers.length && filteredUsers.length > 0) {
       setSelectedUsers(new Set());
     } else {
-      setSelectedUsers(new Set(paginatedUsers.map((u: any) => u[".id"] || u.id)));
+      setSelectedUsers(new Set(filteredUsers.map((u: any) => u[".id"] || u.id)));
     }
   };
 
@@ -407,8 +419,8 @@ export default function UserManagerPage() {
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
                     <th className="p-2.5 w-8 text-center">
-                      <button onClick={toggleSelectAll} className="text-muted-foreground hover:text-foreground">
-                        {selectedUsers.size === paginatedUsers.length && paginatedUsers.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                      <button onClick={toggleSelectAll} className="text-muted-foreground hover:text-foreground" title={`تحديد الكل (${filteredUsers.length})`}>
+                        {selectedUsers.size === filteredUsers.length && filteredUsers.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                       </button>
                     </th>
                     <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">المستخدم</th>

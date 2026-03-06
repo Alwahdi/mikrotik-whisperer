@@ -56,8 +56,8 @@ function useEnabled() {
 }
 
 const CACHE_OPTIONS = {
-  staleTime: 30000,
-  gcTime: 5 * 60 * 1000,
+  staleTime: 10000,
+  gcTime: 3 * 60 * 1000,
 };
 
 // ─── Health Check ──────────────────────────────

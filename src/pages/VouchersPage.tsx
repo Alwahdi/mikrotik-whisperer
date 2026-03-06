@@ -276,7 +276,7 @@ export default function VouchersPage() {
       ? "/ip/hotspot/user/add"
       : "/user-manager/user/add";
 
-    const CONCURRENCY = 5;
+    const CONCURRENCY = 10;
     let totalSuccess = 0;
     let totalFailed = 0;
     const updatedCards = [...cards];
@@ -575,7 +575,7 @@ export default function VouchersPage() {
   body { background: white; }
   .page { padding: 8mm; page-break-after: always; }
   .page:last-child { page-break-after: auto; }
-  .grid { display: grid; grid-template-columns: repeat(${printCols}, 1fr); gap: 3mm; }
+  .grid { display: grid; grid-template-columns: repeat(${printCols}, 1fr); grid-template-rows: repeat(${printRows}, 1fr); gap: 2mm; height: calc(297mm - 16mm); }
   .card {
     border: 1.5px solid #E5E7EB; border-radius: 6px;
     padding: 10px 12px; page-break-inside: avoid;
@@ -584,9 +584,9 @@ export default function VouchersPage() {
     position: relative;
   }
   .card-custom {
-    background-size: cover; background-position: center;
+    background-size: 100% 100%; background-position: center; background-repeat: no-repeat;
     position: relative; border: none; padding: 0;
-    aspect-ratio: 1.6;
+    overflow: hidden;
   }
   .overlay-text {
     position: absolute; transform: translate(-50%, -50%);
@@ -615,23 +615,26 @@ export default function VouchersPage() {
     const toPrint = cardsToPrint || cards;
     if (toPrint.length === 0) return;
     const html = buildPrintHtml(toPrint);
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const iframe = document.createElement("iframe");
-    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0";
-    document.body.appendChild(iframe);
-    const cleanup = () => { URL.revokeObjectURL(url); iframe.remove(); };
-    iframe.onload = () => {
-      try {
-        const win = iframe.contentWindow;
-        if (!win) throw new Error("تعذر فتح الطباعة");
-        win.focus();
-        setTimeout(() => win.print(), 120);
-        win.onafterprint = cleanup;
-        setTimeout(cleanup, 60000);
-      } catch { cleanup(); toast.error("تعذر فتح نافذة الطباعة"); }
-    };
-    iframe.src = url;
+    // Use window.open for reliable printing on both desktop and mobile (iOS Safari blocks iframe print)
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      toast.error("تعذر فتح نافذة الطباعة — تأكد من السماح بالنوافذ المنبثقة");
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    // Wait for images to load then print
+    const images = printWindow.document.querySelectorAll("img");
+    const imagePromises = Array.from(images).map(img =>
+      img.complete ? Promise.resolve() : new Promise(resolve => { img.onload = resolve; img.onerror = resolve; })
+    );
+    Promise.all(imagePromises).then(() => {
+      setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+      }, 300);
+    });
   };
 
   const handleDeleteBatch = (batchId: string) => {
@@ -920,7 +923,7 @@ export default function VouchersPage() {
                       onTouchMove={handlePreviewTouchMove}
                       onTouchEnd={handlePreviewMouseUp}
                     >
-                      <img src={bgImage} alt="خلفية" className="w-full h-full object-cover pointer-events-none" />
+                      <img src={bgImage} alt="خلفية" className="w-full h-full object-fill pointer-events-none" />
                       {fields.filter(f => f.visible).map(f => (
                         <div
                           key={f.id}
@@ -1059,7 +1062,7 @@ export default function VouchersPage() {
                     <div key={i} className="relative">
                       {bgImage ? (
                         <div className="rounded-md border border-border overflow-hidden relative" style={{ aspectRatio: "1.6" }}>
-                          <img src={bgImage} alt="" className="w-full h-full object-cover" />
+                          <img src={bgImage} alt="" className="w-full h-full object-fill" />
                           {fields.filter(f => f.visible).map(f => {
                             let text = "";
                             if (f.type === "username") text = card.username;
