@@ -408,8 +408,8 @@ export default function UserManagerPage() {
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
                     <th className="p-2.5 w-8 text-center">
-                      <button onClick={toggleSelectAll} className="text-muted-foreground hover:text-foreground">
-                        {selectedUsers.size === paginatedUsers.length && paginatedUsers.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+                      <button onClick={toggleSelectAll} className="text-muted-foreground hover:text-foreground" title={`تحديد الكل (${filteredUsers.length})`}>
+                        {selectedUsers.size === filteredUsers.length && filteredUsers.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                       </button>
                     </th>
                     <th className="text-right p-2.5 font-medium text-xs text-muted-foreground">المستخدم</th>
