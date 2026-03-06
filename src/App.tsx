@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
+import RouterDataLoader from "@/components/RouterDataLoader";
 import LandingPage from "./pages/LandingPage";
 import AuthPage from "./pages/AuthPage";
 import AccessGatePage from "./pages/AccessGatePage";
@@ -48,6 +49,7 @@ const App = () => (
             <Route path="/auth" element={<AuthRedirect><AuthPage /></AuthRedirect>} />
             <Route path="/access" element={<AccessGatePage />} />
             <Route path="/routers" element={<ProtectedRoute><RoutersPage /></ProtectedRoute>} />
+            <Route path="/loading" element={<ProtectedRoute><RouterDataLoader /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/hotspot" element={<ProtectedRoute><HotspotPage /></ProtectedRoute>} />
             <Route path="/usermanager" element={<ProtectedRoute><UserManagerPage /></ProtectedRoute>} />
