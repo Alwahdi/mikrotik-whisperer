@@ -42,10 +42,10 @@ import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 const PAGE_SIZE = 20;
 
 export default function UserManagerPage() {
+  const [activeTab, setActiveTab] = useState<"users" | "profiles" | "sessions">("users");
   const { data: users, isLoading: loadingUsers, error: usersError } = useUserManagerUsers();
   const { data: profiles, isLoading: loadingProfiles, error: profilesError } = useUserManagerProfiles();
-  const { data: sessions, isLoading: loadingSessions, error: sessionsError } = useUserManagerSessions();
-  const queryClient = useQueryClient();
+  const { data: sessions, isLoading: loadingSessions, error: sessionsError } = useUserManagerSessions({ enabled: activeTab === "sessions" });
   const action = useUserManagerAction();
   const profileAction = useUserManagerProfileAction();
 

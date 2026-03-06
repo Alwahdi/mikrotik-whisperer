@@ -163,7 +163,7 @@ export default function VouchersPage() {
   const [cards, setCards] = useState<VoucherCard[]>([]);
   const [pushing, setPushing] = useState(false);
   const [pushProgress, setPushProgress] = useState(0);
-  const pushingRef = useRef(false);
+  const [pushMessage, setPushMessage] = useState("");
 
   // Delete progress
   const [deleteProgress, setDeleteProgress] = useState(0);
