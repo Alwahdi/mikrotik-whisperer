@@ -1000,12 +1000,58 @@ async function handleBatchRest(
     }
   };
 
-  const timeoutFor = (command: string) => (command.endsWith("/print") ? 22000 : 12000);
+  const timeoutFor = (command: string) => (command.endsWith("/print") ? 26000 : 16000);
 
   const printOnly = commands.every((cmd) => cmd.command.endsWith("/print"));
-  const CONCURRENCY = printOnly ? 3 : 8;
+  const writeOnly = commands.every((cmd) => isWriteCommand(cmd.command));
+  const userManagerWriteOnly = commands.every((cmd) => isUserManagerUserWriteCommand(cmd.command));
+
+  const CONCURRENCY = printOnly
+    ? 2
+    : userManagerWriteOnly
+      ? 1
+      : writeOnly
+        ? 3
+        : 5;
+
+  const maxAttemptsFor = (command: string) => {
+    if (command.endsWith("/print")) return 2;
+    if (isUserManagerUserWriteCommand(command)) return 3;
+    return 2;
+  };
 
   let nextIndex = 0;
+
+  const executeCommand = async (cmd: { command: string; args?: string[] }) => {
+    const restBody = argsToRestBody(cmd.args);
+    const method = getRestMethod(cmd.command);
+
+    let lastMessage = "Command failed";
+    const maxAttempts = maxAttemptsFor(cmd.command);
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const request = handleRestWithCompat(host, port, protocol, user, pass, cmd.command, method, restBody);
+        const response = await executeWithTimeout(request, timeoutFor(cmd.command), cmd.command);
+        return { ok: true, response, error: "" };
+      } catch (e: any) {
+        lastMessage = e?.message || "Command failed";
+
+        if (isAlreadyExistsError(lastMessage)) {
+          return { ok: true, response: { duplicate: true }, error: "" };
+        }
+
+        if (attempt < maxAttempts && isTransientExecutionError(lastMessage)) {
+          await sleep(120 * attempt + Math.floor(Math.random() * 120));
+          continue;
+        }
+
+        break;
+      }
+    }
+
+    return { ok: false, response: null, error: lastMessage };
+  };
 
   const worker = async () => {
     while (true) {
@@ -1013,18 +1059,9 @@ async function handleBatchRest(
       nextIndex += 1;
       if (current >= commands.length) break;
 
-      const cmd = commands[current];
-      try {
-        const restBody = argsToRestBody(cmd.args);
-        const method = getRestMethod(cmd.command);
-        const request = handleRestWithCompat(host, port, protocol, user, pass, cmd.command, method, restBody);
-        const response = await executeWithTimeout(request, timeoutFor(cmd.command), cmd.command);
-        results[current] = response;
-        errors[current] = "";
-      } catch (e: any) {
-        results[current] = null;
-        errors[current] = e?.message || "Command failed";
-      }
+      const result = await executeCommand(commands[current]);
+      results[current] = result.response;
+      errors[current] = result.error;
     }
   };
 
