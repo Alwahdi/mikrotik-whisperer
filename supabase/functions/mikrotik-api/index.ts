@@ -802,6 +802,47 @@ async function handleRestWithCompat(
   method?: string,
   restBody?: Record<string, any>,
 ): Promise<any> {
+  const runWithVariants = async (
+    targetCommand: string,
+    targetMethod: string | undefined,
+    body: Record<string, any> | undefined,
+    preferenceKey: string,
+  ) => {
+    const variants = buildRestBodyVariants(targetCommand, body);
+    const preferred = restVariantPreference.get(preferenceKey);
+    const ordered = variants.map((variant, index) => ({ variant, index }));
+
+    if (preferred !== undefined && preferred >= 0 && preferred < ordered.length) {
+      const [picked] = ordered.splice(preferred, 1);
+      if (picked) ordered.unshift(picked);
+    }
+
+    let lastError: Error | null = null;
+
+    for (const { variant, index } of ordered) {
+      try {
+        const response = await handleRest(
+          host,
+          port,
+          protocol,
+          user,
+          pass,
+          targetCommand,
+          targetMethod,
+          variant,
+        );
+        restVariantPreference.set(preferenceKey, index);
+        return response;
+      } catch (err: any) {
+        const errorObj = err instanceof Error ? err : new Error(String(err));
+        lastError = errorObj;
+        if (!isCompatibilityError(errorObj.message)) throw errorObj;
+      }
+    }
+
+    throw lastError || new Error("REST command failed");
+  };
+
   if (!command.includes("user-manager")) {
     return handleRest(host, port, protocol, user, pass, command, method, restBody);
   }
@@ -811,37 +852,22 @@ async function handleRestWithCompat(
     const profile = restBody?.profile || restBody?.group;
     const customer = restBody?.customer || restBody?.owner || "admin";
 
-    // Fast path: try direct add with profile/group first
     let directError: Error | null = null;
-    for (const bodyVariant of buildRestBodyVariants(command, restBody)) {
-      try {
-        return await handleRest(host, port, protocol, user, pass, command, method, bodyVariant);
-      } catch (err: any) {
-        const errorObj = err instanceof Error ? err : new Error(String(err));
-        directError = errorObj;
-        if (!isCompatibilityError(errorObj.message)) throw errorObj;
-      }
+    try {
+      return await runWithVariants(command, method, restBody, `direct:${command}`);
+    } catch (err: any) {
+      const errorObj = err instanceof Error ? err : new Error(String(err));
+      directError = errorObj;
+      if (!isCompatibilityError(errorObj.message)) throw errorObj;
     }
 
-    // Fallback path: add user then activate profile
     const addBody = omitBodyKeys(restBody, ["profile", "group"]);
-
-    let addResult: any;
-    let addError: Error | null = directError;
-
-    for (const bodyVariant of buildRestBodyVariants(command, addBody)) {
-      try {
-        addResult = await handleRest(host, port, protocol, user, pass, command, method, bodyVariant);
-        addError = null;
-        break;
-      } catch (err: any) {
+    const addResult = await runWithVariants(command, method, addBody, `add:${command}`)
+      .catch((err: any) => {
         const errorObj = err instanceof Error ? err : new Error(String(err));
-        addError = errorObj;
         if (!isCompatibilityError(errorObj.message)) throw errorObj;
-      }
-    }
-
-    if (addError) throw addError;
+        throw directError || errorObj;
+      });
 
     if (username && profile) {
       await activateUserManagerProfileRest(host, port, protocol, user, pass, command, username, profile, customer);
@@ -850,29 +876,24 @@ async function handleRestWithCompat(
     return addResult;
   }
 
-  // Try primary command with all body variants
   let lastError: Error | null = null;
-  for (const bodyVariant of buildRestBodyVariants(command, restBody)) {
+
+  try {
+    return await runWithVariants(command, method, restBody, `base:${command}`);
+  } catch (err: any) {
+    const errorObj = err instanceof Error ? err : new Error(String(err));
+    lastError = errorObj;
+    if (!isCompatibilityError(errorObj.message)) throw errorObj;
+  }
+
+  const fallbackCmd = getV6FallbackCommand(command);
+  if (fallbackCmd) {
     try {
-      return await handleRest(host, port, protocol, user, pass, command, method, bodyVariant);
+      return await runWithVariants(fallbackCmd, method, restBody, `fallback:${fallbackCmd}`);
     } catch (err: any) {
       const errorObj = err instanceof Error ? err : new Error(String(err));
       lastError = errorObj;
       if (!isCompatibilityError(errorObj.message)) throw errorObj;
-    }
-  }
-
-  // Try v6 fallback path (/tool/user-manager/...)
-  const fallbackCmd = getV6FallbackCommand(command);
-  if (fallbackCmd) {
-    for (const bodyVariant of buildRestBodyVariants(fallbackCmd, restBody)) {
-      try {
-        return await handleRest(host, port, protocol, user, pass, fallbackCmd, method, bodyVariant);
-      } catch (err: any) {
-        const errorObj = err instanceof Error ? err : new Error(String(err));
-        lastError = errorObj;
-        if (!isCompatibilityError(errorObj.message)) throw errorObj;
-      }
     }
   }
 
