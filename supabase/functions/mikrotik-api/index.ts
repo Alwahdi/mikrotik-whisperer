@@ -378,6 +378,47 @@ function isCompatibilityError(message: string): boolean {
   );
 }
 
+function isWriteCommand(command: string): boolean {
+  return command.endsWith("/add") || command.endsWith("/set") || command.endsWith("/remove");
+}
+
+function isUserManagerUserWriteCommand(command: string): boolean {
+  return /(?:\/tool)?\/user-manager\/user\/(add|set|remove)$/.test(command);
+}
+
+function isAlreadyExistsError(message: string): boolean {
+  const m = (message || "").toLowerCase();
+  return (
+    m.includes("already") ||
+    m.includes("exists") ||
+    m.includes("failure: already") ||
+    m.includes("same name")
+  );
+}
+
+function isTransientExecutionError(message: string): boolean {
+  const m = (message || "").toLowerCase();
+  if (!m) return true;
+  if (isAlreadyExistsError(m)) return false;
+  if (m.includes("unknown parameter") || m.includes("input does not match") || m.includes("invalid")) return false;
+  if (m.includes("authentication") || m.includes("unauthorized") || m.includes("not enough permissions")) return false;
+  return (
+    m.includes("timeout") ||
+    m.includes("session closed") ||
+    m.includes("connection") ||
+    m.includes("reset") ||
+    m.includes("tempor") ||
+    m.includes("busy") ||
+    m.includes("too many") ||
+    m.includes("bad gateway") ||
+    m.includes("internal")
+  );
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function buildUserManagerCommandAttempts(
   command: string,
   args?: string[],
