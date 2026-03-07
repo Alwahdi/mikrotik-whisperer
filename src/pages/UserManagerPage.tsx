@@ -45,6 +45,9 @@ const PAGE_SIZE = 20;
 
 export default function UserManagerPage() {
   const [activeTab, setActiveTab] = useState<"users" | "profiles" | "sessions">("users");
+  // Fast count query — always loads (lightweight)
+  const { data: countData, isLoading: loadingCount } = useUserManagerCount({ enabled: activeTab === "users" });
+  // Full user list — lazy, only when tab is active
   const { data: users, isLoading: loadingUsers, error: usersError } = useUserManagerUsers({ enabled: activeTab === "users" });
   const { data: profiles, isLoading: loadingProfiles, error: profilesError } = useUserManagerProfiles();
   const { data: sessions, isLoading: loadingSessions, error: sessionsError } = useUserManagerSessions({ enabled: activeTab === "sessions" });
