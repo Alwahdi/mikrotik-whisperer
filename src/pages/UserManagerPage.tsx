@@ -325,11 +325,6 @@ export default function UserManagerPage() {
     });
   };
 
-  const handleSearch = (val: string) => {
-    setSearch(val);
-    setUsersPage(1);
-    setSessionsPage(1);
-  };
 
   return (
     <DashboardLayout>
