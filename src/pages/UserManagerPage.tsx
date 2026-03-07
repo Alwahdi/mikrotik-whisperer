@@ -395,9 +395,9 @@ export default function UserManagerPage() {
 
       {!isNotInstalled && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-          <StatBox icon={<Users className="h-3.5 w-3.5 text-foreground" />} label="إجمالي" value={loadingUsers ? null : allUsers.length} loading={loadingUsers} />
-          <StatBox icon={<UserCheck className="h-3.5 w-3.5 text-success" />} label="نشط" value={loadingUsers ? null : activeCount} loading={loadingUsers} />
-          <StatBox icon={<UserX className="h-3.5 w-3.5 text-destructive" />} label="معطل" value={loadingUsers ? null : disabledCount} loading={loadingUsers} />
+          <StatBox icon={<Users className="h-3.5 w-3.5 text-foreground" />} label="إجمالي" value={loadingCount && loadingUsers ? null : totalCount} loading={loadingCount && loadingUsers} />
+          <StatBox icon={<UserCheck className="h-3.5 w-3.5 text-success" />} label="نشط" value={loadingCount && loadingUsers ? null : activeCount} loading={loadingCount && loadingUsers} />
+          <StatBox icon={<UserX className="h-3.5 w-3.5 text-destructive" />} label="معطل" value={loadingCount && loadingUsers ? null : disabledCount} loading={loadingCount && loadingUsers} />
           <StatBox icon={<Clock className="h-3.5 w-3.5 text-primary" />} label="جلسات" value={loadingSessions ? null : allSessions.length} loading={loadingSessions} />
         </div>
       )}
