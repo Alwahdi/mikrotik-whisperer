@@ -8,39 +8,43 @@ interface PrefetchStep {
   key: string;
   command: string;
   proplist?: string;
+  timeoutMs?: number;
 }
 
 type RouterConfig = NonNullable<ReturnType<typeof getMikrotikConfig>>;
 
-// تحميل أساسي سريع فقط قبل الدخول
-const LIGHT_STEPS: PrefetchStep[] = [
-  { label: "معلومات النظام", key: "system", command: "/system/resource/print" },
-  { label: "هوية الراوتر", key: "identity", command: "/system/identity/print" },
-  { label: "معلومات الجهاز", key: "routerboard", command: "/system/routerboard/print" },
-  { label: "الواجهات", key: "interfaces", command: "/interface/print" },
-  { label: "باقات يوزر مانجر", key: "um-profiles", command: "/user-manager/profile/print" },
-  { label: "بروفايلات الهوتسبوت", key: "hotspot-profiles", command: "/ip/hotspot/user/profile/print" },
+// خطوات حرجة فقط قبل الدخول (سريعة جدًا)
+const CRITICAL_STEPS: PrefetchStep[] = [
+  { label: "هوية الراوتر", key: "identity", command: "/system/identity/print", timeoutMs: 9000 },
+  { label: "معلومات النظام", key: "system", command: "/system/resource/print", timeoutMs: 9000 },
 ];
 
-// البيانات الثقيلة تُحمّل بالخلفية لتجنب تعليق شاشة التحميل
-const HEAVY_BACKGROUND_STEPS: PrefetchStep[] = [
+// بقية البيانات تُحمّل بالخلفية بدون حجب الانتقال
+const BACKGROUND_STEPS: PrefetchStep[] = [
+  { label: "معلومات الجهاز", key: "routerboard", command: "/system/routerboard/print", timeoutMs: 12000 },
+  { label: "الواجهات", key: "interfaces", command: "/interface/print", timeoutMs: 15000 },
+  { label: "باقات يوزر مانجر", key: "um-profiles", command: "/user-manager/profile/print", timeoutMs: 15000 },
+  { label: "بروفايلات الهوتسبوت", key: "hotspot-profiles", command: "/ip/hotspot/user/profile/print", timeoutMs: 15000 },
   {
     label: "مستخدمي يوزر مانجر",
     key: "um-users",
     command: "/user-manager/user/print",
-    proplist: ".id,username,name,group,actual-profile,disabled,comment,last-seen",
+    proplist: ".id,username,name,group,actual-profile,disabled,last-seen",
+    timeoutMs: 28000,
   },
   {
     label: "جلسات يوزر مانجر",
     key: "um-sessions",
     command: "/user-manager/session/print",
-    proplist: ".id,user,from-time,till-time,download,upload,active",
+    proplist: ".id,user,from-time,till-time,active",
+    timeoutMs: 25000,
   },
   {
     label: "مستخدمي الهوتسبوت",
     key: "hotspot-users",
     command: "/ip/hotspot/user/print",
-    proplist: ".id,name,profile,disabled,comment,limit-uptime,limit-bytes-total",
+    proplist: ".id,name,profile,disabled",
+    timeoutMs: 28000,
   },
 ];
 
@@ -66,33 +70,59 @@ function processResult(key: string, data: any): any {
   return data;
 }
 
-async function warmHeavyDataInBackground(config: RouterConfig, routerKey: string, queryClient: ReturnType<typeof useQueryClient>) {
-  for (const step of HEAVY_BACKGROUND_STEPS) {
-    try {
-      const args = step.proplist ? [`=.proplist=${step.proplist}`] : [];
-      const { data, error } = await supabase.functions.invoke("mikrotik-api", {
-        body: {
-          endpoint: step.command,
-          host: config.host,
-          user: config.user,
-          pass: config.pass,
-          port: config.port,
-          protocol: config.protocol,
-          mode: config.mode,
-          args,
-        },
-      });
+async function invokeStep(config: RouterConfig, step: PrefetchStep) {
+  const args = step.proplist ? [`=.proplist=${step.proplist}`] : [];
+  const request = supabase.functions.invoke("mikrotik-api", {
+    body: {
+      endpoint: step.command,
+      host: config.host,
+      user: config.user,
+      pass: config.pass,
+      port: config.port,
+      protocol: config.protocol,
+      mode: config.mode,
+      args,
+    },
+  });
 
-      if (error || data?.error) continue;
+  const timeoutMs = step.timeoutMs ?? 15000;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(`انتهت مهلة ${step.label}`)), timeoutMs);
+  });
 
-      const cacheK = getCacheKey(routerKey, step);
-      if (cacheK.length > 0 && data != null) {
-        queryClient.setQueryData(cacheK, processResult(step.key, data));
+  const { data, error } = await Promise.race([request, timeoutPromise]);
+  if (error) throw error;
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+async function warmDataInBackground(
+  config: RouterConfig,
+  routerKey: string,
+  queryClient: ReturnType<typeof useQueryClient>,
+) {
+  const CONCURRENCY = 2;
+  let index = 0;
+
+  const worker = async () => {
+    while (index < BACKGROUND_STEPS.length) {
+      const current = index;
+      index += 1;
+      const step = BACKGROUND_STEPS[current];
+
+      try {
+        const data = await invokeStep(config, step);
+        const cacheK = getCacheKey(routerKey, step);
+        if (cacheK.length > 0 && data != null) {
+          queryClient.setQueryData(cacheK, processResult(step.key, data));
+        }
+      } catch {
+        // تجاهل فشل الخلفية حتى لا ينعكس على تجربة الدخول
       }
-    } catch {
-      // الخلفية فقط — لا نكسر تدفق الواجهة
     }
-  }
+  };
+
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 }
 
 export function useRouterPrefetch() {
@@ -111,64 +141,52 @@ export function useRouterPrefetch() {
 
     setLoading(true);
     setError(null);
-    setProgress(3);
-    setCurrentStep("جاري تهيئة الاتصال...");
+    setProgress(5);
+    setCurrentStep("جاري التحقق السريع من الاتصال...");
 
     const routerKey = `${config.host}:${config.port}`;
-    const totalSteps = LIGHT_STEPS.length;
     let pulseTimer: ReturnType<typeof setInterval> | null = null;
 
     try {
-      setCurrentStep("جاري جلب البيانات الأساسية...");
       pulseTimer = setInterval(() => {
-        setProgress((prev) => (prev < 70 ? prev + 2 : prev));
-      }, 220);
+        setProgress((prev) => (prev < 55 ? prev + 3 : prev));
+      }, 180);
 
-      const commands = LIGHT_STEPS.map((s) => ({
-        command: s.command,
-        args: s.proplist ? [`=.proplist=${s.proplist}`] : ([] as string[]),
-      }));
-
-      const { data, error: batchErr } = await supabase.functions.invoke("mikrotik-api", {
-        body: {
-          action: "batch",
-          host: config.host,
-          user: config.user,
-          pass: config.pass,
-          port: config.port,
-          protocol: config.protocol,
-          mode: config.mode,
-          commands,
-        },
-      });
+      const criticalResults = await Promise.allSettled(
+        CRITICAL_STEPS.map(async (step) => {
+          const data = await invokeStep(config, step);
+          return { step, data };
+        }),
+      );
 
       if (pulseTimer) {
         clearInterval(pulseTimer);
         pulseTimer = null;
       }
 
-      if (batchErr) throw batchErr;
-      if (data?.error) throw new Error(data.error);
+      let successCount = 0;
 
-      const results = data?.results || [];
-      const errors = data?.errors || [];
-
-      for (let i = 0; i < LIGHT_STEPS.length; i++) {
-        const step = LIGHT_STEPS[i];
+      for (const item of criticalResults) {
+        if (item.status !== "fulfilled") continue;
+        const { step, data } = item.value;
         const cacheK = getCacheKey(routerKey, step);
-        setCurrentStep(step.label);
-        setProgress(72 + Math.round(((i + 1) / totalSteps) * 28));
-
-        if (cacheK.length > 0 && results[i] != null && (!errors[i] || errors[i] === "")) {
-          queryClient.setQueryData(cacheK, processResult(step.key, results[i]));
+        if (cacheK.length > 0 && data != null) {
+          queryClient.setQueryData(cacheK, processResult(step.key, data));
         }
+        successCount += 1;
       }
 
-      setProgress(100);
-      setCurrentStep("تم تجهيز البيانات الأساسية");
-      setLoading(false);
+      if (successCount === 0) {
+        throw new Error("تعذر الحصول على أي بيانات أساسية من الراوتر");
+      }
 
-      void warmHeavyDataInBackground(config as RouterConfig, routerKey, queryClient);
+      setProgress(85);
+      setCurrentStep("تم الدخول — استكمال باقي البيانات بالخلفية...");
+
+      void warmDataInBackground(config as RouterConfig, routerKey, queryClient);
+
+      setProgress(100);
+      setLoading(false);
       return true;
     } catch (err: any) {
       if (pulseTimer) clearInterval(pulseTimer);
@@ -180,4 +198,3 @@ export function useRouterPrefetch() {
 
   return { prefetch, progress, currentStep, loading, error };
 }
-
