@@ -367,6 +367,13 @@ export default function VouchersPage() {
       const liveRate = Math.round(done / elapsedNow);
       setPushProgress(pct);
       setPushMessage(`${label}: ${done}/${cards.length} • ${liveRate} كرت/ث`);
+      updateJob(jobId, {
+        completed: done,
+        succeeded: totalSuccess,
+        failed: totalFailed,
+        rate: liveRate,
+        status: label.includes("النهائية") ? "retrying" : "running",
+      });
     };
 
     const runPass = async (
