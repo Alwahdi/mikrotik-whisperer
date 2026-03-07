@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
   useUserManagerUsers,
@@ -6,6 +6,8 @@ import {
   useUserManagerSessions,
   useUserManagerAction,
   useUserManagerProfileAction,
+  useUserManagerCount,
+  useUserManagerSearchUsers,
 } from "@/hooks/useMikrotik";
 import {
   Users, RefreshCw, AlertTriangle, Package, Clock,
@@ -43,6 +45,9 @@ const PAGE_SIZE = 20;
 
 export default function UserManagerPage() {
   const [activeTab, setActiveTab] = useState<"users" | "profiles" | "sessions">("users");
+  // Fast count query — always loads (lightweight)
+  const { data: countData, isLoading: loadingCount } = useUserManagerCount({ enabled: activeTab === "users" });
+  // Full user list — lazy, only when tab is active
   const { data: users, isLoading: loadingUsers, error: usersError } = useUserManagerUsers({ enabled: activeTab === "users" });
   const { data: profiles, isLoading: loadingProfiles, error: profilesError } = useUserManagerProfiles();
   const { data: sessions, isLoading: loadingSessions, error: sessionsError } = useUserManagerSessions({ enabled: activeTab === "sessions" });
@@ -51,6 +56,7 @@ export default function UserManagerPage() {
   const profileAction = useUserManagerProfileAction();
 
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [deleteProfileTarget, setDeleteProfileTarget] = useState<any>(null);
@@ -61,6 +67,19 @@ export default function UserManagerPage() {
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [userFilter, setUserFilter] = useState<"all" | "expired">("all");
+
+  // Server-side search (for large datasets)
+  const { data: searchResults, isLoading: loadingSearch } = useUserManagerSearchUsers(debouncedSearch, { enabled: activeTab === "users" });
+
+  // Debounce search input
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSearch = (val: string) => {
+    setSearch(val);
+    setUsersPage(1);
+    setSessionsPage(1);
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => setDebouncedSearch(val), 400);
+  };
   
 
   const [profileOpen, setProfileOpen] = useState(false);
@@ -111,7 +130,13 @@ export default function UserManagerPage() {
     return profileMap[raw] || raw;
   };
 
-  const allUsers = useMemo(() => Array.isArray(users) ? users : [], [users]);
+  const allUsers = useMemo(() => {
+    // If server-side search returned results, use those
+    if (debouncedSearch.trim().length >= 2 && Array.isArray(searchResults)) {
+      return searchResults;
+    }
+    return Array.isArray(users) ? users : [];
+  }, [users, searchResults, debouncedSearch]);
   const allSessions = useMemo(() => Array.isArray(sessions) ? sessions : [], [sessions]);
 
   // Check if user is expired (uptime used up or disabled)
@@ -155,8 +180,12 @@ export default function UserManagerPage() {
   const paginatedUsers = filteredUsers.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE);
   const paginatedSessions = filteredSessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE);
 
-  const activeCount = allUsers.filter((u: any) => u.disabled !== "true" && u.disabled !== true).length;
-  const disabledCount = allUsers.filter((u: any) => u.disabled === "true" || u.disabled === true).length;
+  // Use fast count data if available, otherwise fall back to allUsers
+  const totalCount = countData?.total ?? allUsers.length;
+  const activeCount = countData?.active ?? allUsers.filter((u: any) => u.disabled !== "true" && u.disabled !== true).length;
+  const disabledCount = countData?.disabled ?? allUsers.filter((u: any) => u.disabled === "true" || u.disabled === true).length;
+
+  const isSearching = debouncedSearch.trim().length >= 2 && loadingSearch;
 
   const handleAction = (userAction: string, user: any) => {
     const id = user[".id"] || user.id;
@@ -306,11 +335,6 @@ export default function UserManagerPage() {
     });
   };
 
-  const handleSearch = (val: string) => {
-    setSearch(val);
-    setUsersPage(1);
-    setSessionsPage(1);
-  };
 
   return (
     <DashboardLayout>
@@ -371,9 +395,9 @@ export default function UserManagerPage() {
 
       {!isNotInstalled && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
-          <StatBox icon={<Users className="h-3.5 w-3.5 text-foreground" />} label="إجمالي" value={loadingUsers ? null : allUsers.length} loading={loadingUsers} />
-          <StatBox icon={<UserCheck className="h-3.5 w-3.5 text-success" />} label="نشط" value={loadingUsers ? null : activeCount} loading={loadingUsers} />
-          <StatBox icon={<UserX className="h-3.5 w-3.5 text-destructive" />} label="معطل" value={loadingUsers ? null : disabledCount} loading={loadingUsers} />
+          <StatBox icon={<Users className="h-3.5 w-3.5 text-foreground" />} label="إجمالي" value={loadingCount && loadingUsers ? null : totalCount} loading={loadingCount && loadingUsers} />
+          <StatBox icon={<UserCheck className="h-3.5 w-3.5 text-success" />} label="نشط" value={loadingCount && loadingUsers ? null : activeCount} loading={loadingCount && loadingUsers} />
+          <StatBox icon={<UserX className="h-3.5 w-3.5 text-destructive" />} label="معطل" value={loadingCount && loadingUsers ? null : disabledCount} loading={loadingCount && loadingUsers} />
           <StatBox icon={<Clock className="h-3.5 w-3.5 text-primary" />} label="جلسات" value={loadingSessions ? null : allSessions.length} loading={loadingSessions} />
         </div>
       )}
@@ -381,17 +405,18 @@ export default function UserManagerPage() {
       <div className="relative mb-3">
         <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="بحث..."
+          placeholder="بحث (حرفين أو أكثر للبحث من الراوتر)..."
           value={search}
           onChange={(e) => handleSearch(e.target.value)}
           className="pr-10 text-sm h-9"
         />
+        {isSearching && <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-primary" />}
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "profiles" | "sessions")} dir="rtl">
         <TabsList className="bg-muted mb-3 w-full justify-start">
           <TabsTrigger value="users" className="text-xs">
-            المستخدمين {!loadingUsers && `(${allUsers.length})`}
+            المستخدمين {!loadingCount && !loadingUsers && `(${totalCount})`}
           </TabsTrigger>
           <TabsTrigger value="profiles" className="text-xs">
             الباقات {!loadingProfiles && `(${Array.isArray(profiles) ? profiles.length : 0})`}

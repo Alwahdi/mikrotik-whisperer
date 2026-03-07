@@ -219,6 +219,56 @@ export function useUserManagerUsers(options?: { enabled?: boolean }) {
     gcTime: 10 * 60 * 1000,
   });
 }
+
+// Count-only query for dashboard stats (fast, minimal payload)
+export function useUserManagerCount(options?: { enabled?: boolean }) {
+  const routerKey = getRouterKey();
+  return useQuery({
+    queryKey: ["mikrotik", routerKey, "usermanager", "count"],
+    queryFn: async () => {
+      const data = await callMikrotikApi("/user-manager/user/print", {
+        args: ["=.proplist=.id,disabled"],
+      });
+      const list = Array.isArray(data) ? data : [];
+      return {
+        total: list.length,
+        active: list.filter((u: any) => u.disabled !== "true" && u.disabled !== true).length,
+        disabled: list.filter((u: any) => u.disabled === "true" || u.disabled === true).length,
+      };
+    },
+    enabled: (options?.enabled ?? true) && useEnabled(),
+    retry: 1,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    staleTime: 3 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
+
+// Server-side filtered query via .query
+export function useUserManagerSearchUsers(search: string, options?: { enabled?: boolean }) {
+  const routerKey = getRouterKey();
+  const hasSearch = search.trim().length >= 2;
+  return useQuery({
+    queryKey: ["mikrotik", routerKey, "usermanager", "search", search],
+    queryFn: () => {
+      const args = ["=.proplist=.id,username,name,group,actual-profile,disabled"];
+      if (hasSearch) {
+        // MikroTik API query: search by username containing the term
+        args.push(`?username=${search.trim()}`);
+        args.push(`?name=${search.trim()}`);
+        args.push("?#|");
+      }
+      return callMikrotikApi("/user-manager/user/print", { args });
+    },
+    enabled: (options?.enabled ?? true) && hasSearch && useEnabled(),
+    retry: 1,
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
+    staleTime: 30000,
+    gcTime: 2 * 60 * 1000,
+  });
+}
 export function useUserManagerProfiles(options?: { enabled?: boolean }) {
   const routerKey = getRouterKey();
   return useQuery({
