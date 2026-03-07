@@ -270,10 +270,12 @@ export default function VouchersPage() {
   const pushToRouter = async () => {
     if (cards.length === 0 || pushingRef.current) return;
 
+    const isRestMode = config?.mode === "rest";
+
     setPushing(true);
     pushingRef.current = true;
     setPushProgress(1);
-    setPushMessage("تم بدء الإضافة بالخلفية...");
+    setPushMessage(isRestMode ? "تم بدء الإضافة بالخلفية (REST مُسرّع)..." : "تم بدء الإضافة بالخلفية...");
 
     toast.info(`بدء إضافة ${cards.length} كرت بالخلفية`);
 
