@@ -226,7 +226,7 @@ export function useUserManagerProfiles(options?: { enabled?: boolean }) {
       args: ["=.proplist=.id,name,name-for-users,validity,price,rate-limit,shared-users,override-shared-users,transfer-limit,uptime-limit"],
     }),
     enabled: (options?.enabled ?? true) && useEnabled(),
-    retry: 2,
+    retry: 1,
     staleTime: 60000,
     gcTime: 10 * 60 * 1000,
   });
