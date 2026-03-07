@@ -315,10 +315,10 @@ export default function VouchersPage() {
     progressPulse = setInterval(() => {
       if (!pushingRef.current) return;
       setPushProgress((prev) => {
-        if (completedCount === 0 && prev < 12) return prev + 1;
+        if (completedCount === 0 && prev < 18) return prev + 1;
         return prev;
       });
-    }, 1200);
+    }, 500);
 
     const processChunk = async (chunk: { start: number; commands: { command: string; args?: string[] }[] }) => {
       try {
