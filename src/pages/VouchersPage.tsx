@@ -273,6 +273,7 @@ export default function VouchersPage() {
 
     const isRestMode = config?.mode === "rest";
     const addEndpoint = type === "hotspot" ? "/ip/hotspot/user/add" : "/user-manager/user/add";
+    const jobId = `push-${Date.now()}`;
 
     setPushing(true);
     pushingRef.current = true;
