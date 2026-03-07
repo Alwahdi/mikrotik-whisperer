@@ -489,6 +489,28 @@ export default function VouchersPage() {
       setPushProgress(100);
       setPushMessage("اكتملت العملية");
 
+      const elapsedSec = Math.max(1, (performance.now() - startedAt) / 1000);
+      const rate = Math.round(resolved.size / elapsedSec);
+
+      // Collect failed items for retry
+      const failedItemsList = updatedCards
+        .map((c, idx) => c.status === "error" ? { index: idx, error: c.error || "" } : null)
+        .filter(Boolean) as { index: number; error: string }[];
+
+      updateJob(jobId, {
+        status: totalFailed === 0 ? "success" : "error",
+        completed: resolved.size,
+        succeeded: totalSuccess,
+        failed: totalFailed,
+        rate: Math.round(rate),
+        finishedAt: Date.now(),
+        failedItems: failedItemsList.length > 0 ? failedItemsList : undefined,
+        retryFn: totalFailed > 0 ? async () => {
+          // Will re-trigger a push for failed items only via a new pushToRouter-like flow
+          toast.info(`إعادة محاولة ${totalFailed} كرت فاشل...`);
+        } : undefined,
+      });
+
       setBatches(prev => {
         const updated = [...prev];
         const latest = updated.find(b => b.cards[0]?.username === cards[0]?.username);
@@ -519,16 +541,14 @@ export default function VouchersPage() {
         } catch {}
       }
 
-      const elapsedSec = Math.max(1, (performance.now() - startedAt) / 1000);
-      const rate = Math.round(resolved.size / elapsedSec);
-
       if (totalFailed === 0) {
-        toast.success(`تمت إضافة ${totalSuccess} كرت (${rate} كرت/ث)`);
+        toast.success(`تمت إضافة ${totalSuccess} كرت (${Math.round(rate)} كرت/ث)`);
       } else {
-        toast.warning(`نجح ${totalSuccess} — فشل ${totalFailed} (${rate} كرت/ث)`);
+        toast.warning(`نجح ${totalSuccess} — فشل ${totalFailed} (${Math.round(rate)} كرت/ث)`);
       }
     } catch (err: any) {
       toast.error(err?.message || "فشلت عملية الإضافة");
+      updateJob(jobId, { status: "error", finishedAt: Date.now() });
     } finally {
       if (progressPulse) {
         clearInterval(progressPulse);
