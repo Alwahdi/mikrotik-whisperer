@@ -130,7 +130,13 @@ export default function UserManagerPage() {
     return profileMap[raw] || raw;
   };
 
-  const allUsers = useMemo(() => Array.isArray(users) ? users : [], [users]);
+  const allUsers = useMemo(() => {
+    // If server-side search returned results, use those
+    if (debouncedSearch.trim().length >= 2 && Array.isArray(searchResults)) {
+      return searchResults;
+    }
+    return Array.isArray(users) ? users : [];
+  }, [users, searchResults, debouncedSearch]);
   const allSessions = useMemo(() => Array.isArray(sessions) ? sessions : [], [sessions]);
 
   // Check if user is expired (uptime used up or disabled)
