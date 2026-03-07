@@ -345,8 +345,10 @@ export default function VouchersPage() {
 
       completedCount += chunk.commands.length;
       const pct = Math.max(1, Math.round((completedCount / cards.length) * 100));
+      const elapsedNow = Math.max(1, (performance.now() - startedAt) / 1000);
+      const liveRate = Math.round(completedCount / elapsedNow);
       setPushProgress(pct);
-      setPushMessage(`جاري المعالجة بالخلفية: ${completedCount}/${cards.length}`);
+      setPushMessage(`جاري المعالجة بالخلفية: ${completedCount}/${cards.length} • ${liveRate} كرت/ث`);
 
       if (completedCount % CHUNK_SIZE === 0 || completedCount >= cards.length) {
         setCards([...updatedCards]);
