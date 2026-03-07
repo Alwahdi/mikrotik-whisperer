@@ -239,7 +239,7 @@ export function useUserManagerSessions(options?: { enabled?: boolean }) {
       args: ["=.proplist=.id,user,customer,from-time,till-time,download,upload,active,calling-station-id,user-ip"],
     }),
     enabled: (options?.enabled ?? true) && useEnabled(),
-    retry: 2,
+    retry: 1,
     refetchInterval: false,
     staleTime: 45000,
     gcTime: 10 * 60 * 1000,
