@@ -950,21 +950,48 @@ async function handleBatch(
 
   try {
     for (const cmd of commands) {
-      try {
-        const execPromise = cmd.command.includes("user-manager")
-          ? executeUserManagerCompatible(client, cmd.command, cmd.args)
-          : client.execute(cmd.command, cmd.args);
+      const maxAttempts = isUserManagerUserWriteCommand(cmd.command) ? 3 : 2;
+      let succeeded = false;
+      let lastMessage = "Command failed";
 
-        const result = await executeWithTimeout(execPromise, timeoutFor(cmd.command), cmd.command);
-        results.push(result);
-        errors.push("");
-      } catch (err: any) {
-        const message = err?.message || "Command failed";
-        errors.push(message);
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const execPromise = cmd.command.includes("user-manager")
+            ? executeUserManagerCompatible(client, cmd.command, cmd.args)
+            : client.execute(cmd.command, cmd.args);
+
+          const result = await executeWithTimeout(execPromise, timeoutFor(cmd.command), cmd.command);
+          results.push(result);
+          errors.push("");
+          succeeded = true;
+          break;
+        } catch (err: any) {
+          lastMessage = err?.message || "Command failed";
+
+          if (isAlreadyExistsError(lastMessage)) {
+            results.push({ duplicate: true });
+            errors.push("");
+            succeeded = true;
+            break;
+          }
+
+          const shouldRetry = attempt < maxAttempts && isTransientExecutionError(lastMessage);
+          if (shouldRetry) {
+            try { client.close(); } catch { /* ignore */ }
+            client = await createApiClient(host, port, useTls, user, pass);
+            await sleep(80 * attempt + Math.floor(Math.random() * 80));
+            continue;
+          }
+
+          break;
+        }
+      }
+
+      if (!succeeded) {
+        errors.push(lastMessage);
         results.push(null);
 
-        // Reset connection on timeouts to avoid stuck connection state for remaining commands.
-        if (message.includes("Command timeout")) {
+        if (lastMessage.includes("Command timeout")) {
           try { client.close(); } catch { /* ignore */ }
           client = await createApiClient(host, port, useTls, user, pass);
         }
