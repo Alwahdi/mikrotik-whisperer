@@ -290,13 +290,14 @@ export default function VouchersPage() {
       return { command: addEndpoint, args };
     });
 
-    const isLargeBatch = cards.length >= 800;
-    const CHUNK_SIZE = type === "usermanager"
-      ? (isLargeBatch ? 30 : 50)
-      : (isLargeBatch ? 40 : 70);
-    const CONCURRENCY = type === "usermanager"
-      ? (isLargeBatch ? 3 : 4)
-      : (isLargeBatch ? 4 : 5);
+    const isLargeBatch = cards.length >= 600;
+    const CHUNK_SIZE = isRestMode
+      ? (type === "usermanager" ? (isLargeBatch ? 8 : 12) : (isLargeBatch ? 12 : 18))
+      : (type === "usermanager" ? (isLargeBatch ? 35 : 55) : (isLargeBatch ? 45 : 75));
+
+    const CONCURRENCY = isRestMode
+      ? (type === "usermanager" ? 2 : 3)
+      : (type === "usermanager" ? (isLargeBatch ? 4 : 5) : (isLargeBatch ? 5 : 6));
 
     const chunks: { start: number; commands: { command: string; args?: string[] }[] }[] = [];
     for (let i = 0; i < allCommands.length; i += CHUNK_SIZE) {
