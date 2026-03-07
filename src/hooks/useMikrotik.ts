@@ -209,12 +209,13 @@ export function useUserManagerUsers(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["mikrotik", routerKey, "usermanager", "users"],
     queryFn: () => callMikrotikApi("/user-manager/user/print", {
-      args: ["=.proplist=.id,username,name,group,actual-profile,disabled,comment,last-seen"],
+      args: ["=.proplist=.id,username,name,group,actual-profile,disabled"],
     }),
     enabled: (options?.enabled ?? true) && useEnabled(),
     retry: 1,
     refetchInterval: false,
-    staleTime: 180000,
+    refetchOnWindowFocus: false,
+    staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
 }
@@ -236,12 +237,13 @@ export function useUserManagerSessions(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["mikrotik", routerKey, "usermanager", "sessions"],
     queryFn: () => callMikrotikApi("/user-manager/session/print", {
-      args: ["=.proplist=.id,user,customer,from-time,till-time,download,upload,active,calling-station-id,user-ip"],
+      args: ["=.proplist=.id,user,customer,from-time,till-time,active"],
     }),
     enabled: (options?.enabled ?? true) && useEnabled(),
     retry: 1,
     refetchInterval: false,
-    staleTime: 45000,
+    refetchOnWindowFocus: false,
+    staleTime: 120000,
     gcTime: 10 * 60 * 1000,
   });
 }

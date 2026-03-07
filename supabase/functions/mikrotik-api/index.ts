@@ -6,6 +6,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const restVariantPreference = new Map<string, number>();
+
 // ─── MikroTik API Protocol Client (v6/v7 TCP) ───────────────────────────
 class MikroTikApiClient {
   private conn!: Deno.Conn;
@@ -374,6 +376,47 @@ function isCompatibilityError(message: string): boolean {
     m.includes("unknown command") ||
     m.includes("input does not match")
   );
+}
+
+function isWriteCommand(command: string): boolean {
+  return command.endsWith("/add") || command.endsWith("/set") || command.endsWith("/remove");
+}
+
+function isUserManagerUserWriteCommand(command: string): boolean {
+  return /(?:\/tool)?\/user-manager\/user\/(add|set|remove)$/.test(command);
+}
+
+function isAlreadyExistsError(message: string): boolean {
+  const m = (message || "").toLowerCase();
+  return (
+    m.includes("already") ||
+    m.includes("exists") ||
+    m.includes("failure: already") ||
+    m.includes("same name")
+  );
+}
+
+function isTransientExecutionError(message: string): boolean {
+  const m = (message || "").toLowerCase();
+  if (!m) return true;
+  if (isAlreadyExistsError(m)) return false;
+  if (m.includes("unknown parameter") || m.includes("input does not match") || m.includes("invalid")) return false;
+  if (m.includes("authentication") || m.includes("unauthorized") || m.includes("not enough permissions")) return false;
+  return (
+    m.includes("timeout") ||
+    m.includes("session closed") ||
+    m.includes("connection") ||
+    m.includes("reset") ||
+    m.includes("tempor") ||
+    m.includes("busy") ||
+    m.includes("too many") ||
+    m.includes("bad gateway") ||
+    m.includes("internal")
+  );
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildUserManagerCommandAttempts(
@@ -759,6 +802,47 @@ async function handleRestWithCompat(
   method?: string,
   restBody?: Record<string, any>,
 ): Promise<any> {
+  const runWithVariants = async (
+    targetCommand: string,
+    targetMethod: string | undefined,
+    body: Record<string, any> | undefined,
+    preferenceKey: string,
+  ) => {
+    const variants = buildRestBodyVariants(targetCommand, body);
+    const preferred = restVariantPreference.get(preferenceKey);
+    const ordered = variants.map((variant, index) => ({ variant, index }));
+
+    if (preferred !== undefined && preferred >= 0 && preferred < ordered.length) {
+      const [picked] = ordered.splice(preferred, 1);
+      if (picked) ordered.unshift(picked);
+    }
+
+    let lastError: Error | null = null;
+
+    for (const { variant, index } of ordered) {
+      try {
+        const response = await handleRest(
+          host,
+          port,
+          protocol,
+          user,
+          pass,
+          targetCommand,
+          targetMethod,
+          variant,
+        );
+        restVariantPreference.set(preferenceKey, index);
+        return response;
+      } catch (err: any) {
+        const errorObj = err instanceof Error ? err : new Error(String(err));
+        lastError = errorObj;
+        if (!isCompatibilityError(errorObj.message)) throw errorObj;
+      }
+    }
+
+    throw lastError || new Error("REST command failed");
+  };
+
   if (!command.includes("user-manager")) {
     return handleRest(host, port, protocol, user, pass, command, method, restBody);
   }
@@ -768,37 +852,22 @@ async function handleRestWithCompat(
     const profile = restBody?.profile || restBody?.group;
     const customer = restBody?.customer || restBody?.owner || "admin";
 
-    // Fast path: try direct add with profile/group first
     let directError: Error | null = null;
-    for (const bodyVariant of buildRestBodyVariants(command, restBody)) {
-      try {
-        return await handleRest(host, port, protocol, user, pass, command, method, bodyVariant);
-      } catch (err: any) {
-        const errorObj = err instanceof Error ? err : new Error(String(err));
-        directError = errorObj;
-        if (!isCompatibilityError(errorObj.message)) throw errorObj;
-      }
+    try {
+      return await runWithVariants(command, method, restBody, `direct:${command}`);
+    } catch (err: any) {
+      const errorObj = err instanceof Error ? err : new Error(String(err));
+      directError = errorObj;
+      if (!isCompatibilityError(errorObj.message)) throw errorObj;
     }
 
-    // Fallback path: add user then activate profile
     const addBody = omitBodyKeys(restBody, ["profile", "group"]);
-
-    let addResult: any;
-    let addError: Error | null = directError;
-
-    for (const bodyVariant of buildRestBodyVariants(command, addBody)) {
-      try {
-        addResult = await handleRest(host, port, protocol, user, pass, command, method, bodyVariant);
-        addError = null;
-        break;
-      } catch (err: any) {
+    const addResult = await runWithVariants(command, method, addBody, `add:${command}`)
+      .catch((err: any) => {
         const errorObj = err instanceof Error ? err : new Error(String(err));
-        addError = errorObj;
         if (!isCompatibilityError(errorObj.message)) throw errorObj;
-      }
-    }
-
-    if (addError) throw addError;
+        throw directError || errorObj;
+      });
 
     if (username && profile) {
       await activateUserManagerProfileRest(host, port, protocol, user, pass, command, username, profile, customer);
@@ -807,29 +876,24 @@ async function handleRestWithCompat(
     return addResult;
   }
 
-  // Try primary command with all body variants
   let lastError: Error | null = null;
-  for (const bodyVariant of buildRestBodyVariants(command, restBody)) {
+
+  try {
+    return await runWithVariants(command, method, restBody, `base:${command}`);
+  } catch (err: any) {
+    const errorObj = err instanceof Error ? err : new Error(String(err));
+    lastError = errorObj;
+    if (!isCompatibilityError(errorObj.message)) throw errorObj;
+  }
+
+  const fallbackCmd = getV6FallbackCommand(command);
+  if (fallbackCmd) {
     try {
-      return await handleRest(host, port, protocol, user, pass, command, method, bodyVariant);
+      return await runWithVariants(fallbackCmd, method, restBody, `fallback:${fallbackCmd}`);
     } catch (err: any) {
       const errorObj = err instanceof Error ? err : new Error(String(err));
       lastError = errorObj;
       if (!isCompatibilityError(errorObj.message)) throw errorObj;
-    }
-  }
-
-  // Try v6 fallback path (/tool/user-manager/...)
-  const fallbackCmd = getV6FallbackCommand(command);
-  if (fallbackCmd) {
-    for (const bodyVariant of buildRestBodyVariants(fallbackCmd, restBody)) {
-      try {
-        return await handleRest(host, port, protocol, user, pass, fallbackCmd, method, bodyVariant);
-      } catch (err: any) {
-        const errorObj = err instanceof Error ? err : new Error(String(err));
-        lastError = errorObj;
-        if (!isCompatibilityError(errorObj.message)) throw errorObj;
-      }
     }
   }
 
@@ -886,21 +950,48 @@ async function handleBatch(
 
   try {
     for (const cmd of commands) {
-      try {
-        const execPromise = cmd.command.includes("user-manager")
-          ? executeUserManagerCompatible(client, cmd.command, cmd.args)
-          : client.execute(cmd.command, cmd.args);
+      const maxAttempts = isUserManagerUserWriteCommand(cmd.command) ? 3 : 2;
+      let succeeded = false;
+      let lastMessage = "Command failed";
 
-        const result = await executeWithTimeout(execPromise, timeoutFor(cmd.command), cmd.command);
-        results.push(result);
-        errors.push("");
-      } catch (err: any) {
-        const message = err?.message || "Command failed";
-        errors.push(message);
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const execPromise = cmd.command.includes("user-manager")
+            ? executeUserManagerCompatible(client, cmd.command, cmd.args)
+            : client.execute(cmd.command, cmd.args);
+
+          const result = await executeWithTimeout(execPromise, timeoutFor(cmd.command), cmd.command);
+          results.push(result);
+          errors.push("");
+          succeeded = true;
+          break;
+        } catch (err: any) {
+          lastMessage = err?.message || "Command failed";
+
+          if (isAlreadyExistsError(lastMessage)) {
+            results.push({ duplicate: true });
+            errors.push("");
+            succeeded = true;
+            break;
+          }
+
+          const shouldRetry = attempt < maxAttempts && isTransientExecutionError(lastMessage);
+          if (shouldRetry) {
+            try { client.close(); } catch { /* ignore */ }
+            client = await createApiClient(host, port, useTls, user, pass);
+            await sleep(80 * attempt + Math.floor(Math.random() * 80));
+            continue;
+          }
+
+          break;
+        }
+      }
+
+      if (!succeeded) {
+        errors.push(lastMessage);
         results.push(null);
 
-        // Reset connection on timeouts to avoid stuck connection state for remaining commands.
-        if (message.includes("Command timeout")) {
+        if (lastMessage.includes("Command timeout")) {
           try { client.close(); } catch { /* ignore */ }
           client = await createApiClient(host, port, useTls, user, pass);
         }
@@ -936,12 +1027,58 @@ async function handleBatchRest(
     }
   };
 
-  const timeoutFor = (command: string) => (command.endsWith("/print") ? 22000 : 12000);
+  const timeoutFor = (command: string) => (command.endsWith("/print") ? 26000 : 16000);
 
   const printOnly = commands.every((cmd) => cmd.command.endsWith("/print"));
-  const CONCURRENCY = printOnly ? 3 : 8;
+  const writeOnly = commands.every((cmd) => isWriteCommand(cmd.command));
+  const userManagerWriteOnly = commands.every((cmd) => isUserManagerUserWriteCommand(cmd.command));
+
+  const CONCURRENCY = printOnly
+    ? 2
+    : userManagerWriteOnly
+      ? 1
+      : writeOnly
+        ? 3
+        : 5;
+
+  const maxAttemptsFor = (command: string) => {
+    if (command.endsWith("/print")) return 2;
+    if (isUserManagerUserWriteCommand(command)) return 3;
+    return 2;
+  };
 
   let nextIndex = 0;
+
+  const executeCommand = async (cmd: { command: string; args?: string[] }) => {
+    const restBody = argsToRestBody(cmd.args);
+    const method = getRestMethod(cmd.command);
+
+    let lastMessage = "Command failed";
+    const maxAttempts = maxAttemptsFor(cmd.command);
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const request = handleRestWithCompat(host, port, protocol, user, pass, cmd.command, method, restBody);
+        const response = await executeWithTimeout(request, timeoutFor(cmd.command), cmd.command);
+        return { ok: true, response, error: "" };
+      } catch (e: any) {
+        lastMessage = e?.message || "Command failed";
+
+        if (isAlreadyExistsError(lastMessage)) {
+          return { ok: true, response: { duplicate: true }, error: "" };
+        }
+
+        if (attempt < maxAttempts && isTransientExecutionError(lastMessage)) {
+          await sleep(120 * attempt + Math.floor(Math.random() * 120));
+          continue;
+        }
+
+        break;
+      }
+    }
+
+    return { ok: false, response: null, error: lastMessage };
+  };
 
   const worker = async () => {
     while (true) {
@@ -949,18 +1086,9 @@ async function handleBatchRest(
       nextIndex += 1;
       if (current >= commands.length) break;
 
-      const cmd = commands[current];
-      try {
-        const restBody = argsToRestBody(cmd.args);
-        const method = getRestMethod(cmd.command);
-        const request = handleRestWithCompat(host, port, protocol, user, pass, cmd.command, method, restBody);
-        const response = await executeWithTimeout(request, timeoutFor(cmd.command), cmd.command);
-        results[current] = response;
-        errors[current] = "";
-      } catch (e: any) {
-        results[current] = null;
-        errors[current] = e?.message || "Command failed";
-      }
+      const result = await executeCommand(commands[current]);
+      results[current] = result.response;
+      errors[current] = result.error;
     }
   };
 

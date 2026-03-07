@@ -43,7 +43,7 @@ const PAGE_SIZE = 20;
 
 export default function UserManagerPage() {
   const [activeTab, setActiveTab] = useState<"users" | "profiles" | "sessions">("users");
-  const { data: users, isLoading: loadingUsers, error: usersError } = useUserManagerUsers();
+  const { data: users, isLoading: loadingUsers, error: usersError } = useUserManagerUsers({ enabled: activeTab === "users" });
   const { data: profiles, isLoading: loadingProfiles, error: profilesError } = useUserManagerProfiles();
   const { data: sessions, isLoading: loadingSessions, error: sessionsError } = useUserManagerSessions({ enabled: activeTab === "sessions" });
   const queryClient = useQueryClient();
