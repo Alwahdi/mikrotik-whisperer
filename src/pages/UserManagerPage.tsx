@@ -6,6 +6,8 @@ import {
   useUserManagerSessions,
   useUserManagerAction,
   useUserManagerProfileAction,
+  useUserManagerCount,
+  useUserManagerSearchUsers,
 } from "@/hooks/useMikrotik";
 import {
   Users, RefreshCw, AlertTriangle, Package, Clock,
