@@ -56,7 +56,12 @@ export default function RouterDataLoader() {
               <Button size="sm" variant="outline" onClick={() => navigate("/routers", { replace: true })}>
                 الراوترات
               </Button>
-              <Button size="sm" onClick={() => { started.current = false; prefetch(); }}>
+              <Button size="sm" onClick={() => {
+                started.current = false;
+                prefetch().then((success) => {
+                  if (success) setTimeout(() => navigate("/dashboard", { replace: true }), 250);
+                });
+              }}>
                 <RefreshCw className="h-3.5 w-3.5 ml-1" />
                 إعادة المحاولة
               </Button>
