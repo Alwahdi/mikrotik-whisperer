@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import RouterDataLoader from "@/components/RouterDataLoader";
+import LiveQueuePanel from "@/components/LiveQueuePanel";
 import LandingPage from "./pages/LandingPage";
 import AuthPage from "./pages/AuthPage";
 import AccessGatePage from "./pages/AccessGatePage";
