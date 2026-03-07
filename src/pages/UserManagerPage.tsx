@@ -180,8 +180,12 @@ export default function UserManagerPage() {
   const paginatedUsers = filteredUsers.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE);
   const paginatedSessions = filteredSessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE);
 
-  const activeCount = allUsers.filter((u: any) => u.disabled !== "true" && u.disabled !== true).length;
-  const disabledCount = allUsers.filter((u: any) => u.disabled === "true" || u.disabled === true).length;
+  // Use fast count data if available, otherwise fall back to allUsers
+  const totalCount = countData?.total ?? allUsers.length;
+  const activeCount = countData?.active ?? allUsers.filter((u: any) => u.disabled !== "true" && u.disabled !== true).length;
+  const disabledCount = countData?.disabled ?? allUsers.filter((u: any) => u.disabled === "true" || u.disabled === true).length;
+
+  const isSearching = debouncedSearch.trim().length >= 2 && loadingSearch;
 
   const handleAction = (userAction: string, user: any) => {
     const id = user[".id"] || user.id;
