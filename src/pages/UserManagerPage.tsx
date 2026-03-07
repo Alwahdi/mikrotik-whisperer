@@ -416,7 +416,7 @@ export default function UserManagerPage() {
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "profiles" | "sessions")} dir="rtl">
         <TabsList className="bg-muted mb-3 w-full justify-start">
           <TabsTrigger value="users" className="text-xs">
-            المستخدمين {!loadingUsers && `(${allUsers.length})`}
+            المستخدمين {!loadingCount && !loadingUsers && `(${totalCount})`}
           </TabsTrigger>
           <TabsTrigger value="profiles" className="text-xs">
             الباقات {!loadingProfiles && `(${Array.isArray(profiles) ? profiles.length : 0})`}
