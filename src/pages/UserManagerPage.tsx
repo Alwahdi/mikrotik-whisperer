@@ -405,11 +405,12 @@ export default function UserManagerPage() {
       <div className="relative mb-3">
         <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
-          placeholder="بحث..."
+          placeholder="بحث (حرفين أو أكثر للبحث من الراوتر)..."
           value={search}
           onChange={(e) => handleSearch(e.target.value)}
           className="pr-10 text-sm h-9"
         />
+        {isSearching && <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-primary" />}
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "profiles" | "sessions")} dir="rtl">
