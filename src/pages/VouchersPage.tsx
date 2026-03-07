@@ -573,33 +573,35 @@ export default function VouchersPage() {
       return;
     }
 
+    const delJobId = `del-${Date.now()}`;
+    const delStartedAt = performance.now();
+    addJob({
+      id: delJobId, label: `حذف ${successCards.length} كرت`, type: "delete",
+      status: "running", total: successCards.length, completed: 0, succeeded: 0, failed: 0, rate: 0, startedAt: delStartedAt,
+    });
+
     const nameKey = batch.type === "hotspot" ? "name" : "username";
     const listCmd = batch.type === "hotspot" ? "/ip/hotspot/user/print" : "/user-manager/user/print";
     const removeCmd = batch.type === "hotspot" ? "/ip/hotspot/user/remove" : "/user-manager/user/remove";
 
     try {
-      // Step 1: Fetch ALL users from router in one request
       setDeleteProgress(5);
-      const listResult = await rawBatch.mutateAsync({
-        commands: [{ command: listCmd, args: [] }],
-      });
-
+      const listResult = await rawBatch.mutateAsync({ commands: [{ command: listCmd, args: [] }] });
       const allUsers = listResult?.results?.[0];
       if (!Array.isArray(allUsers)) {
         toast.error("فشل جلب قائمة المستخدمين من الراوتر");
+        updateJob(delJobId, { status: "error", finishedAt: Date.now() });
         setDeletingFromRouter(null);
         setDeleteProgress(0);
         return;
       }
 
-      // Step 2: Build username -> .id map
       const userMap = new Map<string, string>();
       for (const u of allUsers) {
         const uname = u[nameKey] || u["name"] || u["username"];
         if (uname && u[".id"]) userMap.set(uname, u[".id"]);
       }
 
-      // Step 3: Find IDs to delete
       const idsToDelete: string[] = [];
       let notFound = 0;
       for (const card of successCards) {
@@ -612,13 +614,13 @@ export default function VouchersPage() {
 
       if (idsToDelete.length === 0) {
         toast.warning(`لم يتم العثور على أي كرت في الراوتر (${notFound} غير موجود)`);
+        updateJob(delJobId, { status: "success", completed: successCards.length, succeeded: 0, finishedAt: Date.now() });
         setDeletingFromRouter(null);
         setDeleteProgress(0);
         handleDeleteBatch(batchId);
         return;
       }
 
-      // Step 4: Delete in chunks via batch
       const CHUNK_SIZE = 25;
       let deleted = 0;
       let failed = 0;
@@ -626,7 +628,6 @@ export default function VouchersPage() {
       for (let i = 0; i < idsToDelete.length; i += CHUNK_SIZE) {
         const chunk = idsToDelete.slice(i, i + CHUNK_SIZE);
         const commands = chunk.map(id => ({ command: removeCmd, args: [`=.id=${id}`] }));
-
         try {
           const result = await rawBatch.mutateAsync({ commands });
           const errors = result?.errors || [];
@@ -637,10 +638,13 @@ export default function VouchersPage() {
         } catch {
           failed += chunk.length;
         }
-
+        const done = deleted + failed;
+        const elapsed = Math.max(1, (performance.now() - delStartedAt) / 1000);
+        updateJob(delJobId, { completed: done, succeeded: deleted, failed, rate: Math.round(done / elapsed) });
         setDeleteProgress(20 + Math.round(((i + chunk.length) / idsToDelete.length) * 80));
       }
 
+      updateJob(delJobId, { status: failed === 0 ? "success" : "error", finishedAt: Date.now() });
       setDeletingFromRouter(null);
       setDeleteProgress(0);
       handleDeleteBatch(batchId);
@@ -648,11 +652,11 @@ export default function VouchersPage() {
       const parts = [`تم حذف ${deleted} كرت`];
       if (notFound > 0) parts.push(`${notFound} غير موجود`);
       if (failed > 0) parts.push(`${failed} فشل`);
-      
       if (failed === 0) toast.success(parts.join(" • "));
       else toast.warning(parts.join(" • "));
     } catch (err: any) {
       toast.error("فشل الحذف: " + (err.message || "خطأ غير متوقع"));
+      updateJob(delJobId, { status: "error", finishedAt: Date.now() });
       setDeletingFromRouter(null);
       setDeleteProgress(0);
     }
