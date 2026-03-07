@@ -6,6 +6,8 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+const restVariantPreference = new Map<string, number>();
+
 // ─── MikroTik API Protocol Client (v6/v7 TCP) ───────────────────────────
 class MikroTikApiClient {
   private conn!: Deno.Conn;
