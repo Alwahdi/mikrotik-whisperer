@@ -212,7 +212,7 @@ export function useUserManagerUsers(options?: { enabled?: boolean }) {
       args: ["=.proplist=.id,username,name,group,actual-profile,disabled,comment,last-seen"],
     }),
     enabled: (options?.enabled ?? true) && useEnabled(),
-    retry: 2,
+    retry: 1,
     refetchInterval: false,
     staleTime: 180000,
     gcTime: 10 * 60 * 1000,
