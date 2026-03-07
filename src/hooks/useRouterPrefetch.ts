@@ -19,33 +19,12 @@ const CRITICAL_STEPS: PrefetchStep[] = [
   { label: "معلومات النظام", key: "system", command: "/system/resource/print", timeoutMs: 9000 },
 ];
 
-// بقية البيانات تُحمّل بالخلفية بدون حجب الانتقال
+// بقية البيانات الخفيفة تُحمّل بالخلفية بدون حجب الانتقال
 const BACKGROUND_STEPS: PrefetchStep[] = [
   { label: "معلومات الجهاز", key: "routerboard", command: "/system/routerboard/print", timeoutMs: 12000 },
   { label: "الواجهات", key: "interfaces", command: "/interface/print", timeoutMs: 15000 },
-  { label: "باقات يوزر مانجر", key: "um-profiles", command: "/user-manager/profile/print", timeoutMs: 15000 },
-  { label: "بروفايلات الهوتسبوت", key: "hotspot-profiles", command: "/ip/hotspot/user/profile/print", timeoutMs: 15000 },
-  {
-    label: "مستخدمي يوزر مانجر",
-    key: "um-users",
-    command: "/user-manager/user/print",
-    proplist: ".id,username,name,group,actual-profile,disabled,last-seen",
-    timeoutMs: 28000,
-  },
-  {
-    label: "جلسات يوزر مانجر",
-    key: "um-sessions",
-    command: "/user-manager/session/print",
-    proplist: ".id,user,from-time,till-time,active",
-    timeoutMs: 25000,
-  },
-  {
-    label: "مستخدمي الهوتسبوت",
-    key: "hotspot-users",
-    command: "/ip/hotspot/user/print",
-    proplist: ".id,name,profile,disabled",
-    timeoutMs: 28000,
-  },
+  { label: "باقات يوزر مانجر", key: "um-profiles", command: "/user-manager/profile/print", timeoutMs: 12000 },
+  { label: "بروفايلات الهوتسبوت", key: "hotspot-profiles", command: "/ip/hotspot/user/profile/print", timeoutMs: 12000 },
 ];
 
 function getCacheKey(routerKey: string, step: PrefetchStep): string[] {
