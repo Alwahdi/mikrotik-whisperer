@@ -919,21 +919,54 @@ async function handleBatchRest(
   user: string, pass: string,
   commands: { command: string; args?: string[] }[]
 ): Promise<{ results: any[]; errors: string[] }> {
-  const results: any[] = [];
-  const errors: string[] = [];
+  const results: any[] = new Array(commands.length).fill(null);
+  const errors: string[] = new Array(commands.length).fill("");
 
-  for (const cmd of commands) {
+  const executeWithTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     try {
-      const restBody = argsToRestBody(cmd.args);
-      const method = getRestMethod(cmd.command);
-      const r = await handleRestWithCompat(host, port, protocol, user, pass, cmd.command, method, restBody);
-      results.push(r);
-      errors.push("");
-    } catch (e: any) {
-      errors.push(e.message);
-      results.push(null);
+      return await Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error(`Command timeout: ${label}`)), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
     }
-  }
+  };
+
+  const timeoutFor = (command: string) => (command.endsWith("/print") ? 22000 : 12000);
+
+  const printOnly = commands.every((cmd) => cmd.command.endsWith("/print"));
+  const CONCURRENCY = printOnly ? 3 : 8;
+
+  let nextIndex = 0;
+
+  const worker = async () => {
+    while (true) {
+      const current = nextIndex;
+      nextIndex += 1;
+      if (current >= commands.length) break;
+
+      const cmd = commands[current];
+      try {
+        const restBody = argsToRestBody(cmd.args);
+        const method = getRestMethod(cmd.command);
+        const request = handleRestWithCompat(host, port, protocol, user, pass, cmd.command, method, restBody);
+        const response = await executeWithTimeout(request, timeoutFor(cmd.command), cmd.command);
+        results[current] = response;
+        errors[current] = "";
+      } catch (e: any) {
+        results[current] = null;
+        errors[current] = e?.message || "Command failed";
+      }
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, commands.length) }, () => worker()),
+  );
 
   return { results, errors };
 }

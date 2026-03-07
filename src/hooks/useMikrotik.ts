@@ -13,7 +13,10 @@ async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>
   const config = getMikrotikConfig();
   if (!config) throw new Error("لم يتم إعداد بيانات الاتصال بالمايكروتيك");
 
-  const { data, error } = await supabase.functions.invoke("mikrotik-api", {
+  const timeoutMs = extraBody?.timeoutMs ?? (endpoint.endsWith("/print") ? 30000 : 15000);
+  const { timeoutMs: _timeoutMs, ...safeExtraBody } = extraBody || {};
+
+  const request = supabase.functions.invoke("mikrotik-api", {
     body: {
       endpoint,
       host: config.host,
@@ -22,9 +25,18 @@ async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>
       port: config.port,
       protocol: config.protocol,
       mode: config.mode,
-      ...extraBody,
+      ...safeExtraBody,
     },
   });
+
+  const response = await Promise.race([
+    request,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`انتهت مهلة الطلب: ${endpoint}`)), timeoutMs);
+    }),
+  ]) as any;
+
+  const { data, error } = response;
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
   return data;
@@ -34,7 +46,10 @@ async function callMikrotikAction(action: string, extraBody?: Record<string, any
   const config = getMikrotikConfig();
   if (!config) throw new Error("لم يتم إعداد بيانات الاتصال بالمايكروتيك");
 
-  const { data, error } = await supabase.functions.invoke("mikrotik-api", {
+  const timeoutMs = extraBody?.timeoutMs ?? (action === "batch" ? 70000 : 20000);
+  const { timeoutMs: _timeoutMs, ...safeExtraBody } = extraBody || {};
+
+  const request = supabase.functions.invoke("mikrotik-api", {
     body: {
       action,
       host: config.host,
@@ -43,9 +58,18 @@ async function callMikrotikAction(action: string, extraBody?: Record<string, any
       port: config.port,
       protocol: config.protocol,
       mode: config.mode,
-      ...extraBody,
+      ...safeExtraBody,
     },
   });
+
+  const response = await Promise.race([
+    request,
+    new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`انتهت مهلة العملية: ${action}`)), timeoutMs);
+    }),
+  ]) as any;
+
+  const { data, error } = response;
   if (error) throw error;
   if (data?.error) throw new Error(data.error);
   return data;
@@ -188,7 +212,7 @@ export function useUserManagerUsers(options?: { enabled?: boolean }) {
       args: ["=.proplist=.id,username,name,group,actual-profile,disabled,comment,last-seen"],
     }),
     enabled: (options?.enabled ?? true) && useEnabled(),
-    retry: 2,
+    retry: 1,
     refetchInterval: false,
     staleTime: 180000,
     gcTime: 10 * 60 * 1000,
@@ -202,7 +226,7 @@ export function useUserManagerProfiles(options?: { enabled?: boolean }) {
       args: ["=.proplist=.id,name,name-for-users,validity,price,rate-limit,shared-users,override-shared-users,transfer-limit,uptime-limit"],
     }),
     enabled: (options?.enabled ?? true) && useEnabled(),
-    retry: 2,
+    retry: 1,
     staleTime: 60000,
     gcTime: 10 * 60 * 1000,
   });
@@ -215,7 +239,7 @@ export function useUserManagerSessions(options?: { enabled?: boolean }) {
       args: ["=.proplist=.id,user,customer,from-time,till-time,download,upload,active,calling-station-id,user-ip"],
     }),
     enabled: (options?.enabled ?? true) && useEnabled(),
-    retry: 2,
+    retry: 1,
     refetchInterval: false,
     staleTime: 45000,
     gcTime: 10 * 60 * 1000,

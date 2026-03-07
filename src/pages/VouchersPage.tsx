@@ -270,10 +270,12 @@ export default function VouchersPage() {
   const pushToRouter = async () => {
     if (cards.length === 0 || pushingRef.current) return;
 
+    const isRestMode = config?.mode === "rest";
+
     setPushing(true);
     pushingRef.current = true;
     setPushProgress(1);
-    setPushMessage("تم بدء الإضافة بالخلفية...");
+    setPushMessage(isRestMode ? "تم بدء الإضافة بالخلفية (REST مُسرّع)..." : "تم بدء الإضافة بالخلفية...");
 
     toast.info(`بدء إضافة ${cards.length} كرت بالخلفية`);
 
@@ -288,13 +290,14 @@ export default function VouchersPage() {
       return { command: addEndpoint, args };
     });
 
-    const isLargeBatch = cards.length >= 800;
-    const CHUNK_SIZE = type === "usermanager"
-      ? (isLargeBatch ? 30 : 50)
-      : (isLargeBatch ? 40 : 70);
-    const CONCURRENCY = type === "usermanager"
-      ? (isLargeBatch ? 3 : 4)
-      : (isLargeBatch ? 4 : 5);
+    const isLargeBatch = cards.length >= 600;
+    const CHUNK_SIZE = isRestMode
+      ? (type === "usermanager" ? (isLargeBatch ? 8 : 12) : (isLargeBatch ? 12 : 18))
+      : (type === "usermanager" ? (isLargeBatch ? 35 : 55) : (isLargeBatch ? 45 : 75));
+
+    const CONCURRENCY = isRestMode
+      ? (type === "usermanager" ? 2 : 3)
+      : (type === "usermanager" ? (isLargeBatch ? 4 : 5) : (isLargeBatch ? 5 : 6));
 
     const chunks: { start: number; commands: { command: string; args?: string[] }[] }[] = [];
     for (let i = 0; i < allCommands.length; i += CHUNK_SIZE) {
@@ -312,10 +315,10 @@ export default function VouchersPage() {
     progressPulse = setInterval(() => {
       if (!pushingRef.current) return;
       setPushProgress((prev) => {
-        if (completedCount === 0 && prev < 12) return prev + 1;
+        if (completedCount === 0 && prev < 18) return prev + 1;
         return prev;
       });
-    }, 1200);
+    }, 500);
 
     const processChunk = async (chunk: { start: number; commands: { command: string; args?: string[] }[] }) => {
       try {
@@ -342,8 +345,10 @@ export default function VouchersPage() {
 
       completedCount += chunk.commands.length;
       const pct = Math.max(1, Math.round((completedCount / cards.length) * 100));
+      const elapsedNow = Math.max(1, (performance.now() - startedAt) / 1000);
+      const liveRate = Math.round(completedCount / elapsedNow);
       setPushProgress(pct);
-      setPushMessage(`جاري المعالجة بالخلفية: ${completedCount}/${cards.length}`);
+      setPushMessage(`جاري المعالجة بالخلفية: ${completedCount}/${cards.length} • ${liveRate} كرت/ث`);
 
       if (completedCount % CHUNK_SIZE === 0 || completedCount >= cards.length) {
         setCards([...updatedCards]);
