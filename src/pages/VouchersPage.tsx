@@ -271,149 +271,249 @@ export default function VouchersPage() {
     if (cards.length === 0 || pushingRef.current) return;
 
     const isRestMode = config?.mode === "rest";
+    const addEndpoint = type === "hotspot" ? "/ip/hotspot/user/add" : "/user-manager/user/add";
 
     setPushing(true);
     pushingRef.current = true;
     setPushProgress(1);
-    setPushMessage(isRestMode ? "تم بدء الإضافة بالخلفية (REST مُسرّع)..." : "تم بدء الإضافة بالخلفية...");
-
+    setPushMessage("تهيئة إضافة الدفعة...");
     toast.info(`بدء إضافة ${cards.length} كرت بالخلفية`);
 
-    const addEndpoint = type === "hotspot"
-      ? "/ip/hotspot/user/add"
-      : "/user-manager/user/add";
+    const updatedCards: VoucherCard[] = cards.map((c) => ({ ...c, status: "pending", error: undefined }));
+    const resolved = new Set<number>();
+    let totalSuccess = 0;
+    let totalFailed = 0;
+    const startedAt = performance.now();
+    let progressPulse: ReturnType<typeof setInterval> | null = null;
 
-    const allCommands = cards.map((card) => {
+    const isDuplicateError = (message: string) => {
+      const m = message.toLowerCase();
+      return m.includes("already") || m.includes("exists") || m.includes("failure: already") || m.includes("same name");
+    };
+
+    const isRetryableError = (message: string) => {
+      const m = message.toLowerCase();
+      if (!m) return true;
+      if (isDuplicateError(m)) return false;
+      if (m.includes("unknown parameter") || m.includes("input does not match") || m.includes("invalid")) return false;
+      if (m.includes("not enough permissions") || m.includes("authentication") || m.includes("unauthorized")) return false;
+      return (
+        m.includes("timeout") ||
+        m.includes("session closed") ||
+        m.includes("connection") ||
+        m.includes("reset") ||
+        m.includes("tempor") ||
+        m.includes("busy") ||
+        m.includes("too many") ||
+        m.includes("bad gateway") ||
+        m.includes("internal")
+      );
+    };
+
+    const commandForIndex = (idx: number) => {
+      const card = cards[idx];
       const args: string[] = type === "hotspot"
         ? [`=name=${card.username}`, `=password=${card.password}`, `=profile=${card.profile}`]
         : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`];
       return { command: addEndpoint, args };
-    });
+    };
 
-    const isLargeBatch = cards.length >= 600;
-    const CHUNK_SIZE = isRestMode
-      ? (type === "usermanager" ? (isLargeBatch ? 8 : 12) : (isLargeBatch ? 12 : 18))
-      : (type === "usermanager" ? (isLargeBatch ? 35 : 55) : (isLargeBatch ? 45 : 75));
+    const buildChunks = (indexes: number[], chunkSize: number): number[][] => {
+      const out: number[][] = [];
+      for (let i = 0; i < indexes.length; i += chunkSize) out.push(indexes.slice(i, i + chunkSize));
+      return out;
+    };
 
-    const CONCURRENCY = isRestMode
-      ? (type === "usermanager" ? 2 : 3)
-      : (type === "usermanager" ? (isLargeBatch ? 4 : 5) : (isLargeBatch ? 5 : 6));
+    const markSuccess = (idx: number) => {
+      if (!resolved.has(idx)) {
+        resolved.add(idx);
+        totalSuccess += 1;
+      }
+      updatedCards[idx] = { ...updatedCards[idx], status: "success", error: undefined };
+    };
 
-    const chunks: { start: number; commands: { command: string; args?: string[] }[] }[] = [];
-    for (let i = 0; i < allCommands.length; i += CHUNK_SIZE) {
-      chunks.push({ start: i, commands: allCommands.slice(i, i + CHUNK_SIZE) });
-    }
+    const markFinalError = (idx: number, message: string) => {
+      if (!resolved.has(idx)) {
+        resolved.add(idx);
+        totalFailed += 1;
+      }
+      updatedCards[idx] = { ...updatedCards[idx], status: "error", error: message || "فشل التنفيذ" };
+    };
 
-    const updatedCards: VoucherCard[] = cards.map((c) => ({ ...c, status: "pending", error: undefined }));
-    let totalSuccess = 0;
-    let totalFailed = 0;
-    let completedCount = 0;
-    let nextChunkIndex = 0;
-    const startedAt = performance.now();
-    let progressPulse: ReturnType<typeof setInterval> | null = null;
+    const markPending = (idx: number, message?: string) => {
+      if (resolved.has(idx)) return;
+      updatedCards[idx] = { ...updatedCards[idx], status: "pending", error: message };
+    };
+
+    const renderLiveProgress = (label: string) => {
+      const done = resolved.size;
+      const pct = Math.max(1, Math.min(99, Math.round((done / cards.length) * 100)));
+      const elapsedNow = Math.max(1, (performance.now() - startedAt) / 1000);
+      const liveRate = Math.round(done / elapsedNow);
+      setPushProgress(pct);
+      setPushMessage(`${label}: ${done}/${cards.length} • ${liveRate} كرت/ث`);
+    };
+
+    const runPass = async (
+      indexes: number[],
+      chunkSize: number,
+      concurrency: number,
+      label: string,
+      finalPass: boolean,
+    ): Promise<number[]> => {
+      if (indexes.length === 0) return [];
+
+      const chunks = buildChunks(indexes, Math.max(1, chunkSize));
+      let nextChunkIndex = 0;
+      const retrySet = new Set<number>();
+
+      const processChunk = async (chunk: number[]) => {
+        try {
+          const commands = chunk.map(commandForIndex);
+          const result = await rawBatch.mutateAsync({ commands });
+          const errors = Array.isArray(result?.errors) ? result.errors : [];
+
+          for (let j = 0; j < chunk.length; j++) {
+            const cardIdx = chunk[j];
+            const message = typeof errors[j] === "string" ? errors[j].trim() : "";
+
+            if (!message || isDuplicateError(message)) {
+              markSuccess(cardIdx);
+              continue;
+            }
+
+            if (!finalPass && isRetryableError(message)) {
+              retrySet.add(cardIdx);
+              markPending(cardIdx, message);
+            } else {
+              markFinalError(cardIdx, message);
+            }
+          }
+        } catch (err: any) {
+          const message = err?.message || "فشل التنفيذ";
+          for (const cardIdx of chunk) {
+            if (!finalPass && isRetryableError(message)) {
+              retrySet.add(cardIdx);
+              markPending(cardIdx, message);
+            } else {
+              markFinalError(cardIdx, message);
+            }
+          }
+        }
+
+        setCards([...updatedCards]);
+        renderLiveProgress(label);
+      };
+
+      const worker = async () => {
+        while (pushingRef.current) {
+          const current = nextChunkIndex;
+          nextChunkIndex += 1;
+          if (current >= chunks.length) break;
+          await processChunk(chunks[current]);
+        }
+      };
+
+      await Promise.all(Array.from({ length: Math.min(Math.max(1, concurrency), chunks.length) }, () => worker()));
+      return Array.from(retrySet);
+    };
 
     progressPulse = setInterval(() => {
       if (!pushingRef.current) return;
       setPushProgress((prev) => {
-        if (completedCount === 0 && prev < 18) return prev + 1;
+        if (resolved.size === 0 && prev < 15) return prev + 1;
         return prev;
       });
-    }, 500);
+    }, 450);
 
-    const processChunk = async (chunk: { start: number; commands: { command: string; args?: string[] }[] }) => {
-      try {
-        const result = await rawBatch.mutateAsync({ commands: chunk.commands });
-        const errors = result?.errors || [];
+    try {
+      const isLargeBatch = cards.length >= 600;
+      const firstChunk = isRestMode
+        ? (type === "usermanager" ? (isLargeBatch ? 6 : 8) : (isLargeBatch ? 8 : 12))
+        : (type === "usermanager" ? (isLargeBatch ? 30 : 45) : (isLargeBatch ? 45 : 70));
+      const firstConcurrency = isRestMode
+        ? (type === "usermanager" ? 1 : 2)
+        : (type === "usermanager" ? (isLargeBatch ? 3 : 4) : (isLargeBatch ? 4 : 5));
 
-        for (let j = 0; j < chunk.commands.length; j++) {
-          const cardIdx = chunk.start + j;
-          if (errors[j] && errors[j] !== "") {
-            updatedCards[cardIdx] = { ...updatedCards[cardIdx], status: "error", error: errors[j] };
-            totalFailed++;
-          } else {
-            updatedCards[cardIdx] = { ...updatedCards[cardIdx], status: "success" };
-            totalSuccess++;
-          }
+      let pending = await runPass(
+        cards.map((_, idx) => idx),
+        firstChunk,
+        firstConcurrency,
+        "المحاولة 1",
+        false,
+      );
+
+      if (pending.length > 0) {
+        pending = await runPass(
+          pending,
+          Math.max(1, Math.floor(firstChunk / 2)),
+          Math.max(1, firstConcurrency - 1),
+          "المحاولة 2",
+          false,
+        );
+      }
+
+      if (pending.length > 0) {
+        await runPass(pending, 1, 1, "المحاولة النهائية", true);
+      }
+
+      for (let i = 0; i < updatedCards.length; i++) {
+        if (!resolved.has(i)) {
+          markFinalError(i, updatedCards[i].error || "فشل التنفيذ");
         }
-      } catch (err: any) {
-        for (let j = 0; j < chunk.commands.length; j++) {
-          const cardIdx = chunk.start + j;
-          updatedCards[cardIdx] = { ...updatedCards[cardIdx], status: "error", error: err.message || "فشل التنفيذ" };
-          totalFailed++;
+      }
+
+      setCards([...updatedCards]);
+      setPushProgress(100);
+      setPushMessage("اكتملت العملية");
+
+      setBatches(prev => {
+        const updated = [...prev];
+        const latest = updated.find(b => b.cards[0]?.username === cards[0]?.username);
+        if (latest) {
+          latest.pushed = true;
+          latest.pushResults = { success: totalSuccess, failed: totalFailed };
+          latest.cards = updatedCards;
         }
+        return updated;
+      });
+
+      if (totalSuccess > 0 && user?.id) {
+        try {
+          await supabase.from("sales").insert({
+            user_id: user.id,
+            batch_id: crypto.randomUUID(),
+            profile_name: cards[0]?.profile || "",
+            card_count: cards.length,
+            success_count: totalSuccess,
+            failed_count: totalFailed,
+            unit_price: unitPrice,
+            total_amount: totalSuccess * unitPrice,
+            voucher_type: type,
+            router_host: currentRouterHost,
+            notes: `دفعة ${cards.length} كرت`,
+            sales_point: selectedSalesPoint,
+          } as any);
+        } catch {}
       }
 
-      completedCount += chunk.commands.length;
-      const pct = Math.max(1, Math.round((completedCount / cards.length) * 100));
-      const elapsedNow = Math.max(1, (performance.now() - startedAt) / 1000);
-      const liveRate = Math.round(completedCount / elapsedNow);
-      setPushProgress(pct);
-      setPushMessage(`جاري المعالجة بالخلفية: ${completedCount}/${cards.length} • ${liveRate} كرت/ث`);
+      const elapsedSec = Math.max(1, (performance.now() - startedAt) / 1000);
+      const rate = Math.round(resolved.size / elapsedSec);
 
-      if (completedCount % CHUNK_SIZE === 0 || completedCount >= cards.length) {
-        setCards([...updatedCards]);
+      if (totalFailed === 0) {
+        toast.success(`تمت إضافة ${totalSuccess} كرت (${rate} كرت/ث)`);
+      } else {
+        toast.warning(`نجح ${totalSuccess} — فشل ${totalFailed} (${rate} كرت/ث)`);
       }
-    };
-
-    const worker = async () => {
-      while (pushingRef.current) {
-        const currentIndex = nextChunkIndex;
-        if (currentIndex >= chunks.length) break;
-        nextChunkIndex += 1;
-        await processChunk(chunks[currentIndex]);
+    } catch (err: any) {
+      toast.error(err?.message || "فشلت عملية الإضافة");
+    } finally {
+      if (progressPulse) {
+        clearInterval(progressPulse);
+        progressPulse = null;
       }
-    };
-
-    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, chunks.length) }, () => worker()));
-
-    if (progressPulse) {
-      clearInterval(progressPulse);
-      progressPulse = null;
-    }
-
-    setCards([...updatedCards]);
-    setPushProgress(100);
-    setPushMessage("اكتملت العملية");
-    pushingRef.current = false;
-    setPushing(false);
-
-    setBatches(prev => {
-      const updated = [...prev];
-      const latest = updated.find(b => b.cards[0]?.username === cards[0]?.username);
-      if (latest) {
-        latest.pushed = true;
-        latest.pushResults = { success: totalSuccess, failed: totalFailed };
-        latest.cards = updatedCards;
-      }
-      return updated;
-    });
-
-    if (totalSuccess > 0 && user?.id) {
-      try {
-        await supabase.from("sales").insert({
-          user_id: user.id,
-          batch_id: crypto.randomUUID(),
-          profile_name: cards[0]?.profile || "",
-          card_count: cards.length,
-          success_count: totalSuccess,
-          failed_count: totalFailed,
-          unit_price: unitPrice,
-          total_amount: totalSuccess * unitPrice,
-          voucher_type: type,
-          router_host: currentRouterHost,
-          notes: `دفعة ${cards.length} كرت`,
-          sales_point: selectedSalesPoint,
-        } as any);
-      } catch {}
-    }
-
-    const elapsedSec = Math.max(1, (performance.now() - startedAt) / 1000);
-    const rate = Math.round(cards.length / elapsedSec);
-
-    if (totalFailed === 0) {
-      toast.success(`تمت إضافة ${totalSuccess} كرت (${rate} كرت/ث)`);
-    } else {
-      toast.warning(`نجح ${totalSuccess} — فشل ${totalFailed} (${rate} كرت/ث)`);
+      pushingRef.current = false;
+      setPushing(false);
     }
   };
 

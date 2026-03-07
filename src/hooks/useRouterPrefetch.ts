@@ -80,7 +80,7 @@ async function warmDataInBackground(
   routerKey: string,
   queryClient: ReturnType<typeof useQueryClient>,
 ) {
-  const CONCURRENCY = 2;
+  const CONCURRENCY = 1;
   let index = 0;
 
   const worker = async () => {
