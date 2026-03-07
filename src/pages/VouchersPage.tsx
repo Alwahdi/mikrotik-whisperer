@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { addJob, updateJob, type BackgroundJob } from "@/stores/backgroundJobStore";
 
 // ─── Types ────────────────────────────────────
 interface VoucherCard {
