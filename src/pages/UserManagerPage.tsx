@@ -56,6 +56,7 @@ export default function UserManagerPage() {
   const profileAction = useUserManagerProfileAction();
 
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
   const [deleteProfileTarget, setDeleteProfileTarget] = useState<any>(null);
@@ -66,6 +67,19 @@ export default function UserManagerPage() {
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [userFilter, setUserFilter] = useState<"all" | "expired">("all");
+
+  // Server-side search (for large datasets)
+  const { data: searchResults, isLoading: loadingSearch } = useUserManagerSearchUsers(debouncedSearch, { enabled: activeTab === "users" });
+
+  // Debounce search input
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSearch = (val: string) => {
+    setSearch(val);
+    setUsersPage(1);
+    setSessionsPage(1);
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => setDebouncedSearch(val), 400);
+  };
   
 
   const [profileOpen, setProfileOpen] = useState(false);
