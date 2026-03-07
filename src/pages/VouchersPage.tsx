@@ -288,6 +288,19 @@ export default function VouchersPage() {
     const startedAt = performance.now();
     let progressPulse: ReturnType<typeof setInterval> | null = null;
 
+    addJob({
+      id: jobId,
+      label: `إضافة ${cards.length} كرت (${cards[0]?.profile || ""})`,
+      type: "add",
+      status: "running",
+      total: cards.length,
+      completed: 0,
+      succeeded: 0,
+      failed: 0,
+      rate: 0,
+      startedAt,
+    });
+
     const isDuplicateError = (message: string) => {
       const m = message.toLowerCase();
       return m.includes("already") || m.includes("exists") || m.includes("failure: already") || m.includes("same name");
