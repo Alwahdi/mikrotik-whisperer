@@ -91,16 +91,16 @@ export default function LoginScreen() {
             {/* Toggle */}
             <View style={styles.toggle}>
               {[
-                { key: true, label: "تسجيل الدخول" },
-                { key: false, label: "حساب جديد" },
+                { key: "login" as const, label: "تسجيل الدخول" },
+                { key: "register" as const, label: "حساب جديد" },
               ].map(({ key, label }) => (
                 <TouchableOpacity
-                  key={String(key)}
-                  style={[styles.toggleBtn, isLogin === key && styles.toggleBtnActive]}
-                  onPress={() => switchMode(key)}
+                  key={key}
+                  style={[styles.toggleBtn, (isLogin ? "login" : "register") === key && styles.toggleBtnActive]}
+                  onPress={() => switchMode(key === "login")}
                   activeOpacity={0.75}
                 >
-                  <Text style={[styles.toggleText, isLogin === key && styles.toggleTextActive]}>
+                  <Text style={[styles.toggleText, (isLogin ? "login" : "register") === key && styles.toggleTextActive]}>
                     {label}
                   </Text>
                 </TouchableOpacity>

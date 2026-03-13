@@ -285,7 +285,7 @@ export default function RoutersScreen() {
                 <AnimatedPressable
                   style={[styles.connectBtn, connecting === item.id ? { opacity: 0.7 } : undefined] as any}
                   onPress={() => connectToRouter(item)}
-                  haptic={false}
+                  haptic
                 >
                   {connecting === item.id ? (
                     <ActivityIndicator size="small" color="#fff" />

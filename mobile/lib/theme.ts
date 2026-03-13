@@ -1,4 +1,4 @@
-/** Shared design tokens — Expo SDK 52, New Architecture */
+/** Shared design tokens — Expo SDK 55, New Architecture */
 export const Colors = {
   // Brand
   primary: "#7c3aed",

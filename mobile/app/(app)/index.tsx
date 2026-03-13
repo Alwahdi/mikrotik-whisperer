@@ -59,7 +59,7 @@ export default function DashboardScreen() {
   const todayRevenue = useMemo(() => (todaySales || []).reduce((s: number, r: any) => s + Number(r.total_amount || 0), 0), [todaySales]);
   const todayCards = useMemo(() => (todaySales || []).reduce((s: number, r: any) => s + (r.success_count || 0), 0), [todaySales]);
 
-  const cpuLoad = Number(sysRes?.["cpu-load"] ?? 0);
+  const cpuLoad = parseInt(String(sysRes?.["cpu-load"] ?? "0"), 10) || 0;
   const totalMem = Number(sysRes?.["total-memory"] || 0);
   const freeMem = Number(sysRes?.["free-memory"] || 0);
   const memUsed = totalMem > 0 ? Math.round(((totalMem - freeMem) / totalMem) * 100) : 0;

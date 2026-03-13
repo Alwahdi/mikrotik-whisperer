@@ -13,6 +13,8 @@ import { formatDateTime } from "@/lib/utils";
 import { ListRowSkeleton } from "@/components/SkeletonLoader";
 import EmptyState from "@/components/EmptyState";
 import StatCard from "@/components/StatCard";
+
+const MS_PER_DAY = 86_400_000;
 import { lightTap, selectionChanged } from "@/lib/haptics";
 
 type DateFilter = "today" | "week" | "month" | "all";
@@ -46,8 +48,8 @@ export default function SalesScreen() {
     const now = new Date();
     let filtered = [...(sales as any[])];
     if (dateFilter === "today") filtered = filtered.filter((s) => new Date(s.created_at).toDateString() === now.toDateString());
-    else if (dateFilter === "week") { const w = new Date(now.getTime() - 7 * 86400000); filtered = filtered.filter((s) => new Date(s.created_at) >= w); }
-    else if (dateFilter === "month") { const m = new Date(now.getTime() - 30 * 86400000); filtered = filtered.filter((s) => new Date(s.created_at) >= m); }
+    else if (dateFilter === "week") { const w = new Date(now.getTime() - 7 * MS_PER_DAY); filtered = filtered.filter((s) => new Date(s.created_at) >= w); }
+    else if (dateFilter === "month") { const m = new Date(now.getTime() - 30 * MS_PER_DAY); filtered = filtered.filter((s) => new Date(s.created_at) >= m); }
     return filtered;
   }, [sales, dateFilter]);
 

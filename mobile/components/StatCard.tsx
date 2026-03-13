@@ -50,6 +50,8 @@ const variantStyles: Record<
   },
 };
 
+const SPRING_CFG = { damping: 20, stiffness: 200 } as const;
+
 export default function StatCard({
   title,
   value,
@@ -63,8 +65,8 @@ export default function StatCard({
   const translateY = useSharedValue(12);
 
   useEffect(() => {
-    opacity.value = withDelay(delay, withSpring(1, { damping: 20, stiffness: 200 }));
-    translateY.value = withDelay(delay, withSpring(0, { damping: 20, stiffness: 200 }));
+    opacity.value = withDelay(delay, withSpring(1, SPRING_CFG));
+    translateY.value = withDelay(delay, withSpring(0, SPRING_CFG));
   }, []);
 
   const animStyle = useAnimatedStyle(() => ({

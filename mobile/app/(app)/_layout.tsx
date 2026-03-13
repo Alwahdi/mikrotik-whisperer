@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback } from "react";
 import { Platform, View, Text, StyleSheet } from "react-native";
 import { Tabs, Redirect } from "expo-router";
 import { BlurView } from "expo-blur";
@@ -60,12 +60,14 @@ export default function AppLayout() {
     return 0;
   };
 
+  const onTabPress = useCallback(() => { selectionChanged(); }, []);
+
   if (loading) return <LoadingView />;
   if (!user) return <Redirect href="/(auth)/login" />;
 
   return (
     <Tabs
-      screenListeners={{ tabPress: () => selectionChanged() }}
+      screenListeners={{ tabPress: onTabPress }}
       screenOptions={{
         headerShown: false,
         tabBarStyle: {

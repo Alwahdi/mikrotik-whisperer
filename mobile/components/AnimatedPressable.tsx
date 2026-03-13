@@ -65,7 +65,7 @@ export default function AnimatedPressable({
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       onPress={handlePress}
-      style={[animStyle, style as ViewStyle]}
+      style={[animStyle, ...(Array.isArray(style) ? style : style ? [style] : [])] as any}
       {...props}
     >
       {children}
