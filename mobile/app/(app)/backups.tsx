@@ -4,6 +4,7 @@ import {
   Alert, RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
@@ -11,10 +12,13 @@ import { getMikrotikConfigSync } from "@/lib/mikrotikConfig";
 import { useHotspotAllUsers, useUserManagerUsers } from "@/hooks/useMikrotik";
 import { Colors, Radius, Spacing } from "@/lib/theme";
 import { formatDateTime } from "@/lib/utils";
-import LoadingView from "@/components/LoadingView";
+import { ListRowSkeleton } from "@/components/SkeletonLoader";
 import EmptyState from "@/components/EmptyState";
 import Button from "@/components/Button";
 import Badge from "@/components/Badge";
+import LoadingView from "@/components/LoadingView";
+import AnimatedPressable from "@/components/AnimatedPressable";
+import { lightTap, notifySuccess, notifyError, heavyTap } from "@/lib/haptics";
 
 interface BackupRecord {
   id: string;
@@ -57,7 +61,7 @@ export default function BackupsScreen() {
   };
 
   const createBackup = async (type: "hotspot" | "usermanager" | "all") => {
-    if (!config) { Alert.alert("خطأ", "لا يوجد اتصال بالراوتر"); return; }
+    if (!config) { notifyError(); Alert.alert("خطأ", "لا يوجد اتصال بالراوتر"); return; }
     if (!user?.id) return;
 
     const labels: Record<string, string> = {
@@ -66,6 +70,7 @@ export default function BackupsScreen() {
       all: "الكل",
     };
 
+    lightTap();
     setCreating(true);
     try {
       const metadata: any = {};
@@ -104,9 +109,11 @@ export default function BackupsScreen() {
       });
 
       if (error) throw error;
-      Alert.alert("تم", `تم إنشاء نسخة احتياطية لـ ${labels[type]}`);
+      notifySuccess();
+      Alert.alert("تم ✓", `تم إنشاء نسخة احتياطية لـ ${labels[type]}`);
       fetchBackups();
     } catch (err: any) {
+      notifyError();
       Alert.alert("خطأ", err.message || "فشل إنشاء النسخة الاحتياطية");
     } finally {
       setCreating(false);
@@ -114,6 +121,7 @@ export default function BackupsScreen() {
   };
 
   const deleteBackup = (id: string) => {
+    heavyTap();
     Alert.alert("حذف النسخة", "هل أنت متأكد؟", [
       { text: "إلغاء", style: "cancel" },
       {

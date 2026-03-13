@@ -1,10 +1,11 @@
-import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ViewStyle,
-} from "react-native";
+import React, { useEffect } from "react";
+import { Text, StyleSheet, ViewStyle } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withDelay,
+} from "react-native-reanimated";
 import { Colors, Radius, Spacing } from "@/lib/theme";
 
 type Variant = "default" | "primary" | "accent" | "warning" | "success";
@@ -15,6 +16,7 @@ interface StatCardProps {
   subtitle?: string;
   variant?: Variant;
   style?: ViewStyle;
+  delay?: number;
 }
 
 const variantStyles: Record<
@@ -38,12 +40,12 @@ const variantStyles: Record<
   },
   warning: {
     bg: Colors.warningBg,
-    border: "rgba(245,158,11,0.25)",
+    border: Colors.warningBorder,
     valueFg: Colors.warning,
   },
   success: {
     bg: Colors.successBg,
-    border: "rgba(34,197,94,0.25)",
+    border: Colors.successBorder,
     valueFg: Colors.success,
   },
 };
@@ -54,25 +56,35 @@ export default function StatCard({
   subtitle,
   variant = "default",
   style,
+  delay = 0,
 }: StatCardProps) {
   const vs = variantStyles[variant];
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(12);
+
+  useEffect(() => {
+    opacity.value = withDelay(delay, withSpring(1, { damping: 20, stiffness: 200 }));
+    translateY.value = withDelay(delay, withSpring(0, { damping: 20, stiffness: 200 }));
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ translateY: translateY.value }],
+  }));
 
   return (
-    <View
+    <Animated.View
       style={[
         styles.card,
         { backgroundColor: vs.bg, borderColor: vs.border },
+        animStyle,
         style,
       ]}
     >
       <Text style={styles.title}>{title}</Text>
-      <Text style={[styles.value, { color: vs.valueFg }]}>
-        {value}
-      </Text>
-      {subtitle ? (
-        <Text style={styles.subtitle}>{subtitle}</Text>
-      ) : null}
-    </View>
+      <Text style={[styles.value, { color: vs.valueFg }]}>{value}</Text>
+      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+    </Animated.View>
   );
 }
 
@@ -82,22 +94,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: Spacing.md,
     flex: 1,
+    gap: 2,
   },
   title: {
     fontSize: 10,
     color: Colors.textSecondary,
-    marginBottom: 4,
+    marginBottom: 2,
     textAlign: "right",
+    fontWeight: "500",
   },
   value: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
     textAlign: "right",
+    letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 10,
     color: Colors.mutedFg,
-    marginTop: 2,
+    marginTop: 1,
     textAlign: "right",
   },
 });

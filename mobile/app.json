@@ -6,7 +6,8 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "mikrotikmanager",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
@@ -21,7 +22,8 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0f0f1a"
       },
-      "package": "com.mikrotikmanager.app"
+      "package": "com.mikrotikmanager.app",
+      "edgeToEdgeLayoutEnabled": true
     },
     "web": {
       "bundler": "metro",
@@ -31,6 +33,7 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      "expo-font",
       [
         "expo-splash-screen",
         {

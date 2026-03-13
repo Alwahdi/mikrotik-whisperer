@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -21,9 +22,11 @@ import {
 import { supabase } from "@/lib/supabase";
 import { Colors, Radius, Spacing } from "@/lib/theme";
 import Button from "@/components/Button";
+import AnimatedPressable from "@/components/AnimatedPressable";
+import { lightTap, notifySuccess, notifyError, notifyWarning } from "@/lib/haptics";
 
 export default function SettingsScreen() {
-  const { user, signOut, role, isAdmin } = useAuth();
+  const { user, signOut, role } = useAuth();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<MikrotikConfig>({
     host: "", user: "admin", pass: "", port: "443", protocol: "https", mode: "rest",
@@ -34,15 +37,12 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     getMikrotikConfig().then((saved) => {
-      if (saved) {
-        setForm(saved);
-        setConnected(true);
-        setRouterInfo(saved.label || "");
-      }
+      if (saved) { setForm(saved); setConnected(true); setRouterInfo(saved.label || ""); }
     });
   }, []);
 
   const handleFieldChange = (field: keyof MikrotikConfig, value: string) => {
+    lightTap();
     setForm((prev) => {
       const updated = { ...prev, [field]: value };
       if (field === "mode") {
@@ -61,17 +61,14 @@ export default function SettingsScreen() {
 
   const testConnection = async () => {
     if (!form.host || !form.user || !form.pass) {
+      notifyError();
       Alert.alert("خطأ", "يرجى تعبئة جميع الحقول");
       return;
     }
     setTesting(true);
     try {
       const { data, error } = await supabase.functions.invoke("mikrotik-api", {
-        body: {
-          endpoint: "/system/identity/print",
-          host: form.host, user: form.user, pass: form.pass,
-          port: form.port, protocol: form.protocol, mode: form.mode,
-        },
+        body: { endpoint: "/system/identity/print", host: form.host, user: form.user, pass: form.pass, port: form.port, protocol: form.protocol, mode: form.mode },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -80,16 +77,19 @@ export default function SettingsScreen() {
       setConnected(true);
       setRouterInfo(name || "MikroTik");
       queryClient.invalidateQueries({ queryKey: ["mikrotik"] });
-      Alert.alert("تم الاتصال", `متصل بـ: ${name || "MikroTik"}`);
+      notifySuccess();
+      Alert.alert("تم الاتصال ✓", `متصل بـ: ${name || "MikroTik"}`);
     } catch (err: any) {
       setConnected(false);
-      Alert.alert("فشل", err.message || "خطأ في الاتصال");
+      notifyError();
+      Alert.alert("فشل الاتصال", err.message || "خطأ في الاتصال");
     } finally {
       setTesting(false);
     }
   };
 
   const disconnect = async () => {
+    notifyWarning();
     await clearMikrotikConfig();
     setConnected(false);
     setRouterInfo("");
@@ -100,15 +100,14 @@ export default function SettingsScreen() {
   const protocolOptions = getProtocolOptions(form.mode);
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Header */}
-        <View style={styles.header}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <Animated.View entering={FadeInDown.delay(0).springify()} style={styles.header}>
           <Text style={styles.pageTitle}>الإعدادات</Text>
-        </View>
+        </Animated.View>
 
         {/* Account Info */}
-        <View style={styles.card}>
+        <Animated.View entering={FadeInDown.delay(60).springify()} style={styles.card}>
           <Text style={styles.cardTitle}>الحساب</Text>
           <View style={styles.accountRow}>
             <View style={styles.avatar}>
@@ -121,50 +120,44 @@ export default function SettingsScreen() {
               </Text>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
         {/* Connection Status */}
         {connected && (
-          <View style={styles.connectedBanner}>
+          <Animated.View entering={FadeInDown.delay(80).springify()} style={styles.connectedBanner}>
             <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
             <View style={{ flex: 1 }}>
               <Text style={styles.connectedTitle}>متصل: {routerInfo}</Text>
-              <Text style={styles.connectedMeta}>
-                {form.mode === "rest" ? "REST" : "API"} • {form.host}:{form.port}
-              </Text>
+              <Text style={styles.connectedMeta}>{form.mode === "rest" ? "REST" : "API"} • {form.host}:{form.port}</Text>
             </View>
-            <TouchableOpacity onPress={disconnect}>
-              <Ionicons name="power-outline" size={20} color={Colors.destructive} />
-            </TouchableOpacity>
-          </View>
+            <AnimatedPressable onPress={disconnect} style={styles.disconnectBtn}>
+              <Ionicons name="power-outline" size={18} color={Colors.destructive} />
+            </AnimatedPressable>
+          </Animated.View>
         )}
 
         {/* Connection Mode */}
-        <View style={styles.card}>
+        <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.card}>
           <Text style={styles.cardTitle}>طريقة الاتصال</Text>
           <View style={styles.modeRow}>
             {(["rest", "api"] as ConnectionMode[]).map((m) => (
-              <TouchableOpacity
+              <AnimatedPressable
                 key={m}
-                style={[styles.modeBtn, form.mode === m && styles.modeBtnActive]}
+                style={[styles.modeBtn, form.mode === m ? styles.modeBtnActive : undefined] as any}
                 onPress={() => handleFieldChange("mode", m)}
               >
-                <Ionicons
-                  name={m === "rest" ? "server-outline" : "wifi"}
-                  size={18}
-                  color={form.mode === m ? Colors.foreground : Colors.mutedFg}
-                />
+                <Ionicons name={m === "rest" ? "server-outline" : "wifi"} size={18} color={form.mode === m ? Colors.foreground : Colors.mutedFg} />
                 <Text style={[styles.modeBtnText, form.mode === m && { color: Colors.foreground }]}>
                   {m === "rest" ? "REST API" : "MikroTik API"}
                 </Text>
                 <Text style={styles.modeSubText}>{m === "rest" ? "v7.1+" : "v6 / v7"}</Text>
-              </TouchableOpacity>
+              </AnimatedPressable>
             ))}
           </View>
-        </View>
+        </Animated.View>
 
         {/* Connection Details */}
-        <View style={styles.card}>
+        <Animated.View entering={FadeInDown.delay(140).springify()} style={styles.card}>
           <Text style={styles.cardTitle}>بيانات الاتصال</Text>
 
           <View>
@@ -176,9 +169,7 @@ export default function SettingsScreen() {
                   style={[styles.protoChip, form.protocol === opt.value && styles.protoChipActive]}
                   onPress={() => handleFieldChange("protocol", opt.value)}
                 >
-                  <Text style={[styles.protoText, form.protocol === opt.value && { color: Colors.foreground }]}>
-                    {opt.label}
-                  </Text>
+                  <Text style={[styles.protoText, form.protocol === opt.value && { color: Colors.foreground }]}>{opt.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -234,16 +225,11 @@ export default function SettingsScreen() {
             />
           </View>
 
-          <Button
-            onPress={testConnection}
-            label="اتصال وحفظ"
-            loading={testing}
-            disabled={!form.host || !form.user || !form.pass}
-          />
-        </View>
+          <Button onPress={testConnection} label="اتصال وحفظ" loading={testing} disabled={!form.host || !form.user || !form.pass} size="lg" />
+        </Animated.View>
 
         {/* Tips */}
-        <View style={styles.card}>
+        <Animated.View entering={FadeInDown.delay(180).springify()} style={styles.card}>
           <Text style={styles.cardTitle}>نصائح</Text>
           {[
             "REST API: فعّل www أو www-ssl من IP → Services",
@@ -253,47 +239,43 @@ export default function SettingsScreen() {
           ].map((tip, i) => (
             <Text key={i} style={styles.tipText}>• {tip}</Text>
           ))}
-        </View>
+        </Animated.View>
 
-        {/* Navigation shortcuts */}
-        <View style={styles.card}>
+        {/* Quick Links */}
+        <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.card}>
           <Text style={styles.cardTitle}>روابط سريعة</Text>
           {[
             { label: "إدارة الراوترات", icon: "hardware-chip-outline" as const, path: "/routers" },
             { label: "النسخ الاحتياطي", icon: "cloud-download-outline" as const, path: "/(app)/backups" },
           ].map((item) => (
-            <TouchableOpacity
-              key={item.path}
-              style={styles.linkRow}
-              onPress={() => router.push(item.path as any)}
-            >
+            <AnimatedPressable key={item.path} style={styles.linkRow} onPress={() => router.push(item.path as any)}>
               <Ionicons name={item.icon} size={18} color={Colors.textSecondary} />
               <Text style={styles.linkText}>{item.label}</Text>
               <Ionicons name="chevron-back-outline" size={14} color={Colors.mutedFg} />
-            </TouchableOpacity>
+            </AnimatedPressable>
           ))}
-        </View>
+        </Animated.View>
 
         {/* Sign Out */}
-        <TouchableOpacity
-          style={styles.signOutBtn}
-          onPress={() => {
-            Alert.alert("تسجيل الخروج", "هل تريد الخروج؟", [
-              { text: "إلغاء", style: "cancel" },
-              {
-                text: "خروج",
-                style: "destructive",
-                onPress: async () => {
-                  await signOut();
-                  router.replace("/(auth)/login");
+        <Animated.View entering={FadeInDown.delay(220).springify()}>
+          <AnimatedPressable
+            style={styles.signOutBtn}
+            onPress={() => {
+              lightTap();
+              Alert.alert("تسجيل الخروج", "هل تريد الخروج؟", [
+                { text: "إلغاء", style: "cancel" },
+                {
+                  text: "خروج",
+                  style: "destructive",
+                  onPress: async () => { await signOut(); router.replace("/(auth)/login"); },
                 },
-              },
-            ]);
-          }}
-        >
-          <Ionicons name="log-out-outline" size={18} color={Colors.destructive} />
-          <Text style={styles.signOutText}>تسجيل الخروج</Text>
-        </TouchableOpacity>
+              ]);
+            }}
+          >
+            <Ionicons name="log-out-outline" size={18} color={Colors.destructive} />
+            <Text style={styles.signOutText}>تسجيل الخروج</Text>
+          </AnimatedPressable>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -301,63 +283,37 @@ export default function SettingsScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
-  scroll: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 40 },
+  scroll: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 90 },
   header: { marginBottom: Spacing.xs },
-  pageTitle: { fontSize: 20, fontWeight: "800", color: Colors.foreground },
-  card: {
-    backgroundColor: Colors.card, borderRadius: Radius.lg,
-    borderWidth: 1, borderColor: Colors.cardBorder, padding: Spacing.md, gap: Spacing.sm,
-  },
-  cardTitle: { fontSize: 12, fontWeight: "700", color: Colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.5 },
+  pageTitle: { fontSize: 22, fontWeight: "800", color: Colors.foreground, letterSpacing: -0.5 },
+  card: { backgroundColor: Colors.card, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.cardBorder, padding: Spacing.md, gap: Spacing.sm },
+  cardTitle: { fontSize: 11, fontWeight: "700", color: Colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.8 },
   accountRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
-  avatar: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: "rgba(124,58,237,0.12)", alignItems: "center", justifyContent: "center",
-  },
+  avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: "rgba(124,58,237,0.12)", alignItems: "center", justifyContent: "center" },
   accountInfo: { flex: 1 },
-  accountEmail: { fontSize: 14, fontWeight: "600", color: Colors.foreground },
+  accountEmail: { fontSize: 14, fontWeight: "700", color: Colors.foreground },
   accountRole: { fontSize: 11, color: Colors.mutedFg },
-  connectedBanner: {
-    flexDirection: "row", alignItems: "center", gap: Spacing.sm,
-    backgroundColor: Colors.successBg, borderWidth: 1, borderColor: "rgba(34,197,94,0.25)",
-    borderRadius: Radius.md, padding: Spacing.md,
-  },
-  connectedTitle: { fontSize: 13, fontWeight: "600", color: Colors.foreground },
+  connectedBanner: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, backgroundColor: Colors.successBg, borderWidth: 1, borderColor: Colors.successBorder, borderRadius: Radius.md, padding: Spacing.md },
+  connectedTitle: { fontSize: 13, fontWeight: "700", color: Colors.foreground },
   connectedMeta: { fontSize: 10, color: Colors.mutedFg, fontFamily: "Courier" },
+  disconnectBtn: { padding: 6, backgroundColor: Colors.destructiveBg, borderRadius: Radius.sm, borderWidth: 1, borderColor: Colors.destructiveBorder },
   modeRow: { flexDirection: "row", gap: Spacing.sm },
-  modeBtn: {
-    flex: 1, padding: Spacing.sm, borderRadius: Radius.md,
-    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.muted,
-    alignItems: "flex-start", gap: 4,
-  },
+  modeBtn: { flex: 1, padding: Spacing.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.muted, alignItems: "flex-start", gap: 4 },
   modeBtnActive: { borderColor: "rgba(124,58,237,0.4)", backgroundColor: "rgba(124,58,237,0.08)" },
   modeBtnText: { fontSize: 13, fontWeight: "600", color: Colors.mutedFg },
   modeSubText: { fontSize: 10, color: Colors.mutedFg },
-  fieldLabel: { fontSize: 12, fontWeight: "500", color: Colors.foreground, textAlign: "right", marginBottom: 5 },
+  fieldLabel: { fontSize: 12, fontWeight: "600", color: Colors.foreground, textAlign: "right", marginBottom: 5 },
   protoRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  protoChip: {
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.sm,
-    borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.muted,
-  },
+  protoChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.sm, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.muted },
   protoChipActive: { borderColor: Colors.primary, backgroundColor: "rgba(124,58,237,0.12)" },
-  protoText: { fontSize: 12, fontWeight: "500", color: Colors.mutedFg },
-  input: {
-    backgroundColor: Colors.muted, borderWidth: 1, borderColor: Colors.border,
-    borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm + 2,
-    fontSize: 14, color: Colors.foreground,
-  },
+  protoText: { fontSize: 12, fontWeight: "600", color: Colors.mutedFg },
+  input: { backgroundColor: Colors.muted, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm + 2, fontSize: 14, color: Colors.foreground },
   monoInput: { textAlign: "left", fontFamily: "Courier" },
   rowGroup: { flexDirection: "row", gap: Spacing.sm },
   tipText: { fontSize: 11, color: Colors.mutedFg, lineHeight: 18 },
-  linkRow: {
-    flexDirection: "row", alignItems: "center", gap: Spacing.sm,
-    paddingVertical: 6,
-  },
+  linkRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.border },
   linkText: { flex: 1, fontSize: 13, color: Colors.foreground },
-  signOutBtn: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    backgroundColor: Colors.destructiveBg, borderWidth: 1, borderColor: "rgba(239,68,68,0.25)",
-    borderRadius: Radius.md, paddingVertical: 12,
-  },
-  signOutText: { fontSize: 14, fontWeight: "600", color: Colors.destructive },
+  signOutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.destructiveBg, borderWidth: 1, borderColor: Colors.destructiveBorder, borderRadius: Radius.md, paddingVertical: 14 },
+  signOutText: { fontSize: 14, fontWeight: "700", color: Colors.destructive },
 });
+

@@ -1,14 +1,14 @@
 import React from "react";
 import {
-  View,
   Text,
-  TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
   ViewStyle,
   TextStyle,
 } from "react-native";
-import { Colors, Radius, Spacing } from "@/lib/theme";
+import { LinearGradient } from "expo-linear-gradient";
+import AnimatedPressable from "@/components/AnimatedPressable";
+import { Colors, Radius } from "@/lib/theme";
 
 interface ButtonProps {
   onPress: () => void;
@@ -35,40 +35,58 @@ export default function Button({
 }: ButtonProps) {
   const isDisabled = disabled || loading;
 
-  const containerStyle: ViewStyle[] = [
-    styles.base,
-    styles[size],
-    styles[variant],
-    isDisabled ? styles.disabled : {},
-    style ?? {},
-  ];
+  const containerStyle = [styles.base, styles[size], isDisabled && styles.disabled, style] as ViewStyle[];
 
-  const tStyle: TextStyle[] = [
-    styles.text,
-    styles[`text_${size}`] as TextStyle,
-    styles[`text_${variant}`] as TextStyle,
-    textStyle ?? {},
-  ];
+  const tStyle = [styles.text, styles[`text_${size}` as keyof typeof styles], styles[`text_${variant}` as keyof typeof styles], textStyle] as TextStyle[];
+
+  if (variant === "primary") {
+    return (
+      <AnimatedPressable
+        onPress={onPress}
+        disabled={isDisabled}
+        style={[styles.base, styles[size], isDisabled ? styles.disabled : undefined, { overflow: "hidden" }, style ?? undefined] as ViewStyle[]}
+      >
+        <LinearGradient
+          colors={[Colors.gradientStart, Colors.gradientEnd]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFill}
+        />
+        {loading ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <>
+            {icon}
+            <Text style={[styles.text, styles[`text_${size}` as keyof typeof styles], { color: "#fff" }, textStyle]}>
+              {label}
+            </Text>
+          </>
+        )}
+      </AnimatedPressable>
+    );
+  }
+
+  const variantStyle: Record<string, ViewStyle> = {
+    outline: { backgroundColor: "transparent", borderWidth: 1, borderColor: Colors.border },
+    destructive: { backgroundColor: Colors.destructiveBg, borderWidth: 1, borderColor: Colors.destructiveBorder },
+    ghost: { backgroundColor: "transparent" },
+  };
 
   return (
-    <TouchableOpacity
+    <AnimatedPressable
       onPress={onPress}
       disabled={isDisabled}
-      style={containerStyle}
-      activeOpacity={0.75}
+      style={[...containerStyle, variantStyle[variant] ?? {}]}
     >
       {loading ? (
-        <ActivityIndicator
-          size="small"
-          color={variant === "primary" ? "#fff" : Colors.primary}
-        />
+        <ActivityIndicator size="small" color={Colors.primary} />
       ) : (
         <>
           {icon}
           <Text style={tStyle}>{label}</Text>
         </>
       )}
-    </TouchableOpacity>
+    </AnimatedPressable>
   );
 }
 
@@ -80,29 +98,10 @@ const styles = StyleSheet.create({
     gap: 6,
     borderRadius: Radius.md,
   },
-  // Sizes
   sm: { paddingVertical: 6, paddingHorizontal: 12 },
   md: { paddingVertical: 10, paddingHorizontal: 18 },
   lg: { paddingVertical: 14, paddingHorizontal: 24 },
-  // Variants
-  primary: {
-    backgroundColor: Colors.primary,
-  },
-  outline: {
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  destructive: {
-    backgroundColor: Colors.destructiveBg,
-    borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.3)",
-  },
-  ghost: {
-    backgroundColor: "transparent",
-  },
   disabled: { opacity: 0.5 },
-  // Text
   text: { fontWeight: "600", textAlign: "center" },
   text_sm: { fontSize: 12 },
   text_md: { fontSize: 14 },

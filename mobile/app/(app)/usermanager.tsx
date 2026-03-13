@@ -1,18 +1,21 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, Alert, RefreshControl, Modal, ScrollView,
+  TextInput, Alert, RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import {
   useUserManagerUsers, useUserManagerProfiles, useUserManagerSessions,
   useUserManagerAction,
 } from "@/hooks/useMikrotik";
 import { Colors, Radius, Spacing } from "@/lib/theme";
-import LoadingView from "@/components/LoadingView";
+import { ListRowSkeleton } from "@/components/SkeletonLoader";
 import EmptyState from "@/components/EmptyState";
 import Badge from "@/components/Badge";
+import AnimatedPressable from "@/components/AnimatedPressable";
+import { lightTap, notifySuccess, notifyError } from "@/lib/haptics";
 
 type Tab = "users" | "profiles" | "sessions";
 
@@ -26,42 +29,41 @@ export default function UserManagerScreen() {
   const { data: sessions, isLoading: loadingSessions, refetch: refetchSessions } = useUserManagerSessions({ enabled: tab === "sessions" });
   const action = useUserManagerAction();
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     if (tab === "users") await refetchUsers();
     if (tab === "profiles") await refetchProfiles();
     if (tab === "sessions") await refetchSessions();
     setRefreshing(false);
-  };
+  }, [tab]);
 
   const filteredUsers = useMemo(() => {
     const list: any[] = (users as any[]) || [];
     if (!search.trim()) return list;
     const q = search.toLowerCase();
-    return list.filter((u: any) =>
-      (u.username || u.name || "").toLowerCase().includes(q)
-    );
+    return list.filter((u: any) => (u.username || u.name || "").toLowerCase().includes(q));
   }, [users, search]);
 
   const userList = Array.isArray(users) ? users : [];
   const profileList = Array.isArray(profiles) ? profiles : [];
   const sessionList = Array.isArray(sessions) ? sessions : [];
 
-  const handleUserAction = (user: any, act: string) => {
+  const handleUserAction = useCallback((user: any, act: string) => {
     const name = user.username || user.name || "المستخدم";
     const labels: Record<string, string> = { disable: "تعطيل", enable: "تفعيل", remove: "حذف" };
-    Alert.alert(labels[act] || act, `${labels[act]} ${name}؟`, [
+    lightTap();
+    Alert.alert(labels[act], `${labels[act]} ${name}؟`, [
       { text: "إلغاء", style: "cancel" },
       {
         text: labels[act],
         style: act === "remove" ? "destructive" : "default",
         onPress: () => action.mutate(
           { action: act, id: user[".id"] },
-          { onSuccess: () => { refetchUsers(); Alert.alert("تم", `تم ${labels[act]} ${name}`); } }
+          { onSuccess: () => notifySuccess(), onError: () => notifyError() }
         ),
       },
     ]);
-  };
+  }, [action]);
 
   const isLoading =
     (tab === "users" && loadingUsers) ||
@@ -69,11 +71,13 @@ export default function UserManagerScreen() {
     (tab === "sessions" && loadingSessions);
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.pageTitle}>يوزر مانجر</Text>
         {users && (
-          <Text style={styles.counter}>{userList.length} مستخدم</Text>
+          <View style={styles.countPill}>
+            <Text style={styles.countText}>{userList.length} مستخدم</Text>
+          </View>
         )}
       </View>
 
@@ -83,7 +87,7 @@ export default function UserManagerScreen() {
           <TouchableOpacity
             key={t}
             style={[styles.tab, tab === t && styles.tabActive]}
-            onPress={() => setTab(t)}
+            onPress={() => { lightTap(); setTab(t); }}
           >
             <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
               {t === "users" ? "المستخدمون" : t === "profiles" ? "الباقات" : "الجلسات"}
@@ -112,51 +116,49 @@ export default function UserManagerScreen() {
       )}
 
       {isLoading ? (
-        <LoadingView />
+        <View style={styles.skeletonList}>
+          {Array.from({ length: 5 }).map((_, i) => <ListRowSkeleton key={i} lines={2} />)}
+        </View>
       ) : tab === "users" ? (
         <FlatList
           data={filteredUsers}
           keyExtractor={(item, i) => item[".id"] || String(i)}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
           contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={<EmptyState title="لا يوجد مستخدمون" />}
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             const disabled = item.disabled === "true" || item.disabled === true;
             return (
-              <View style={styles.userCard}>
+              <Animated.View entering={FadeInDown.delay(index * 30).springify()} style={styles.userCard}>
                 <View style={styles.userHeader}>
                   <View style={styles.userAvatar}>
                     <Ionicons name="person" size={16} color={Colors.primaryLight} />
                   </View>
                   <View style={styles.userInfo}>
                     <Text style={styles.userName}>{item.username || item.name || "—"}</Text>
-                    <Text style={styles.userMeta}>
-                      {item["actual-profile"] || item.group || "—"}
-                    </Text>
+                    <Text style={styles.userMeta}>{item["actual-profile"] || item.group || "—"}</Text>
                   </View>
-                  <Badge
-                    label={disabled ? "معطل" : "نشط"}
-                    variant={disabled ? "destructive" : "success"}
-                  />
+                  <Badge label={disabled ? "معطل" : "نشط"} variant={disabled ? "destructive" : "success"} />
                 </View>
                 <View style={styles.actionRow}>
                   {disabled ? (
-                    <TouchableOpacity style={[styles.btn, styles.enableBtn]} onPress={() => handleUserAction(item, "enable")}>
+                    <AnimatedPressable style={[styles.btn, styles.enableBtn]} onPress={() => handleUserAction(item, "enable")}>
                       <Ionicons name="checkmark-circle-outline" size={14} color={Colors.success} />
                       <Text style={[styles.btnText, { color: Colors.success }]}>تفعيل</Text>
-                    </TouchableOpacity>
+                    </AnimatedPressable>
                   ) : (
-                    <TouchableOpacity style={[styles.btn, styles.disableBtn]} onPress={() => handleUserAction(item, "disable")}>
+                    <AnimatedPressable style={[styles.btn, styles.disableBtn]} onPress={() => handleUserAction(item, "disable")}>
                       <Ionicons name="ban-outline" size={14} color={Colors.warning} />
                       <Text style={[styles.btnText, { color: Colors.warning }]}>تعطيل</Text>
-                    </TouchableOpacity>
+                    </AnimatedPressable>
                   )}
-                  <TouchableOpacity style={[styles.btn, styles.deleteBtn]} onPress={() => handleUserAction(item, "remove")}>
+                  <AnimatedPressable style={[styles.btn, styles.deleteBtn]} onPress={() => handleUserAction(item, "remove")}>
                     <Ionicons name="trash-outline" size={14} color={Colors.destructive} />
                     <Text style={[styles.btnText, { color: Colors.destructive }]}>حذف</Text>
-                  </TouchableOpacity>
+                  </AnimatedPressable>
                 </View>
-              </View>
+              </Animated.View>
             );
           }}
         />
@@ -166,15 +168,16 @@ export default function UserManagerScreen() {
           keyExtractor={(item, i) => item[".id"] || String(i)}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
           contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={<EmptyState title="لا توجد باقات" />}
-          renderItem={({ item }) => (
-            <View style={styles.profileCard}>
+          renderItem={({ item, index }) => (
+            <Animated.View entering={FadeInDown.delay(index * 30).springify()} style={styles.profileCard}>
               <Text style={styles.profileName}>{item.name}</Text>
               {item.price ? <Text style={styles.profileMeta}>السعر: {item.price}</Text> : null}
               {item.validity ? <Text style={styles.profileMeta}>الصلاحية: {item.validity}</Text> : null}
               {item["rate-limit"] ? <Text style={styles.profileMeta}>السرعة: {item["rate-limit"]}</Text> : null}
               {item["shared-users"] ? <Text style={styles.profileMeta}>مشاركة: {item["shared-users"]}</Text> : null}
-            </View>
+            </Animated.View>
           )}
         />
       ) : (
@@ -183,9 +186,10 @@ export default function UserManagerScreen() {
           keyExtractor={(item, i) => item[".id"] || String(i)}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
           contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
           ListEmptyComponent={<EmptyState title="لا توجد جلسات" />}
-          renderItem={({ item }) => (
-            <View style={styles.sessionCard}>
+          renderItem={({ item, index }) => (
+            <Animated.View entering={FadeInDown.delay(index * 30).springify()} style={styles.sessionCard}>
               <View style={styles.userHeader}>
                 <View style={styles.userAvatar}>
                   <Ionicons name="time-outline" size={16} color={Colors.primaryLight} />
@@ -199,7 +203,7 @@ export default function UserManagerScreen() {
                   variant={item.active === "true" || item.active === true ? "success" : "default"}
                 />
               </View>
-            </View>
+            </Animated.View>
           )}
         />
       )}
@@ -209,54 +213,33 @@ export default function UserManagerScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
-  },
-  pageTitle: { fontSize: 20, fontWeight: "800", color: Colors.foreground },
-  counter: { fontSize: 12, color: Colors.mutedFg },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
+  pageTitle: { fontSize: 22, fontWeight: "800", color: Colors.foreground, letterSpacing: -0.5 },
+  countPill: { backgroundColor: Colors.muted, paddingHorizontal: 10, paddingVertical: 3, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border },
+  countText: { fontSize: 11, color: Colors.textSecondary, fontWeight: "600" },
   tabs: { flexDirection: "row", paddingHorizontal: Spacing.lg, gap: Spacing.xs, marginBottom: Spacing.sm },
   tab: { flex: 1, paddingVertical: 8, borderRadius: Radius.md, backgroundColor: Colors.muted, alignItems: "center" },
   tabActive: { backgroundColor: Colors.primary },
-  tabText: { fontSize: 11, fontWeight: "500", color: Colors.mutedFg },
+  tabText: { fontSize: 11, fontWeight: "600", color: Colors.mutedFg },
   tabTextActive: { color: "#fff" },
-  searchRow: {
-    flexDirection: "row", alignItems: "center",
-    marginHorizontal: Spacing.lg, marginBottom: Spacing.sm,
-    backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border,
-    borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: 8, gap: 8,
-  },
+  searchRow: { flexDirection: "row", alignItems: "center", marginHorizontal: Spacing.lg, marginBottom: Spacing.sm, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: 8, gap: 8 },
   searchInput: { flex: 1, fontSize: 13, color: Colors.foreground },
-  list: { paddingHorizontal: Spacing.lg, gap: Spacing.sm, paddingBottom: 24 },
-  userCard: {
-    backgroundColor: Colors.card, borderRadius: Radius.lg,
-    borderWidth: 1, borderColor: Colors.cardBorder, padding: Spacing.md, gap: 8,
-  },
+  skeletonList: { paddingHorizontal: Spacing.lg, gap: Spacing.sm },
+  list: { paddingHorizontal: Spacing.lg, gap: Spacing.sm, paddingBottom: 90 },
+  userCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.cardBorder, padding: Spacing.md, gap: 8 },
   userHeader: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
-  userAvatar: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: "rgba(124,58,237,0.12)", alignItems: "center", justifyContent: "center",
-  },
+  userAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(124,58,237,0.12)", alignItems: "center", justifyContent: "center" },
   userInfo: { flex: 1 },
-  userName: { fontSize: 13, fontWeight: "600", color: Colors.foreground },
+  userName: { fontSize: 13, fontWeight: "700", color: Colors.foreground },
   userMeta: { fontSize: 10, color: Colors.mutedFg },
   actionRow: { flexDirection: "row", gap: 8 },
-  btn: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.sm, borderWidth: 1,
-  },
-  btnText: { fontSize: 11, fontWeight: "500" },
-  enableBtn: { borderColor: "rgba(34,197,94,0.3)", backgroundColor: Colors.successBg },
-  disableBtn: { borderColor: "rgba(245,158,11,0.3)", backgroundColor: Colors.warningBg },
-  deleteBtn: { borderColor: "rgba(239,68,68,0.3)", backgroundColor: Colors.destructiveBg },
-  profileCard: {
-    backgroundColor: Colors.card, borderRadius: Radius.lg,
-    borderWidth: 1, borderColor: Colors.cardBorder, padding: Spacing.md, gap: 4,
-  },
-  profileName: { fontSize: 14, fontWeight: "600", color: Colors.foreground },
+  btn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.sm, borderWidth: 1 },
+  btnText: { fontSize: 11, fontWeight: "600" },
+  enableBtn: { borderColor: Colors.successBorder, backgroundColor: Colors.successBg },
+  disableBtn: { borderColor: Colors.warningBorder, backgroundColor: Colors.warningBg },
+  deleteBtn: { borderColor: Colors.destructiveBorder, backgroundColor: Colors.destructiveBg },
+  profileCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.cardBorder, padding: Spacing.md, gap: 4 },
+  profileName: { fontSize: 14, fontWeight: "700", color: Colors.foreground },
   profileMeta: { fontSize: 11, color: Colors.mutedFg },
-  sessionCard: {
-    backgroundColor: Colors.card, borderRadius: Radius.lg,
-    borderWidth: 1, borderColor: Colors.cardBorder, padding: Spacing.md,
-  },
+  sessionCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.cardBorder, padding: Spacing.md },
 });

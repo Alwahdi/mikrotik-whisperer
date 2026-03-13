@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import {
@@ -25,7 +26,9 @@ import {
 } from "@/lib/mikrotikConfig";
 import { Colors, Radius, Spacing } from "@/lib/theme";
 import Button from "@/components/Button";
-import LoadingView from "@/components/LoadingView";
+import { ListRowSkeleton } from "@/components/SkeletonLoader";
+import AnimatedPressable from "@/components/AnimatedPressable";
+import { lightTap, notifySuccess, notifyError, heavyTap } from "@/lib/haptics";
 
 interface RouterRow {
   id: string;
@@ -84,21 +87,14 @@ export default function RoutersScreen() {
 
   const addRouter = async () => {
     if (!form.host.trim() || !form.username || !form.password) {
+      notifyError();
       Alert.alert("خطأ", "يرجى تعبئة جميع الحقول المطلوبة");
       return;
     }
     setSaving(true);
     try {
       const { data, error } = await supabase.functions.invoke("mikrotik-api", {
-        body: {
-          endpoint: "/system/identity/print",
-          host: form.host.trim(),
-          user: form.username,
-          pass: form.password,
-          port: form.port,
-          protocol: form.protocol,
-          mode: form.mode,
-        },
+        body: { endpoint: "/system/identity/print", host: form.host.trim(), user: form.username, pass: form.password, port: form.port, protocol: form.protocol, mode: form.mode },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -107,20 +103,9 @@ export default function RoutersScreen() {
 
       let version: string | null = null;
       try {
-        const { data: resData } = await supabase.functions.invoke(
-          "mikrotik-api",
-          {
-            body: {
-              endpoint: "/system/resource/print",
-              host: form.host.trim(),
-              user: form.username,
-              pass: form.password,
-              port: form.port,
-              protocol: form.protocol,
-              mode: form.mode,
-            },
-          }
-        );
+        const { data: resData } = await supabase.functions.invoke("mikrotik-api", {
+          body: { endpoint: "/system/resource/print", host: form.host.trim(), user: form.username, pass: form.password, port: form.port, protocol: form.protocol, mode: form.mode },
+        });
         const res = Array.isArray(resData) ? resData[0] : resData;
         version = res?.version || null;
       } catch {}
@@ -140,19 +125,13 @@ export default function RoutersScreen() {
       });
       if (insertError) throw insertError;
 
-      Alert.alert("تم", `تمت إضافة الراوتر: ${name || form.label || "MikroTik"}`);
+      notifySuccess();
+      Alert.alert("تم ✓", `تمت إضافة الراوتر: ${name || form.label || "MikroTik"}`);
       setShowAdd(false);
-      setForm({
-        label: "",
-        host: "",
-        port: "443",
-        username: "admin",
-        password: "",
-        protocol: "https",
-        mode: "rest",
-      });
+      setForm({ label: "", host: "", port: "443", username: "admin", password: "", protocol: "https", mode: "rest" });
       fetchRouters();
     } catch (err: any) {
+      notifyError();
       Alert.alert("فشل الاتصال", err.message || "خطأ غير معروف");
     } finally {
       setSaving(false);
@@ -191,8 +170,10 @@ export default function RoutersScreen() {
         .update({ is_online: true, last_connected_at: new Date().toISOString() })
         .eq("id", r.id);
 
+      notifySuccess();
       router.replace("/(app)");
     } catch (err: any) {
+      notifyError();
       Alert.alert("فشل الاتصال", err.message || "خطأ");
       await supabase.from("routers").update({ is_online: false }).eq("id", r.id);
     } finally {
@@ -201,6 +182,7 @@ export default function RoutersScreen() {
   };
 
   const deleteRouter = (id: string) => {
+    heavyTap();
     Alert.alert("حذف الراوتر", "هل أنت متأكد؟", [
       { text: "إلغاء", style: "cancel" },
       {
@@ -216,10 +198,16 @@ export default function RoutersScreen() {
 
   const protocolOptions = getProtocolOptions(form.mode);
 
-  if (pageLoading) return <LoadingView />;
+  if (pageLoading) return (
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      <View style={styles.skeletonList}>
+        {Array.from({ length: 3 }).map((_, i) => <ListRowSkeleton key={i} lines={2} />)}
+      </View>
+    </SafeAreaView>
+  );
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -231,8 +219,9 @@ export default function RoutersScreen() {
             <Text style={styles.headerSub}>{user?.email}</Text>
           </View>
         </View>
-        <TouchableOpacity
+        <AnimatedPressable
           onPress={() => {
+            lightTap();
             Alert.alert("تسجيل الخروج", "هل تريد الخروج؟", [
               { text: "إلغاء", style: "cancel" },
               {
@@ -247,7 +236,7 @@ export default function RoutersScreen() {
           style={styles.iconBtn}
         >
           <Ionicons name="log-out-outline" size={22} color={Colors.mutedFg} />
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
 
       {/* Title */}
@@ -256,13 +245,10 @@ export default function RoutersScreen() {
           <Text style={styles.pageTitle}>الراوترات</Text>
           <Text style={styles.pageSub}>اختر راوتر أو أضف جديد</Text>
         </View>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => setShowAdd(true)}
-        >
+        <AnimatedPressable style={styles.addBtn} onPress={() => { lightTap(); setShowAdd(true); }}>
           <Ionicons name="add" size={18} color="#fff" />
           <Text style={styles.addBtnText}>إضافة</Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
 
       {/* List */}
@@ -271,36 +257,21 @@ export default function RoutersScreen() {
           <Ionicons name="hardware-chip-outline" size={48} color={Colors.mutedFg} />
           <Text style={styles.emptyTitle}>لا توجد راوترات</Text>
           <Text style={styles.emptySub}>أضف أول راوتر للبدء</Text>
-          <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => setShowAdd(true)}
-          >
+          <AnimatedPressable style={styles.addBtn} onPress={() => { lightTap(); setShowAdd(true); }}>
             <Text style={styles.addBtnText}>إضافة راوتر</Text>
-          </TouchableOpacity>
+          </AnimatedPressable>
         </View>
       ) : (
         <FlatList
           data={routers}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
-            <View style={styles.routerCard}>
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item, index }) => (
+            <Animated.View entering={FadeInDown.delay(index * 60).springify()} style={styles.routerCard}>
               <View style={styles.routerLeft}>
-                <View
-                  style={[
-                    styles.statusIcon,
-                    {
-                      backgroundColor: item.is_online
-                        ? Colors.successBg
-                        : Colors.muted,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name={item.is_online ? "wifi" : "wifi-outline"}
-                    size={18}
-                    color={item.is_online ? Colors.success : Colors.mutedFg}
-                  />
+                <View style={[styles.statusIcon, { backgroundColor: item.is_online ? Colors.successBg : Colors.muted }]}>
+                  <Ionicons name={item.is_online ? "wifi" : "wifi-outline"} size={18} color={item.is_online ? Colors.success : Colors.mutedFg} />
                 </View>
                 <View style={styles.routerInfo}>
                   <Text style={styles.routerLabel}>{item.label}</Text>
@@ -311,28 +282,23 @@ export default function RoutersScreen() {
                 </View>
               </View>
               <View style={styles.routerActions}>
-                <TouchableOpacity
-                  style={styles.connectBtn}
+                <AnimatedPressable
+                  style={[styles.connectBtn, connecting === item.id ? { opacity: 0.7 } : undefined] as any}
                   onPress={() => connectToRouter(item)}
-                  disabled={connecting === item.id}
+                  haptic={false}
                 >
                   {connecting === item.id ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
                     <Ionicons name="radio-outline" size={14} color="#fff" />
                   )}
-                  <Text style={styles.connectBtnText}>
-                    {connecting === item.id ? "..." : "اتصال"}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => deleteRouter(item.id)}
-                >
+                  <Text style={styles.connectBtnText}>{connecting === item.id ? "..." : "اتصال"}</Text>
+                </AnimatedPressable>
+                <AnimatedPressable style={styles.deleteBtn} onPress={() => deleteRouter(item.id)}>
                   <Ionicons name="trash-outline" size={16} color={Colors.destructive} />
-                </TouchableOpacity>
+                </AnimatedPressable>
               </View>
-            </View>
+            </Animated.View>
           )}
         />
       )}
@@ -347,46 +313,27 @@ export default function RoutersScreen() {
         <SafeAreaView style={styles.modalSafe}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>إضافة راوتر جديد</Text>
-            <TouchableOpacity onPress={() => setShowAdd(false)}>
+            <AnimatedPressable onPress={() => { lightTap(); setShowAdd(false); }}>
               <Ionicons name="close" size={24} color={Colors.foreground} />
-            </TouchableOpacity>
+            </AnimatedPressable>
           </View>
 
-          <ScrollView
-            style={styles.modalContent}
-            keyboardShouldPersistTaps="handled"
-          >
+          <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled">
             {/* Mode selection */}
             <Text style={styles.fieldLabel}>طريقة الاتصال</Text>
             <View style={styles.modeRow}>
               {(["rest", "api"] as ConnectionMode[]).map((m) => (
-                <TouchableOpacity
+                <AnimatedPressable
                   key={m}
-                  style={[
-                    styles.modeBtn,
-                    form.mode === m && styles.modeBtnActive,
-                  ]}
+                  style={[styles.modeBtn, form.mode === m ? styles.modeBtnActive : undefined] as any}
                   onPress={() => handleModeChange(m)}
                 >
-                  <Ionicons
-                    name={m === "rest" ? "server-outline" : "wifi"}
-                    size={20}
-                    color={
-                      form.mode === m ? Colors.foreground : Colors.mutedFg
-                    }
-                  />
-                  <Text
-                    style={[
-                      styles.modeBtnText,
-                      form.mode === m && styles.modeBtnTextActive,
-                    ]}
-                  >
+                  <Ionicons name={m === "rest" ? "server-outline" : "wifi"} size={20} color={form.mode === m ? Colors.foreground : Colors.mutedFg} />
+                  <Text style={[styles.modeBtnText, form.mode === m && styles.modeBtnTextActive]}>
                     {m === "rest" ? "REST API" : "MikroTik API"}
                   </Text>
-                  <Text style={styles.modeSubText}>
-                    {m === "rest" ? "v7.1+" : "v6 / v7"}
-                  </Text>
-                </TouchableOpacity>
+                  <Text style={styles.modeSubText}>{m === "rest" ? "v7.1+" : "v6 / v7"}</Text>
+                </AnimatedPressable>
               ))}
             </View>
 
@@ -495,6 +442,7 @@ export default function RoutersScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: Colors.background },
+  skeletonList: { flex: 1, padding: Spacing.lg, gap: Spacing.sm },
   header: {
     flexDirection: "row",
     alignItems: "center",
