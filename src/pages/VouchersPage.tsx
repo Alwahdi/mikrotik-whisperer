@@ -88,6 +88,12 @@ const TEMPLATES_KEY = "mikrotik_print_templates";
 const GEN_SETTINGS_KEY = "mikrotik_gen_settings";
 const SALES_POINTS_KEY = "mikrotik_sales_points";
 
+// Card aspect ratios for the preview widgets.
+// Standard credit-card ratio (1.586) is used for normal column counts;
+// a slightly wider ratio is used when many columns are packed onto the page.
+const CARD_ASPECT_STANDARD = "1.6";
+const CARD_ASPECT_WIDE = "1.8"; // used when printCols > 3 to keep mini-cells visible
+
 function loadBatches(): VoucherBatch[] {
   try { return JSON.parse(localStorage.getItem(BATCHES_KEY) || "[]"); } catch { return []; }
 }
@@ -859,7 +865,9 @@ export default function VouchersPage() {
     printWindow.document.open();
     printWindow.document.write(html);
     printWindow.document.close();
-    // Wait for fonts/images to load then trigger print
+    // Wait for fonts/images to load before triggering the print dialog.
+    // 400 ms is sufficient for Google Fonts to initialise in the new window.
+    const PRINT_LOAD_DELAY_MS = 400;
     const images = printWindow.document.querySelectorAll("img");
     const imagePromises = Array.from(images).map(img =>
       img.complete ? Promise.resolve() : new Promise<void>(resolve => { img.onload = () => resolve(); img.onerror = () => resolve(); })
@@ -868,7 +876,7 @@ export default function VouchersPage() {
       setTimeout(() => {
         printWindow.focus();
         printWindow.print();
-      }, 400);
+      }, PRINT_LOAD_DELAY_MS);
     });
   };
 
@@ -1173,7 +1181,7 @@ export default function VouchersPage() {
                     <div
                       ref={previewRef}
                       className="mt-2 rounded border border-border overflow-hidden relative cursor-crosshair select-none touch-none"
-                      style={{ aspectRatio: "1.6" }}
+                      style={{ aspectRatio: CARD_ASPECT_STANDARD }}
                       onMouseMove={handlePreviewMouseMove}
                       onMouseUp={handlePreviewMouseUp}
                       onMouseLeave={handlePreviewMouseUp}
@@ -1271,7 +1279,7 @@ export default function VouchersPage() {
                       <div
                         key={i}
                         className="rounded-sm border border-border bg-background"
-                        style={{ aspectRatio: `${printCols > 3 ? "1.8" : "1.6"}` }}
+                        style={{ aspectRatio: printCols > 3 ? CARD_ASPECT_WIDE : CARD_ASPECT_STANDARD }}
                       />
                     ))}
                   </div>
@@ -1361,7 +1369,7 @@ export default function VouchersPage() {
                   {cards.slice(0, 100).map((card, i) => (
                     <div key={i} className="relative">
                       {bgImage ? (
-                        <div className="rounded-md border border-border overflow-hidden relative" style={{ aspectRatio: "1.6" }}>
+                        <div className="rounded-md border border-border overflow-hidden relative" style={{ aspectRatio: CARD_ASPECT_STANDARD }}>
                           <img src={bgImage} alt="" className="w-full h-full object-fill" />
                           {fields.filter(f => f.visible).map(f => {
                             let text = "";

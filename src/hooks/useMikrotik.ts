@@ -477,9 +477,14 @@ export function useUserManagerBatchAdd() {
       if (!config) throw new Error("لم يتم إعداد بيانات الاتصال");
 
       const isRestMode = config.mode === "rest";
-      // Adaptive chunk sizes based on protocol
-      const chunkSize = isRestMode ? 6 : 40;
-      const concurrency = isRestMode ? 1 : 4;
+      // REST mode is stateless/slower, so use smaller chunks and no concurrency.
+      // API (WebSocket) mode can handle larger batches in parallel.
+      const REST_CHUNK_SIZE = 6;
+      const API_CHUNK_SIZE = 40;
+      const REST_CONCURRENCY = 1;
+      const API_CONCURRENCY = 4;
+      const chunkSize = isRestMode ? REST_CHUNK_SIZE : API_CHUNK_SIZE;
+      const concurrency = isRestMode ? REST_CONCURRENCY : API_CONCURRENCY;
 
       const errors: { username: string; error: string }[] = [];
       let succeeded = 0;
@@ -491,6 +496,13 @@ export function useUserManagerBatchAdd() {
       }
 
       let nextChunk = 0;
+
+      // Detect duplicate errors: a user that already exists is considered successful
+      // since the desired end-state (user exists with that name) has been achieved.
+      const isDuplicate = (msg: string) => {
+        const m = msg.toLowerCase();
+        return m.includes("already") || m.includes("exists") || m.includes("same name");
+      };
 
       const processChunk = async (chunk: BatchAddUser[]) => {
         const commands = chunk.map((u) => ({
@@ -508,7 +520,7 @@ export function useUserManagerBatchAdd() {
           const errs = Array.isArray(result?.errors) ? result.errors : [];
           for (let j = 0; j < chunk.length; j++) {
             const msg = typeof errs[j] === "string" ? errs[j].trim() : "";
-            if (!msg || msg.toLowerCase().includes("already") || msg.toLowerCase().includes("exists")) {
+            if (!msg || isDuplicate(msg)) {
               succeeded++;
             } else {
               errors.push({ username: chunk[j].username, error: msg });
