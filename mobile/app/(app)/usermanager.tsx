@@ -10,7 +10,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import {
   useUserManagerUsers, useUserManagerProfiles, useUserManagerSessions,
-  useUserManagerAction, useUserManagerBatchAdd,
+  useUserManagerAction, useUserManagerBatchAdd, useRawBatchAction,
 } from "@/hooks/useMikrotik";
 import { Colors, Radius, Spacing } from "@/lib/theme";
 import { ListRowSkeleton } from "@/components/SkeletonLoader";
@@ -18,6 +18,8 @@ import EmptyState from "@/components/EmptyState";
 import Badge from "@/components/Badge";
 import AnimatedPressable from "@/components/AnimatedPressable";
 import { lightTap, notifySuccess, notifyError } from "@/lib/haptics";
+
+const MONO_FONT = Platform.select({ ios: "Courier", android: "monospace", default: "monospace" });
 
 type Tab = "users" | "profiles" | "sessions";
 type UsernameMode = "usernameAndPassword" | "usernameOnly";
@@ -78,6 +80,197 @@ const radioStyles = StyleSheet.create({
   label: { fontSize: 13, color: Colors.foreground },
 });
 
+// ─── User Context Menu Sheet ──────────────────────
+function UserContextSheet({ user, visible, onClose, profiles, action, onViewSessions }: {
+  user: any;
+  visible: boolean;
+  onClose: () => void;
+  profiles: any[];
+  action: ReturnType<typeof useUserManagerAction>;
+  onViewSessions: (username: string) => void;
+}) {
+  const [view, setView] = useState<"menu" | "assign-profile">("menu");
+
+  const handleClose = useCallback(() => { setView("menu"); onClose(); }, [onClose]);
+
+  const handleDelete = useCallback(() => {
+    const name = user?.username || user?.name || "المستخدم";
+    lightTap();
+    Alert.alert("حذف الكرت", `حذف ${name}؟`, [
+      { text: "إلغاء", style: "cancel" },
+      {
+        text: "حذف", style: "destructive",
+        onPress: () => action.mutate(
+          { action: "remove", id: user?.[".id"] },
+          { onSuccess: () => { notifySuccess(); handleClose(); }, onError: () => notifyError() }
+        ),
+      },
+    ]);
+  }, [user, action, handleClose]);
+
+  const handleToggleDisable = useCallback(() => {
+    const disabled = user?.disabled === "true" || user?.disabled === true;
+    lightTap();
+    action.mutate(
+      { action: disabled ? "enable" : "disable", id: user?.[".id"] },
+      { onSuccess: () => { notifySuccess(); handleClose(); }, onError: () => notifyError() }
+    );
+  }, [user, action, handleClose]);
+
+  const handleAssignProfile = useCallback((profileName: string) => {
+    lightTap();
+    action.mutate(
+      { action: "set", id: user?.[".id"], data: { group: profileName } },
+      { onSuccess: () => { notifySuccess(); handleClose(); }, onError: () => notifyError() }
+    );
+  }, [user, action, handleClose]);
+
+  const disabled = user?.disabled === "true" || user?.disabled === true;
+  const username = user?.username || user?.name || "—";
+  const currentGroup = user?.group || user?.["actual-profile"] || "";
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
+      <Pressable style={ctx.backdrop} onPress={handleClose} />
+      <View style={ctx.container}>
+        <View style={ctx.handle} />
+
+        {view === "menu" ? (
+          <>
+            {/* Title row */}
+            <View style={ctx.titleRow}>
+              <View style={ctx.titleAvatar}>
+                <Ionicons name="person" size={16} color={Colors.primaryLight} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={ctx.titleName}>{username}</Text>
+                {currentGroup ? <Text style={ctx.titleSub}>{currentGroup}</Text> : null}
+              </View>
+              <TouchableOpacity onPress={handleClose} style={ctx.closeBtn}>
+                <Ionicons name="close" size={18} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Menu items */}
+            <View style={ctx.menuList}>
+              <TouchableOpacity style={ctx.menuItem} onPress={handleDelete}>
+                <View style={[ctx.menuIconWrap, ctx.menuIconDestructive]}>
+                  <Ionicons name="trash-outline" size={16} color={Colors.destructive} />
+                </View>
+                <Text style={[ctx.menuItemText, { color: Colors.destructive }]}>حذف الكرت</Text>
+                <Ionicons name="chevron-back-outline" size={14} color={Colors.mutedFg} />
+              </TouchableOpacity>
+
+              <View style={ctx.menuDivider} />
+
+              <TouchableOpacity style={ctx.menuItem} onPress={() => { lightTap(); setView("assign-profile"); }}>
+                <View style={[ctx.menuIconWrap, ctx.menuIconPrimary]}>
+                  <Ionicons name="layers-outline" size={16} color={Colors.primaryLight} />
+                </View>
+                <Text style={ctx.menuItemText}>اضافة باقة للكرت</Text>
+                <Ionicons name="chevron-back-outline" size={14} color={Colors.mutedFg} />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={ctx.menuItem} onPress={() => { onViewSessions(username); handleClose(); }}>
+                <View style={[ctx.menuIconWrap, ctx.menuIconDefault]}>
+                  <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
+                </View>
+                <Text style={ctx.menuItemText}>عرض الجلسات</Text>
+                <Ionicons name="chevron-back-outline" size={14} color={Colors.mutedFg} />
+              </TouchableOpacity>
+
+              <View style={ctx.menuDivider} />
+
+              <TouchableOpacity style={ctx.menuItem} onPress={handleToggleDisable}>
+                <View style={[ctx.menuIconWrap, disabled ? ctx.menuIconSuccess : ctx.menuIconWarning]}>
+                  <Ionicons
+                    name={disabled ? "checkmark-circle-outline" : "ban-outline"}
+                    size={16}
+                    color={disabled ? Colors.success : Colors.warning}
+                  />
+                </View>
+                <Text style={[ctx.menuItemText, { color: disabled ? Colors.success : Colors.warning }]}>
+                  {disabled ? "تفعيل الكرت" : "تعطيل الكرت"}
+                </Text>
+                <Ionicons name="chevron-back-outline" size={14} color={Colors.mutedFg} />
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <>
+            {/* Assign profile view */}
+            <View style={ctx.titleRow}>
+              <TouchableOpacity onPress={() => setView("menu")} style={ctx.backBtn}>
+                <Ionicons name="arrow-forward-outline" size={20} color={Colors.mutedFg} />
+              </TouchableOpacity>
+              <Text style={ctx.titleName}>اختر الباقة لـ {username}</Text>
+            </View>
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+              {profiles.length === 0 ? (
+                <Text style={ctx.emptyProfiles}>لا توجد باقات</Text>
+              ) : profiles.map((p) => (
+                <TouchableOpacity
+                  key={p[".id"] || p.name}
+                  style={[ctx.menuItem, currentGroup === p.name && ctx.menuItemActive]}
+                  onPress={() => handleAssignProfile(p.name)}
+                >
+                  <View style={[ctx.menuIconWrap, ctx.menuIconPrimary]}>
+                    <Ionicons name="layers-outline" size={16} color={Colors.primaryLight} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[ctx.menuItemText, currentGroup === p.name && { color: Colors.primaryLight }]}>
+                      {p.name}
+                    </Text>
+                    {p["rate-limit"] && (
+                      <Text style={ctx.menuItemSub}>{p["rate-limit"]}</Text>
+                    )}
+                  </View>
+                  {currentGroup === p.name && (
+                    <Ionicons name="checkmark" size={16} color={Colors.primaryLight} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        {action.isPending && (
+          <View style={ctx.loadingOverlay}>
+            <ActivityIndicator size="small" color={Colors.primaryLight} />
+          </View>
+        )}
+      </View>
+    </Modal>
+  );
+}
+
+const ctx = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: Colors.overlay },
+  container: { backgroundColor: Colors.card, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, padding: Spacing.lg, paddingBottom: Platform.OS === "ios" ? 36 : Spacing.xl },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.border, alignSelf: "center", marginBottom: Spacing.md },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginBottom: Spacing.sm, paddingBottom: Spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border },
+  titleAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: "rgba(124,58,237,0.12)", alignItems: "center", justifyContent: "center" },
+  titleName: { fontSize: 15, fontWeight: "800", color: Colors.foreground },
+  titleSub: { fontSize: 11, color: Colors.mutedFg, marginTop: 1 },
+  closeBtn: { padding: 4, borderRadius: Radius.sm, backgroundColor: Colors.muted },
+  backBtn: { padding: 4, borderRadius: Radius.sm, backgroundColor: Colors.muted },
+  menuList: { gap: 2 },
+  menuDivider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.border, marginVertical: 2, marginHorizontal: Spacing.sm },
+  menuItem: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingVertical: 11, paddingHorizontal: Spacing.sm, borderRadius: Radius.md },
+  menuItemActive: { backgroundColor: "rgba(124,58,237,0.08)" },
+  menuItemText: { flex: 1, fontSize: 14, color: Colors.foreground, fontWeight: "500" },
+  menuItemSub: { fontSize: 10, color: Colors.mutedFg, marginTop: 1 },
+  menuIconWrap: { width: 30, height: 30, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  menuIconDestructive: { backgroundColor: Colors.destructiveBg },
+  menuIconPrimary: { backgroundColor: "rgba(124,58,237,0.12)" },
+  menuIconDefault: { backgroundColor: Colors.muted },
+  menuIconSuccess: { backgroundColor: Colors.successBg },
+  menuIconWarning: { backgroundColor: Colors.warningBg },
+  emptyProfiles: { fontSize: 13, color: Colors.mutedFg, textAlign: "center", padding: Spacing.xl },
+  loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.25)", alignItems: "center", justifyContent: "center", borderRadius: Radius.xxl },
+});
+
+// ─── Add Users Sheet ──────────────────────────────
 function AddUsersSheet({
   visible, onClose, profiles,
 }: {
@@ -357,7 +550,7 @@ const sheet = StyleSheet.create({
   previewRowAlt: { backgroundColor: "rgba(255,255,255,0.02)" },
   previewCol: { flex: 1, fontSize: 10, fontWeight: "700", color: Colors.mutedFg, textAlign: "center" },
   previewCell: { flex: 1, fontSize: 10, color: Colors.textSecondary, textAlign: "center" },
-  previewCellMono: { flex: 1, fontSize: 10, color: Colors.foreground, textAlign: "center", fontFamily: Platform.select({ ios: "Courier", android: "monospace", default: "monospace" }) },
+  previewCellMono: { flex: 1, fontSize: 10, color: Colors.foreground, textAlign: "center", fontFamily: MONO_FONT },
   previewMore: { fontSize: 10, color: Colors.mutedFg, textAlign: "center", padding: Spacing.sm },
   actionRow: { flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.md },
   generateBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 12 },
@@ -373,10 +566,18 @@ export default function UserManagerScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [addSheetVisible, setAddSheetVisible] = useState(false);
 
-  const { data: users, isLoading: loadingUsers, refetch: refetchUsers } = useUserManagerUsers({ enabled: tab === "users" });
-  const { data: profiles, isLoading: loadingProfiles, refetch: refetchProfiles } = useUserManagerProfiles({ enabled: tab === "profiles" || addSheetVisible });
+  // Multi-select state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Context menu state
+  const [contextUser, setContextUser] = useState<any | null>(null);
+
+  const { data: users, isLoading: loadingUsers, refetch: refetchUsers } = useUserManagerUsers({ enabled: tab === "users" || selectMode });
+  const { data: profiles, isLoading: loadingProfiles, refetch: refetchProfiles } = useUserManagerProfiles({ enabled: tab === "profiles" || addSheetVisible || !!contextUser });
   const { data: sessions, isLoading: loadingSessions, refetch: refetchSessions } = useUserManagerSessions({ enabled: tab === "sessions" });
   const action = useUserManagerAction();
+  const bulkAction = useRawBatchAction();
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -386,16 +587,78 @@ export default function UserManagerScreen() {
     setRefreshing(false);
   }, [tab]);
 
-  const filteredUsers = useMemo(() => {
-    const list: any[] = (users as any[]) || [];
-    if (!search.trim()) return list;
-    const q = search.toLowerCase();
-    return list.filter((u: any) => (u.username || u.name || "").toLowerCase().includes(q));
-  }, [users, search]);
-
   const userList = Array.isArray(users) ? users : [];
   const profileList = Array.isArray(profiles) ? profiles : [];
   const sessionList = Array.isArray(sessions) ? sessions : [];
+
+  const filteredUsers = useMemo(() => {
+    if (!search.trim()) return userList;
+    const q = search.toLowerCase();
+    return userList.filter((u: any) => (u.username || u.name || "").toLowerCase().includes(q));
+  }, [userList, search]);
+
+  const filteredSessions = useMemo(() => {
+    if (!search.trim()) return sessionList;
+    const q = search.toLowerCase();
+    return sessionList.filter((s: any) => (s.user || "").toLowerCase().includes(q));
+  }, [sessionList, search]);
+
+  const filteredProfiles = useMemo(() => {
+    if (!search.trim()) return profileList;
+    const q = search.toLowerCase();
+    return profileList.filter((p: any) => (p.name || "").toLowerCase().includes(q));
+  }, [profileList, search]);
+
+  // ── Multi-select helpers ──
+  const toggleSelect = useCallback((id: string) => {
+    lightTap();
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectMode = useCallback(() => {
+    lightTap();
+    setSelectMode((prev) => { if (prev) setSelectedIds(new Set()); return !prev; });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    lightTap();
+    setSelectedIds(new Set(filteredUsers.map((u: any) => u[".id"]).filter(Boolean)));
+  }, [filteredUsers]);
+
+  const handleBulkDelete = useCallback(() => {
+    if (!selectedIds.size) return;
+    lightTap();
+    Alert.alert("حذف المحدد", `حذف ${selectedIds.size} مستخدم؟`, [
+      { text: "إلغاء", style: "cancel" },
+      {
+        text: "حذف", style: "destructive",
+        onPress: () => {
+          const commands = Array.from(selectedIds)
+            .filter(Boolean)
+            .map((id) => ({ command: "/user-manager/user/remove", args: [`=.id=${id}`] }));
+          bulkAction.mutate({ commands }, {
+            onSuccess: () => {
+              notifySuccess();
+              setSelectedIds(new Set());
+              setSelectMode(false);
+              refetchUsers();
+            },
+            onError: () => notifyError(),
+          });
+        },
+      },
+    ]);
+  }, [selectedIds, bulkAction, refetchUsers]);
+
+  // ── Context menu ──
+  const handleViewSessions = useCallback((username: string) => {
+    setSearch(username);
+    setTab("sessions");
+  }, []);
 
   const handleUserAction = useCallback((user: any, act: string) => {
     const name = user.username || user.name || "المستخدم";
@@ -420,9 +683,15 @@ export default function UserManagerScreen() {
     (tab === "sessions" && loadingSessions);
 
   const activeCount = useMemo(() =>
-    Array.isArray(users) ? users.filter((u: any) => u.disabled !== "true" && u.disabled !== true).length : 0,
-    [users]
+    userList.filter((u: any) => u.disabled !== "true" && u.disabled !== true).length,
+    [userList]
   );
+  const disabledCount = useMemo(() =>
+    userList.filter((u: any) => u.disabled === "true" || u.disabled === true).length,
+    [userList]
+  );
+
+  const allSelected = selectedIds.size > 0 && selectedIds.size === filteredUsers.filter((u: any) => u[".id"]).length;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -436,20 +705,73 @@ export default function UserManagerScreen() {
                 <View style={styles.statDot} />
                 <Text style={styles.statPillText}>{activeCount} نشط</Text>
               </View>
+              {disabledCount > 0 && (
+                <View style={styles.statPillWarn}>
+                  <Text style={styles.statPillWarnText}>{disabledCount} معطل</Text>
+                </View>
+              )}
               <View style={styles.statPillMuted}>
                 <Text style={styles.statPillMutedText}>{userList.length} إجمالي</Text>
               </View>
             </View>
           )}
         </View>
-        <AnimatedPressable
-          style={styles.addFab}
-          onPress={() => { lightTap(); setAddSheetVisible(true); }}
-        >
-          <Ionicons name="person-add-outline" size={18} color={Colors.primaryFg} />
-          <Text style={styles.addFabText}>إضافة</Text>
-        </AnimatedPressable>
+        <View style={styles.headerActions}>
+          {tab === "users" && (
+            <AnimatedPressable
+              style={[styles.selectToggleBtn, selectMode ? styles.selectToggleBtnActive : undefined] as any}
+              onPress={toggleSelectMode}
+            >
+              <Ionicons
+                name={selectMode ? "close" : "checkmark-circle-outline"}
+                size={16}
+                color={selectMode ? Colors.primaryFg : Colors.textSecondary}
+              />
+              <Text style={[styles.selectToggleText, selectMode && styles.selectToggleTextActive]}>
+                {selectMode ? "إلغاء" : "تحديد"}
+              </Text>
+            </AnimatedPressable>
+          )}
+          {!selectMode && (
+            <AnimatedPressable
+              style={styles.addFab}
+              onPress={() => { lightTap(); setAddSheetVisible(true); }}
+            >
+              <Ionicons name="person-add-outline" size={18} color={Colors.primaryFg} />
+              <Text style={styles.addFabText}>إضافة</Text>
+            </AnimatedPressable>
+          )}
+        </View>
       </View>
+
+      {/* Bulk action bar (select mode) */}
+      {tab === "users" && selectMode && (
+        <View style={styles.bulkBar}>
+          <TouchableOpacity style={styles.selectAllRow} onPress={allSelected ? () => setSelectedIds(new Set()) : selectAll}>
+            <View style={[styles.checkbox, allSelected && styles.checkboxChecked]}>
+              {allSelected && <Ionicons name="checkmark" size={10} color="#fff" />}
+            </View>
+            <Text style={styles.selectAllText}>
+              {allSelected ? "إلغاء تحديد الكل" : "تحديد الكل"}
+              {selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.bulkDeleteBtn, !selectedIds.size && styles.bulkDeleteBtnDisabled]}
+            onPress={handleBulkDelete}
+            disabled={!selectedIds.size || bulkAction.isPending}
+          >
+            {bulkAction.isPending ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="trash-outline" size={14} color="#fff" />
+                <Text style={styles.bulkDeleteText}>حذف المحدد</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Tabs */}
       <View style={styles.tabs}>
@@ -459,7 +781,7 @@ export default function UserManagerScreen() {
             <TouchableOpacity
               key={t}
               style={[styles.tab, tab === t && styles.tabActive]}
-              onPress={() => { lightTap(); setTab(t); }}
+              onPress={() => { lightTap(); setTab(t); if (selectMode) { setSelectMode(false); setSelectedIds(new Set()); } }}
             >
               <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
                 {t === "users" ? "المستخدمون" : t === "profiles" ? "الباقات" : "الجلسات"}
@@ -474,24 +796,23 @@ export default function UserManagerScreen() {
         })}
       </View>
 
-      {tab === "users" && (
-        <View style={styles.searchRow}>
-          <Ionicons name="search-outline" size={16} color={Colors.mutedFg} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="بحث باسم المستخدم..."
-            placeholderTextColor={Colors.mutedFg}
-            value={search}
-            onChangeText={setSearch}
-            textAlign="right"
-          />
-          {search ? (
-            <TouchableOpacity onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={16} color={Colors.mutedFg} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      )}
+      {/* Search */}
+      <View style={styles.searchRow}>
+        <Ionicons name="search-outline" size={16} color={Colors.mutedFg} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder={tab === "sessions" ? "بحث باسم المستخدم..." : tab === "profiles" ? "بحث بالباقة..." : "بحث باسم المستخدم..."}
+          placeholderTextColor={Colors.mutedFg}
+          value={search}
+          onChangeText={setSearch}
+          textAlign="right"
+        />
+        {search ? (
+          <TouchableOpacity onPress={() => setSearch("")}>
+            <Ionicons name="close-circle" size={16} color={Colors.mutedFg} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
 
       {isLoading ? (
         <View style={styles.skeletonList}>
@@ -507,9 +828,21 @@ export default function UserManagerScreen() {
           ListEmptyComponent={<EmptyState title="لا يوجد مستخدمون" subtitle="اضغط إضافة لإنشاء مستخدمين جدد" />}
           renderItem={({ item, index }) => {
             const disabled = item.disabled === "true" || item.disabled === true;
+            const isSelected = selectedIds.has(item[".id"]);
             return (
-              <Animated.View entering={FadeInDown.delay(index * 25).springify()} style={styles.userCard}>
+              <Animated.View
+                entering={FadeInDown.delay(index * 25).springify()}
+                style={[styles.userCard, isSelected && styles.userCardSelected]}
+              >
                 <View style={styles.userHeader}>
+                  {/* Checkbox in select mode */}
+                  {selectMode && (
+                    <TouchableOpacity onPress={() => toggleSelect(item[".id"])} style={styles.checkboxWrapper}>
+                      <View style={[styles.checkbox, isSelected && styles.checkboxChecked]}>
+                        {isSelected && <Ionicons name="checkmark" size={10} color="#fff" />}
+                      </View>
+                    </TouchableOpacity>
+                  )}
                   <View style={[styles.userAvatar, disabled && styles.userAvatarDisabled]}>
                     <Ionicons name="person" size={16} color={disabled ? Colors.mutedFg : Colors.primaryLight} />
                   </View>
@@ -518,31 +851,42 @@ export default function UserManagerScreen() {
                     <Text style={styles.userMeta}>{item["actual-profile"] || item.group || "—"}</Text>
                   </View>
                   <Badge label={disabled ? "معطل" : "نشط"} variant={disabled ? "destructive" : "success"} />
-                </View>
-                <View style={styles.actionRow}>
-                  {disabled ? (
-                    <AnimatedPressable style={[styles.btn, styles.enableBtn]} onPress={() => handleUserAction(item, "enable")}>
-                      <Ionicons name="checkmark-circle-outline" size={14} color={Colors.success} />
-                      <Text style={[styles.btnText, { color: Colors.success }]}>تفعيل</Text>
-                    </AnimatedPressable>
-                  ) : (
-                    <AnimatedPressable style={[styles.btn, styles.disableBtn]} onPress={() => handleUserAction(item, "disable")}>
-                      <Ionicons name="ban-outline" size={14} color={Colors.warning} />
-                      <Text style={[styles.btnText, { color: Colors.warning }]}>تعطيل</Text>
-                    </AnimatedPressable>
+                  {/* More button */}
+                  {!selectMode && (
+                    <TouchableOpacity
+                      style={styles.moreBtn}
+                      onPress={() => { lightTap(); setContextUser(item); }}
+                    >
+                      <Ionicons name="ellipsis-vertical" size={16} color={Colors.mutedFg} />
+                    </TouchableOpacity>
                   )}
-                  <AnimatedPressable style={[styles.btn, styles.deleteBtn]} onPress={() => handleUserAction(item, "remove")}>
-                    <Ionicons name="trash-outline" size={14} color={Colors.destructive} />
-                    <Text style={[styles.btnText, { color: Colors.destructive }]}>حذف</Text>
-                  </AnimatedPressable>
                 </View>
+                {!selectMode && (
+                  <View style={styles.actionRow}>
+                    {disabled ? (
+                      <AnimatedPressable style={[styles.btn, styles.enableBtn]} onPress={() => handleUserAction(item, "enable")}>
+                        <Ionicons name="checkmark-circle-outline" size={14} color={Colors.success} />
+                        <Text style={[styles.btnText, { color: Colors.success }]}>تفعيل</Text>
+                      </AnimatedPressable>
+                    ) : (
+                      <AnimatedPressable style={[styles.btn, styles.disableBtn]} onPress={() => handleUserAction(item, "disable")}>
+                        <Ionicons name="ban-outline" size={14} color={Colors.warning} />
+                        <Text style={[styles.btnText, { color: Colors.warning }]}>تعطيل</Text>
+                      </AnimatedPressable>
+                    )}
+                    <AnimatedPressable style={[styles.btn, styles.deleteBtn]} onPress={() => handleUserAction(item, "remove")}>
+                      <Ionicons name="trash-outline" size={14} color={Colors.destructive} />
+                      <Text style={[styles.btnText, { color: Colors.destructive }]}>حذف</Text>
+                    </AnimatedPressable>
+                  </View>
+                )}
               </Animated.View>
             );
           }}
         />
       ) : tab === "profiles" ? (
         <FlatList
-          data={profileList}
+          data={filteredProfiles}
           keyExtractor={(item, i) => item[".id"] || String(i)}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
           contentContainerStyle={styles.list}
@@ -592,7 +936,7 @@ export default function UserManagerScreen() {
         />
       ) : (
         <FlatList
-          data={sessionList}
+          data={filteredSessions}
           keyExtractor={(item, i) => item[".id"] || String(i)}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
           contentContainerStyle={styles.list}
@@ -643,6 +987,16 @@ export default function UserManagerScreen() {
         onClose={() => setAddSheetVisible(false)}
         profiles={profileList}
       />
+
+      {/* User Context Menu */}
+      <UserContextSheet
+        user={contextUser}
+        visible={!!contextUser}
+        onClose={() => setContextUser(null)}
+        profiles={profileList}
+        action={action}
+        onViewSessions={handleViewSessions}
+      />
     </SafeAreaView>
   );
 }
@@ -653,17 +1007,35 @@ const styles = StyleSheet.create({
   // Header
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: Spacing.xs },
   headerLeft: { flex: 1 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },
   pageTitle: { fontSize: 22, fontWeight: "800", color: Colors.foreground, letterSpacing: -0.5 },
-  statsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 },
+  statsRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3, flexWrap: "wrap" },
   statPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: Colors.successBg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.successBorder },
   statDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.success },
   statPillText: { fontSize: 10, fontWeight: "700", color: Colors.success },
+  statPillWarn: { backgroundColor: Colors.warningBg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.warningBorder },
+  statPillWarnText: { fontSize: 10, fontWeight: "700", color: Colors.warning },
   statPillMuted: { backgroundColor: Colors.muted, paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border },
   statPillMutedText: { fontSize: 10, fontWeight: "600", color: Colors.textSecondary },
 
-  // FAB
+  // Buttons
   addFab: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full },
   addFabText: { fontSize: 13, fontWeight: "700", color: Colors.primaryFg },
+  selectToggleBtn: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: Colors.muted, paddingHorizontal: 12, paddingVertical: 7, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border },
+  selectToggleBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  selectToggleText: { fontSize: 12, fontWeight: "700", color: Colors.textSecondary },
+  selectToggleTextActive: { color: Colors.primaryFg },
+
+  // Bulk action bar
+  bulkBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, backgroundColor: Colors.card, borderBottomWidth: 1, borderBottomColor: Colors.border, gap: Spacing.sm },
+  selectAllRow: { flexDirection: "row", alignItems: "center", gap: 8, flex: 1 },
+  selectAllText: { fontSize: 12, color: Colors.foreground, fontWeight: "600" },
+  checkbox: { width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: Colors.border, alignItems: "center", justifyContent: "center", backgroundColor: Colors.muted },
+  checkboxChecked: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  checkboxWrapper: { marginRight: 4 },
+  bulkDeleteBtn: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: Colors.destructive, paddingHorizontal: 12, paddingVertical: 7, borderRadius: Radius.md },
+  bulkDeleteBtnDisabled: { opacity: 0.45 },
+  bulkDeleteText: { fontSize: 12, fontWeight: "700", color: "#fff" },
 
   // Tabs
   tabs: { flexDirection: "row", paddingHorizontal: Spacing.lg, gap: Spacing.xs, marginBottom: Spacing.sm, marginTop: Spacing.xs },
@@ -685,6 +1057,7 @@ const styles = StyleSheet.create({
 
   // User card
   userCard: { backgroundColor: Colors.card, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.cardBorder, padding: Spacing.md, gap: 8 },
+  userCardSelected: { borderColor: Colors.primary, backgroundColor: "rgba(124,58,237,0.06)" },
   userHeader: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
   userAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(124,58,237,0.12)", alignItems: "center", justifyContent: "center" },
   userAvatarDisabled: { backgroundColor: "rgba(107,114,128,0.12)" },
@@ -692,6 +1065,7 @@ const styles = StyleSheet.create({
   userInfo: { flex: 1 },
   userName: { fontSize: 13, fontWeight: "700", color: Colors.foreground },
   userMeta: { fontSize: 10, color: Colors.mutedFg, marginTop: 1 },
+  moreBtn: { padding: 6, borderRadius: Radius.sm, backgroundColor: Colors.muted },
   actionRow: { flexDirection: "row", gap: 8 },
   btn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.sm, borderWidth: 1 },
   btnText: { fontSize: 11, fontWeight: "600" },
