@@ -23,6 +23,23 @@ import {
   useUserManagerSessions, useIPAddresses,
 } from "@/hooks/useMikrotik";
 
+interface QuickActionProps {
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  path: string;
+}
+
+function QuickAction({ label, icon, path }: QuickActionProps) {
+  return (
+    <AnimatedPressable style={styles.quickBtn} onPress={() => router.push(path as any)}>
+      <View style={styles.quickIcon}>
+        <Ionicons name={icon} size={20} color={Colors.primaryLight} />
+      </View>
+      <Text style={styles.quickBtnText}>{label}</Text>
+    </AnimatedPressable>
+  );
+}
+
 export default function DashboardScreen() {
   const { user } = useAuth();
   const config = getMikrotikConfigSync();
@@ -101,15 +118,6 @@ export default function DashboardScreen() {
     : 0;
   const routerName = identity?.name ?? config.label ?? "MikroTik";
   const latency = health?.latency;
-
-  const QuickAction = ({ label, icon, path }: { label: string; icon: any; path: string }) => (
-    <AnimatedPressable style={styles.quickBtn} onPress={() => router.push(path)}>
-      <View style={styles.quickIcon}>
-        <Ionicons name={icon} size={20} color={Colors.primaryLight} />
-      </View>
-      <Text style={styles.quickBtnText}>{label}</Text>
-    </AnimatedPressable>
-  );
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
