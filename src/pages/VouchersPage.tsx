@@ -23,7 +23,7 @@ import {
 import {
   Printer, CreditCard, Plus, Trash2, Download, Home, Upload, Loader2,
   History, ChevronLeft, ChevronRight, Check, X, Save, FolderOpen, GripVertical,
-  Store,
+  Store, FileDown, LayoutGrid,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -732,13 +732,15 @@ export default function VouchersPage() {
     toast.success("تم حذف القالب");
   };
 
-  // ─── Print HTML Builder ──────────────────────
+  // ─── Print HTML Builder (professional quality) ──────────────────────
   const buildPrintHtml = (cardsToPrint: VoucherCard[]): string => {
     const cardsPerPage = printCols * printRows;
+    const totalPages = Math.max(1, Math.ceil(cardsToPrint.length / cardsPerPage));
     const pages: string[] = [];
     const visibleFields = fields.filter(f => f.visible);
 
     for (let p = 0; p < cardsToPrint.length; p += cardsPerPage) {
+      const pageIndex = Math.floor(p / cardsPerPage) + 1;
       const pageCards = cardsToPrint.slice(p, p + cardsPerPage);
       const cardHtml = pageCards.map(c => {
         if (bgImage) {
@@ -750,72 +752,105 @@ export default function VouchersPage() {
             else if (f.type === "title") text = cardTitle;
             else if (f.type === "subtitle") text = cardSubtitle;
             else if (f.type === "price") text = unitPrice > 0 ? `${unitPrice}` : "";
-            return text ? `<div class="overlay-text" style="top:${f.y}%;left:${f.x}%;font-size:${f.fontSize}px;color:${f.color}">${text}</div>` : "";
+            return text
+              ? `<div class="overlay-text" style="top:${f.y}%;left:${f.x}%;font-size:${f.fontSize}px;color:${f.color}">${text}</div>`
+              : "";
           }).join("");
           return `<div class="card card-custom" style="background-image:url('${bgImage}')">${fieldsHtml}</div>`;
         }
         return `
           <div class="card">
-            <div class="card-title">${cardTitle}</div>
-            <div class="card-sub">${cardSubtitle}</div>
+            <div class="card-header">
+              <div class="card-title">${cardTitle}</div>
+              ${unitPrice > 0 ? `<div class="price-badge">${unitPrice}</div>` : ""}
+            </div>
+            ${cardSubtitle ? `<div class="card-sub">${cardSubtitle}</div>` : ""}
+            <div class="divider"></div>
             <div class="field"><div class="label">اسم المستخدم</div><div class="value">${c.username}</div></div>
             ${c.password ? `<div class="field"><div class="label">كلمة المرور</div><div class="value">${c.password}</div></div>` : ""}
             <div class="profile-badge">${c.profile}</div>
-            ${unitPrice > 0 ? `<div class="price-badge">${unitPrice}</div>` : ""}
           </div>`;
       }).join("");
-      pages.push(`<div class="page"><div class="grid">${cardHtml}</div></div>`);
+      pages.push(`
+        <div class="page">
+          <div class="grid">${cardHtml}</div>
+          <div class="page-footer">${pageIndex} / ${totalPages}</div>
+        </div>`);
     }
 
     return `<!DOCTYPE html>
-<html dir="rtl"><head><meta charset="utf-8"><title>كروت</title>
+<html dir="rtl"><head>
+<meta charset="utf-8">
+<title>${cardTitle || "كروت"}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', sans-serif; }
-  body { background: white; }
-  .page { padding: 8mm; page-break-after: always; }
+  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: white; font-family: 'Cairo', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .page { padding: 8mm; page-break-after: always; position: relative; min-height: 297mm; display: flex; flex-direction: column; }
   .page:last-child { page-break-after: auto; }
-  .grid { display: grid; grid-template-columns: repeat(${printCols}, 1fr); grid-template-rows: repeat(${printRows}, 1fr); gap: 2mm; height: calc(297mm - 16mm); }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(${printCols}, 1fr);
+    grid-template-rows: repeat(${printRows}, 1fr);
+    gap: 2.5mm;
+    flex: 1;
+  }
   .card {
-    border: 1.5px solid #E5E7EB; border-radius: 6px;
-    padding: 10px 12px; page-break-inside: avoid;
+    border: 1px solid #D1D5DB;
+    border-radius: 5px;
+    padding: 6px 8px;
+    page-break-inside: avoid;
     background: #FFFFFF;
-    min-height: 80px;
     position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
   .card-custom {
-    background-size: 100% 100%; background-position: center; background-repeat: no-repeat;
-    position: relative; border: none; padding: 0;
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    position: relative;
+    border: none;
+    padding: 0;
     overflow: hidden;
   }
   .overlay-text {
-    position: absolute; transform: translate(-50%, -50%);
+    position: absolute;
+    transform: translate(-50%, -50%);
     font-weight: 700;
-    text-shadow: 0 0 4px rgba(255,255,255,0.9);
-    font-family: 'JetBrains Mono', monospace; letter-spacing: 1.5px;
+    white-space: nowrap;
+    text-shadow: 0 0 3px rgba(255,255,255,0.85), 0 0 6px rgba(255,255,255,0.6);
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 1px;
   }
-  .card-title { font-weight: 700; font-size: 10px; color: #000; margin-bottom: 1px; }
-  .card-sub { font-size: 8px; color: #666; margin-bottom: 6px; }
-  .field { margin-bottom: 3px; }
-  .label { font-size: 7px; color: #666; }
-  .value { font-size: 11px; font-weight: 600; color: #000; font-family: 'JetBrains Mono', monospace; letter-spacing: 1px; }
+  .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2px; }
+  .card-title { font-weight: 700; font-size: 9px; color: #111827; line-height: 1.2; }
+  .card-sub { font-size: 7px; color: #6B7280; margin-bottom: 4px; }
+  .divider { height: 1px; background: #F3F4F6; margin: 3px 0; }
+  .field { margin-bottom: 2px; }
+  .label { font-size: 6.5px; color: #9CA3AF; letter-spacing: 0.3px; text-transform: uppercase; }
+  .value { font-size: 10px; font-weight: 600; color: #111827; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.8px; line-height: 1.3; }
   .profile-badge {
-    display: inline-block; margin-top: 4px; padding: 1px 6px;
-    background: #F3F4F6; border-radius: 3px; font-size: 7px; color: #666;
+    display: inline-block; margin-top: 3px; padding: 1px 5px;
+    background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 3px;
+    font-size: 6.5px; color: #6B7280; letter-spacing: 0.2px;
   }
-  .price-badge {
-    position: absolute; top: 6px; left: 8px;
-    font-size: 9px; font-weight: 700; color: #2563EB;
+  .price-badge { font-size: 9px; font-weight: 700; color: #2563EB; white-space: nowrap; }
+  .page-footer {
+    text-align: center; padding-top: 2mm;
+    font-size: 7px; color: #9CA3AF; letter-spacing: 0.5px;
   }
-  @media print { .page { padding: 5mm; } }
-</style></head><body>${pages.join("")}</body></html>`;
+  @media print {
+    .page { padding: 5mm; }
+    @page { margin: 0; size: A4 portrait; }
+  }
+</style>
+</head><body>${pages.join("")}</body></html>`;
   };
 
-  const handlePrint = (cardsToPrint?: VoucherCard[]) => {
-    const toPrint = cardsToPrint || cards;
-    if (toPrint.length === 0) return;
-    const html = buildPrintHtml(toPrint);
-    // Use window.open for reliable printing on both desktop and mobile (iOS Safari blocks iframe print)
+  const openPrintWindow = (html: string) => {
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       toast.error("تعذر فتح نافذة الطباعة — تأكد من السماح بالنوافذ المنبثقة");
@@ -824,17 +859,36 @@ export default function VouchersPage() {
     printWindow.document.open();
     printWindow.document.write(html);
     printWindow.document.close();
-    // Wait for images to load then print
+    // Wait for fonts/images to load then trigger print
     const images = printWindow.document.querySelectorAll("img");
     const imagePromises = Array.from(images).map(img =>
-      img.complete ? Promise.resolve() : new Promise(resolve => { img.onload = resolve; img.onerror = resolve; })
+      img.complete ? Promise.resolve() : new Promise<void>(resolve => { img.onload = () => resolve(); img.onerror = () => resolve(); })
     );
     Promise.all(imagePromises).then(() => {
       setTimeout(() => {
         printWindow.focus();
         printWindow.print();
-      }, 300);
+      }, 400);
     });
+  };
+
+  const handlePrint = (cardsToPrint?: VoucherCard[]) => {
+    const toPrint = cardsToPrint || cards;
+    if (toPrint.length === 0) return;
+    openPrintWindow(buildPrintHtml(toPrint));
+  };
+
+  // PDF export: same flow as print but hints the user to choose "Save as PDF"
+  const handleExportPdf = (cardsToPrint?: VoucherCard[]) => {
+    const toPrint = cardsToPrint || cards;
+    if (toPrint.length === 0) return;
+    // Build HTML with PDF-optimised meta hint
+    const html = buildPrintHtml(toPrint).replace(
+      "</title>",
+      '</title><meta name="description" content="PDF export">'
+    );
+    openPrintWindow(html);
+    toast.info("اختر «حفظ كـ PDF» من نافذة الطباعة");
   };
 
   const handleDeleteBatch = (batchId: string) => {
@@ -934,6 +988,9 @@ export default function VouchersPage() {
                     <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => loadBatchCards(batch)}>تحميل</Button>
                     <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => handlePrint(batch.cards)}>
                       <Printer className="h-3 w-3 ml-1" /> طباعة
+                    </Button>
+                    <Button size="sm" variant="outline" className="text-xs h-8 text-primary border-primary/30" onClick={() => handleExportPdf(batch.cards)}>
+                      <FileDown className="h-3 w-3 ml-1" /> PDF
                     </Button>
                     {batch.pushed && (
                       <Button
@@ -1195,7 +1252,35 @@ export default function VouchersPage() {
                     <Input type="number" min={1} max={8} value={printRows} onChange={e => setPrintRows(Number(e.target.value) || 4)} className="h-9" />
                   </div>
                 </div>
-                <p className="text-[10px] text-muted-foreground">{printCols * printRows} كرت في كل صفحة</p>
+
+                {/* Real-time page layout mini-preview */}
+                <div className="rounded border border-border bg-muted/30 p-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      <LayoutGrid className="h-3 w-3" /> تخطيط الصفحة
+                    </span>
+                    <span className="text-[10px] font-medium text-foreground">
+                      {printCols * printRows} كرت / صفحة
+                    </span>
+                  </div>
+                  <div
+                    className="grid gap-0.5"
+                    style={{ gridTemplateColumns: `repeat(${printCols}, 1fr)` }}
+                  >
+                    {Array.from({ length: printCols * printRows }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="rounded-sm border border-border bg-background"
+                        style={{ aspectRatio: `${printCols > 3 ? "1.8" : "1.6"}` }}
+                      />
+                    ))}
+                  </div>
+                  {cards.length > 0 && (
+                    <p className="text-[10px] text-muted-foreground mt-1.5 text-center font-medium">
+                      {Math.ceil(cards.length / (printCols * printRows))} صفحة لـ {cards.length} كرت
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-2">
@@ -1235,6 +1320,9 @@ export default function VouchersPage() {
                 <Button onClick={() => handlePrint()} size="sm" variant="outline" className="w-full">
                   <Printer className="h-3.5 w-3.5 ml-1" /> طباعة
                 </Button>
+                <Button onClick={() => handleExportPdf()} size="sm" variant="outline" className="w-full text-primary border-primary/30 hover:bg-primary/5">
+                  <FileDown className="h-3.5 w-3.5 ml-1" /> تصدير PDF
+                </Button>
               </div>
             )}
           </div>
@@ -1248,9 +1336,18 @@ export default function VouchersPage() {
                   معاينة ({cards.length})
                 </h3>
                 {cards.length > 0 && (
-                  <span className="text-[10px] text-muted-foreground">
-                    {Math.ceil(cards.length / (printCols * printRows))} صفحة
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">
+                      <LayoutGrid className="h-3 w-3" />
+                      {Math.ceil(cards.length / (printCols * printRows))} صفحة
+                    </span>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handlePrint()}>
+                      <Printer className="h-3 w-3 ml-1" /> طباعة
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs text-primary" onClick={() => handleExportPdf()}>
+                      <FileDown className="h-3 w-3 ml-1" /> PDF
+                    </Button>
+                  </div>
                 )}
               </div>
 

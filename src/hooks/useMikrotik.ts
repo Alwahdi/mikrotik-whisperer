@@ -322,13 +322,95 @@ export function useUserManagerAction() {
 
       return callMikrotikApi(endpointMap[action] || `/user-manager/user/${action}`, { args: finalArgs });
     },
-    onSuccess: () => {
+    onMutate: async ({ action, id, data }) => {
       const routerKey = getRouterKey();
-      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager"] });
-      toast.success("تم تنفيذ العملية بنجاح");
+      const usersKey = ["mikrotik", routerKey, "usermanager", "users"];
+      const countKey = ["mikrotik", routerKey, "usermanager", "count"];
+
+      // Cancel in-flight queries to prevent race conditions
+      await qc.cancelQueries({ queryKey: usersKey });
+
+      const previousUsers = qc.getQueryData(usersKey);
+      const previousCount = qc.getQueryData(countKey);
+
+      // Optimistically update the users list for instant UI feedback
+      if (action === "add" && data) {
+        const optimisticUser = {
+          ".id": `__optimistic__${Date.now()}`,
+          username: data.username ?? "",
+          name: data.username ?? "",
+          group: data.group ?? "",
+          "actual-profile": data.group ?? "",
+          disabled: "false",
+        };
+        qc.setQueryData(usersKey, (old: any) =>
+          Array.isArray(old) ? [optimisticUser, ...old] : [optimisticUser]
+        );
+        qc.setQueryData(countKey, (old: any) =>
+          old ? { ...old, total: (old.total ?? 0) + 1, active: (old.active ?? 0) + 1 } : old
+        );
+      } else if (action === "remove" && id) {
+        qc.setQueryData(usersKey, (old: any) =>
+          Array.isArray(old) ? old.filter((u: any) => (u[".id"] || u.id) !== id) : old
+        );
+        qc.setQueryData(countKey, (old: any) => {
+          if (!old) return old;
+          const removedUser = Array.isArray(previousUsers)
+            ? (previousUsers as any[]).find((u: any) => (u[".id"] || u.id) === id)
+            : null;
+          const wasActive = removedUser && removedUser.disabled !== "true" && removedUser.disabled !== true;
+          return {
+            ...old,
+            total: Math.max(0, (old.total ?? 1) - 1),
+            active: wasActive ? Math.max(0, (old.active ?? 1) - 1) : old.active,
+            disabled: !wasActive ? Math.max(0, (old.disabled ?? 1) - 1) : old.disabled,
+          };
+        });
+      } else if (action === "disable" && id) {
+        qc.setQueryData(usersKey, (old: any) =>
+          Array.isArray(old)
+            ? old.map((u: any) => (u[".id"] || u.id) === id ? { ...u, disabled: "true" } : u)
+            : old
+        );
+        qc.setQueryData(countKey, (old: any) =>
+          old ? { ...old, active: Math.max(0, (old.active ?? 1) - 1), disabled: (old.disabled ?? 0) + 1 } : old
+        );
+      } else if (action === "enable" && id) {
+        qc.setQueryData(usersKey, (old: any) =>
+          Array.isArray(old)
+            ? old.map((u: any) => (u[".id"] || u.id) === id ? { ...u, disabled: "false" } : u)
+            : old
+        );
+        qc.setQueryData(countKey, (old: any) =>
+          old ? { ...old, active: (old.active ?? 0) + 1, disabled: Math.max(0, (old.disabled ?? 1) - 1) } : old
+        );
+      }
+
+      return { previousUsers, previousCount };
     },
-    onError: (err: any) => {
+    onError: (err: any, _variables, context) => {
+      // Roll back optimistic updates on failure
+      const routerKey = getRouterKey();
+      if (context?.previousUsers !== undefined) {
+        qc.setQueryData(["mikrotik", routerKey, "usermanager", "users"], context.previousUsers);
+      }
+      if (context?.previousCount !== undefined) {
+        qc.setQueryData(["mikrotik", routerKey, "usermanager", "count"], context.previousCount);
+      }
       toast.error(err.message || "فشلت العملية");
+    },
+    onSuccess: (_data, { action }) => {
+      const routerKey = getRouterKey();
+      // Only invalidate changed queries — avoid full cache bust
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager", "users"] });
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager", "count"] });
+      const actionLabels: Record<string, string> = {
+        add: "تمت الإضافة بنجاح",
+        remove: "تم الحذف بنجاح",
+        disable: "تم التعطيل",
+        enable: "تم التفعيل",
+      };
+      toast.success(actionLabels[action] ?? "تم تنفيذ العملية بنجاح");
     },
   });
 }
@@ -362,6 +444,113 @@ export function useUserManagerProfileAction() {
     },
     onError: (err: any) => {
       toast.error(err.message || "فشل حفظ الباقة");
+    },
+  });
+}
+
+// ─── User Manager Batch Add (high-throughput parallel creation) ─────────────
+export interface BatchAddUser {
+  username: string;
+  password: string;
+  group: string;
+}
+
+export interface BatchAddResult {
+  total: number;
+  succeeded: number;
+  failed: number;
+  errors: { username: string; error: string }[];
+}
+
+export function useUserManagerBatchAdd() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      users,
+      onProgress,
+    }: {
+      users: BatchAddUser[];
+      onProgress?: (done: number, total: number) => void;
+    }): Promise<BatchAddResult> => {
+      const config = getMikrotikConfig();
+      if (!config) throw new Error("لم يتم إعداد بيانات الاتصال");
+
+      const isRestMode = config.mode === "rest";
+      // Adaptive chunk sizes based on protocol
+      const chunkSize = isRestMode ? 6 : 40;
+      const concurrency = isRestMode ? 1 : 4;
+
+      const errors: { username: string; error: string }[] = [];
+      let succeeded = 0;
+      let done = 0;
+
+      const chunks: BatchAddUser[][] = [];
+      for (let i = 0; i < users.length; i += chunkSize) {
+        chunks.push(users.slice(i, i + chunkSize));
+      }
+
+      let nextChunk = 0;
+
+      const processChunk = async (chunk: BatchAddUser[]) => {
+        const commands = chunk.map((u) => ({
+          command: "/user-manager/user/add",
+          args: [
+            `=username=${u.username}`,
+            `=password=${u.password}`,
+            `=group=${u.group}`,
+            `=owner=admin`,
+          ],
+        }));
+
+        try {
+          const result = await callMikrotikAction("batch", { commands });
+          const errs = Array.isArray(result?.errors) ? result.errors : [];
+          for (let j = 0; j < chunk.length; j++) {
+            const msg = typeof errs[j] === "string" ? errs[j].trim() : "";
+            if (!msg || msg.toLowerCase().includes("already") || msg.toLowerCase().includes("exists")) {
+              succeeded++;
+            } else {
+              errors.push({ username: chunk[j].username, error: msg });
+            }
+          }
+        } catch (err: any) {
+          const msg = err?.message || "فشل التنفيذ";
+          for (const u of chunk) {
+            errors.push({ username: u.username, error: msg });
+          }
+        }
+
+        done += chunk.length;
+        onProgress?.(done, users.length);
+      };
+
+      const worker = async () => {
+        while (true) {
+          const idx = nextChunk++;
+          if (idx >= chunks.length) break;
+          await processChunk(chunks[idx]);
+        }
+      };
+
+      await Promise.all(
+        Array.from({ length: Math.min(concurrency, chunks.length) }, () => worker())
+      );
+
+      return { total: users.length, succeeded, failed: errors.length, errors };
+    },
+    onSuccess: (result) => {
+      const routerKey = getRouterKey();
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager", "users"] });
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager", "count"] });
+      if (result.failed === 0) {
+        toast.success(`تمت إضافة ${result.succeeded} مستخدم بنجاح`);
+      } else {
+        toast.warning(`نجح ${result.succeeded} — فشل ${result.failed}`);
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "فشلت عملية الإضافة");
     },
   });
 }
