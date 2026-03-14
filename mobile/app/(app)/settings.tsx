@@ -247,6 +247,7 @@ export default function SettingsScreen() {
           {[
             { label: "إدارة الراوترات", icon: "hardware-chip-outline" as const, path: "/routers" },
             { label: "النسخ الاحتياطي", icon: "cloud-download-outline" as const, path: "/(app)/backups" },
+            { label: "سجل النظام", icon: "list-outline" as const, path: "/(app)/logs" },
           ].map((item) => (
             <AnimatedPressable key={item.path} style={styles.linkRow} onPress={() => router.push(item.path as any)}>
               <Ionicons name={item.icon} size={18} color={Colors.textSecondary} />

@@ -20,7 +20,7 @@ import { lightTap } from "@/lib/haptics";
 import {
   useHotspotUsers, useUserManagerUsers, useSystemResources,
   useSystemIdentity, useInterfaces, useDHCPLeases, useRouterHealth,
-  useUserManagerSessions,
+  useUserManagerSessions, useIPAddresses,
 } from "@/hooks/useMikrotik";
 
 export default function DashboardScreen() {
@@ -35,6 +35,7 @@ export default function DashboardScreen() {
   const { data: interfaces, refetch: refetchI } = useInterfaces();
   const { data: dhcpLeases, refetch: refetchD } = useDHCPLeases();
   const { data: health } = useRouterHealth();
+  const { data: ipAddresses } = useIPAddresses();
 
   const { data: todaySales, refetch: refetchSales } = useQuery({
     queryKey: ["today-sales", user?.id],
@@ -232,6 +233,20 @@ export default function DashboardScreen() {
           </Animated.View>
         )}
 
+        {/* IP Addresses */}
+        {Array.isArray(ipAddresses) && ipAddresses.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(175).springify()} style={styles.tableCard}>
+            <Text style={styles.tableSectionTitle}>عناوين IP</Text>
+            {(ipAddresses as any[]).filter((a: any) => a.disabled !== "true" && a.disabled !== true).map((addr: any, i: number) => (
+              <View key={addr[".id"] || `${addr.interface}-${addr.address}` || String(i)} style={styles.ifaceRow}>
+                <View style={[styles.ifaceDot, { backgroundColor: Colors.primaryLight }]} />
+                <Text style={styles.ifaceName}>{addr.interface || "—"}</Text>
+                <Text style={styles.ifaceBytes}>{addr.address || "—"}</Text>
+              </View>
+            ))}
+          </Animated.View>
+        )}
+
         {/* System Info */}
         <Animated.View entering={FadeInDown.delay(200).springify()} style={styles.sysInfoCard}>
           <Text style={styles.tableSectionTitle}>معلومات النظام</Text>
@@ -253,6 +268,7 @@ export default function DashboardScreen() {
         <View style={styles.moreRow}>
           {[
             { label: "النسخ الاحتياطي", icon: "cloud-download-outline" as const, path: "/(app)/backups" },
+            { label: "سجل النظام", icon: "list-outline" as const, path: "/(app)/logs" },
             { label: "الإعدادات", icon: "settings-outline" as const, path: "/(app)/settings" },
             { label: "تغيير الراوتر", icon: "swap-horizontal-outline" as const, path: "/routers" },
           ].map((item) => (

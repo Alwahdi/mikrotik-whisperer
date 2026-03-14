@@ -104,6 +104,7 @@ export default function AppLayout() {
       {/* Hidden screens accessible via router.push */}
       <Tabs.Screen name="backups"  options={{ href: null, title: "النسخ الاحتياطي" }} />
       <Tabs.Screen name="settings" options={{ href: null, title: "الإعدادات" }} />
+      <Tabs.Screen name="logs"     options={{ href: null, title: "السجلات" }} />
     </Tabs>
   );
 }

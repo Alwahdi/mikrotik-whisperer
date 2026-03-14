@@ -349,3 +349,32 @@ export function useRawBatchAction() {
     }) => callMikrotikAction("batch", { commands }),
   });
 }
+
+// ─── System Logs ─────────────────────────────────
+export function useSystemLogs() {
+  const routerKey = getRouterKey();
+  return useQuery({
+    queryKey: ["mikrotik", routerKey, "system", "logs"],
+    queryFn: () =>
+      callMikrotikApi("/log/print", {
+        args: ["=.proplist=.id,time,topics,message"],
+      }),
+    refetchInterval: 30000,
+    enabled: useEnabled(),
+    staleTime: 15000,
+    gcTime: 3 * 60 * 1000,
+  });
+}
+
+// ─── IP Addresses ────────────────────────────────
+export function useIPAddresses() {
+  const routerKey = getRouterKey();
+  return useQuery({
+    queryKey: ["mikrotik", routerKey, "ip", "address"],
+    queryFn: () => callMikrotikApi("/ip/address/print"),
+    refetchInterval: 60000,
+    enabled: useEnabled(),
+    staleTime: 30000,
+    gcTime: 5 * 60 * 1000,
+  });
+}
