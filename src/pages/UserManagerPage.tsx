@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
   useUserManagerUsers,
@@ -8,18 +8,22 @@ import {
   useUserManagerProfileAction,
   useUserManagerCount,
   useUserManagerSearchUsers,
+  useUserManagerBatchAdd,
+  type BatchAddUser,
 } from "@/hooks/useMikrotik";
 import {
   Users, RefreshCw, AlertTriangle, Package, Clock,
   UserCheck, UserX, Search, MoreHorizontal, UserPlus,
   Ban, Trash2, CheckCircle, XCircle, Eye, ChevronLeft, ChevronRight,
   Home, PackagePlus, PencilLine, AlertCircle, CheckSquare, Square, Loader2,
+  Upload, FileText,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuTrigger, DropdownMenuSeparator,
@@ -54,6 +58,7 @@ export default function UserManagerPage() {
   const queryClient = useQueryClient();
   const action = useUserManagerAction();
   const profileAction = useUserManagerProfileAction();
+  const batchAdd = useUserManagerBatchAdd();
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -68,6 +73,14 @@ export default function UserManagerPage() {
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [userFilter, setUserFilter] = useState<"all" | "expired">("all");
 
+  // Batch import state
+  const [batchImportOpen, setBatchImportOpen] = useState(false);
+  const [batchCsvText, setBatchCsvText] = useState("");
+  const [batchImportProfile, setBatchImportProfile] = useState("");
+  const [batchImporting, setBatchImporting] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(0);
+  const csvFileInputRef = useRef<HTMLInputElement>(null);
+
   // Server-side search (for large datasets)
   const { data: searchResults, isLoading: loadingSearch } = useUserManagerSearchUsers(debouncedSearch, { enabled: activeTab === "users" });
 
@@ -80,7 +93,6 @@ export default function UserManagerPage() {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => setDebouncedSearch(val), 400);
   };
-  
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileMode, setProfileMode] = useState<"add" | "edit">("add");
@@ -335,6 +347,59 @@ export default function UserManagerPage() {
     });
   };
 
+  // Parse CSV text: each line can be "username,password" or "username,password,profile"
+  const parseCsvUsers = useCallback((text: string, defaultProfile: string): BatchAddUser[] => {
+    return text
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(line => line && !line.startsWith("#"))
+      .map(line => {
+        const parts = line.split(",").map(p => p.trim());
+        return {
+          username: parts[0] || "",
+          password: parts[1] || parts[0] || "",
+          group: parts[2] || defaultProfile,
+        } satisfies BatchAddUser;
+      })
+      .filter(u => u.username.length > 0);
+  }, []);
+
+  const handleCsvFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setBatchCsvText((ev.target?.result as string) || "");
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const handleBatchImport = async () => {
+    const users = parseCsvUsers(batchCsvText, batchImportProfile);
+    if (users.length === 0) {
+      toast.error("لا توجد بيانات صالحة للاستيراد");
+      return;
+    }
+    if (!batchImportProfile && users.some(u => !u.group)) {
+      toast.error("يرجى اختيار باقة افتراضية");
+      return;
+    }
+    setBatchImporting(true);
+    setBatchProgress(0);
+    try {
+      await batchAdd.mutateAsync({
+        users,
+        onProgress: (done, total) => setBatchProgress(Math.round((done / total) * 100)),
+      });
+      setBatchImportOpen(false);
+      setBatchCsvText("");
+      setBatchImportProfile("");
+    } finally {
+      setBatchImporting(false);
+      setBatchProgress(0);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -357,6 +422,10 @@ export default function UserManagerPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setBatchImportOpen(true)} className="h-8" title="استيراد دفعي">
+            <Upload className="h-3.5 w-3.5 ml-1" />
+            <span className="hidden sm:inline">استيراد</span>
+          </Button>
           <Button size="sm" variant="outline" onClick={() => setAddOpen(true)} className="h-8">
             <UserPlus className="h-3.5 w-3.5 ml-1" />
             <span className="hidden sm:inline">إضافة</span>
@@ -850,6 +919,93 @@ export default function UserManagerPage() {
               ))}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch Import Dialog */}
+      <input
+        ref={csvFileInputRef}
+        type="file"
+        accept=".csv,.txt"
+        onChange={handleCsvFileUpload}
+        className="hidden"
+      />
+      <Dialog open={batchImportOpen} onOpenChange={open => { if (!batchImporting) setBatchImportOpen(open); }}>
+        <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" />
+              استيراد مستخدمين دفعي
+            </DialogTitle>
+            <DialogDescription>
+              أدخل البيانات بصيغة CSV: <span className="font-mono text-foreground">username,password,profile</span>
+              <span className="mr-1">(الباقة اختيارية إذا حددت الافتراضية)</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">الباقة الافتراضية</label>
+              <select
+                value={batchImportProfile}
+                onChange={e => setBatchImportProfile(e.target.value)}
+                className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
+                disabled={batchImporting}
+              >
+                <option value="">— اختر باقة —</option>
+                {Array.isArray(profiles) && profiles.map((p: any, i: number) => (
+                  <option key={i} value={p.name}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-muted-foreground">بيانات CSV</label>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-xs"
+                  onClick={() => csvFileInputRef.current?.click()}
+                  disabled={batchImporting}
+                >
+                  <Upload className="h-3 w-3 ml-1" /> رفع ملف
+                </Button>
+              </div>
+              <textarea
+                value={batchCsvText}
+                onChange={e => setBatchCsvText(e.target.value)}
+                placeholder={"user01,pass01,profile1\nuser02,pass02\nuser03,pass03,profile2"}
+                className="w-full h-36 rounded-md border border-input bg-background px-3 py-2 text-xs font-mono resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                disabled={batchImporting}
+                dir="ltr"
+              />
+              {batchCsvText.trim() && (
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  {parseCsvUsers(batchCsvText, batchImportProfile).length} سجل سيتم استيراده
+                </p>
+              )}
+            </div>
+
+            {batchImporting && (
+              <div className="space-y-1.5">
+                <Progress value={batchProgress} className="h-2" />
+                <p className="text-xs text-muted-foreground text-center">{batchProgress}%</p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBatchImportOpen(false)} disabled={batchImporting}>
+              إلغاء
+            </Button>
+            <Button onClick={handleBatchImport} disabled={batchImporting || !batchCsvText.trim()}>
+              {batchImporting
+                ? <><Loader2 className="h-3.5 w-3.5 animate-spin ml-1" /> جاري الاستيراد...</>
+                : <><Upload className="h-3.5 w-3.5 ml-1" /> استيراد</>
+              }
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </DashboardLayout>
