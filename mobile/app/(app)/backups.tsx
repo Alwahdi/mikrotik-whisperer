@@ -20,13 +20,20 @@ import LoadingView from "@/components/LoadingView";
 import AnimatedPressable from "@/components/AnimatedPressable";
 import { lightTap, notifySuccess, notifyError, heavyTap } from "@/lib/haptics";
 
+interface BackupMetadata {
+  hotspot_users?: unknown[];
+  hotspot_count?: number;
+  um_users?: unknown[];
+  um_count?: number;
+}
+
 interface BackupRecord {
   id: string;
   router_id: string;
   router_label: string;
   backup_type: string;
   status: string;
-  metadata: any;
+  metadata: BackupMetadata;
   created_at: string;
 }
 
@@ -73,7 +80,7 @@ export default function BackupsScreen() {
     lightTap();
     setCreating(true);
     try {
-      const metadata: any = {};
+      const metadata: BackupMetadata = {};
 
       if (type === "hotspot" || type === "all") {
         const { data } = await supabase.functions.invoke("mikrotik-api", {

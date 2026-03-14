@@ -9,20 +9,19 @@ const SUPABASE_URL = "https://chcobxsntmsyfqhtqezq.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNoY29ieHNudG1zeWZxaHRxZXpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI2NzE0MDcsImV4cCI6MjA4ODI0NzQwN30.4CWAAg7cgPJStlmzB7ctrv0iK4qUAWiqp05Q6zzTAVM";
 
-// On web with static/SSR output, `window` is unavailable in Node.js during
-// pre-rendering. Using a guard here prevents the "window is not defined" crash
-// while still persisting sessions via localStorage in the browser.
+/** Platform-safe localStorage adapter that gracefully handles SSR (no `window`). */
+const isServer = typeof window === "undefined";
 const webStorage = {
   getItem: async (key: string): Promise<string | null> => {
-    if (typeof window === "undefined") return null;
+    if (isServer) return null;
     return window.localStorage.getItem(key);
   },
   setItem: async (key: string, value: string): Promise<void> => {
-    if (typeof window === "undefined") return;
+    if (isServer) return;
     window.localStorage.setItem(key, value);
   },
   removeItem: async (key: string): Promise<void> => {
-    if (typeof window === "undefined") return;
+    if (isServer) return;
     window.localStorage.removeItem(key);
   },
 };
