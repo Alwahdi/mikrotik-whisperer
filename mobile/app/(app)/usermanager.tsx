@@ -329,6 +329,11 @@ function buildPrintHtml(users: GeneratedUser[], profileName: string): string {
 </style></head><body><div class="grid">${cardHtml}</div></body></html>`;
 }
 
+/** How many users to send to the router per network request when adding in bulk. */
+const CHUNK_SIZE = 10;
+/** Error label used when a whole chunk fails due to a network/connection error. */
+const ERR_NETWORK = "فشل الاتصال";
+
 function AddUsersSheet({
   visible, onClose, profiles,
 }: {
@@ -348,6 +353,8 @@ function AddUsersSheet({
   const [preview, setPreview] = useState<GeneratedUser[]>([]);
   const [addResults, setAddResults] = useState<AddResult[] | null>(null);
   const [printing, setPrinting] = useState(false);
+  /** Non-null while a chunked add is running: tracks how many users have been sent so far. */
+  const [addProgress, setAddProgress] = useState<{ done: number; total: number } | null>(null);
 
   // sync first profile when sheet opens
   React.useEffect(() => {
@@ -406,28 +413,55 @@ function AddUsersSheet({
 
   const handleAddToServer = useCallback(async () => {
     if (!preview.length) return;
-    const commands = preview.map((u) => ({
-      command: "/user-manager/user/add",
-      args: [`=username=${u.username}`, `=password=${u.password}`, `=group=${u.profile}`],
-    }));
-    batchAdd.mutate({ commands }, {
-      onSuccess: (result: any) => {
-        const errors: string[] = result?.errors ?? [];
-        const results: AddResult[] = preview.map((u, i) => ({
-          user: u,
-          ok: !errors[i],
-          error: errors[i] || undefined,
-        }));
-        setAddResults(results);
-        const failCount = results.filter((r) => !r.ok).length;
-        const okCount = results.filter((r) => r.ok).length;
-        if (failCount === 0) notifySuccess(); else notifyError();
-        if (okCount > 0 && failCount === 0) {
-          // all success — close after short delay
-          setTimeout(() => { setPreview([]); setAddResults(null); onClose(); }, 1200);
+
+    const total = preview.length;
+    // Accumulate per-user error strings across all chunks (undefined = success).
+    const allErrors: (string | undefined)[] = new Array(total).fill(undefined);
+    const chunkCount = Math.ceil(total / CHUNK_SIZE);
+
+    setAddProgress({ done: 0, total });
+
+    for (let c = 0; c < chunkCount; c++) {
+      const start = c * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, total);
+      const commands = preview.slice(start, end).map((u) => ({
+        command: "/user-manager/user/add",
+        args: [`=username=${u.username}`, `=password=${u.password}`, `=group=${u.profile}`],
+      }));
+
+      try {
+        const result: any = await batchAdd.mutateAsync({ commands });
+        const chunkErrors: string[] = result?.errors ?? [];
+        for (let i = 0; i < end - start; i++) {
+          allErrors[start + i] = i < chunkErrors.length ? (chunkErrors[i] || undefined) : undefined;
         }
-      },
-    });
+      } catch {
+        // Network failure for this chunk — mark every user in it as failed.
+        // The mutation's onError handler already shows an alert to the user.
+        for (let i = start; i < end; i++) {
+          allErrors[i] = ERR_NETWORK;
+        }
+      }
+
+      setAddProgress({ done: end, total });
+    }
+
+    setAddProgress(null);
+
+    const results: AddResult[] = preview.map((u, i) => ({
+      user: u,
+      ok: !allErrors[i],
+      error: allErrors[i],
+    }));
+    setAddResults(results);
+
+    const failCount = results.filter((r) => !r.ok).length;
+    const okCount = results.filter((r) => r.ok).length;
+    if (failCount === 0) notifySuccess(); else notifyError();
+    if (okCount > 0 && failCount === 0) {
+      // all success — close after short delay
+      setTimeout(() => { setPreview([]); setAddResults(null); onClose(); }, 1200);
+    }
   }, [preview, batchAdd, onClose]);
 
   const handlePrint = useCallback(async () => {
@@ -461,10 +495,11 @@ function AddUsersSheet({
   }, [preview, profile]);
 
   const handleClose = useCallback(() => {
+    if (addProgress) return; // prevent closing while an add operation is in flight
     setPreview([]);
     setAddResults(null);
     onClose();
-  }, [onClose]);
+  }, [onClose, addProgress]);
 
   const credentialOptions = [
     { value: "usernameAndPassword", label: "مختلفان", icon: "shuffle-outline" },
@@ -685,17 +720,19 @@ function AddUsersSheet({
             {preview.length > 0 && (
               <View style={sheet.actionRow}>
                 <TouchableOpacity
-                  style={[sheet.uploadBtn, batchAdd.isPending && sheet.btnDisabled]}
+                  style={[sheet.uploadBtn, addProgress !== null && sheet.btnDisabled]}
                   onPress={handleAddToServer}
-                  disabled={batchAdd.isPending}
+                  disabled={addProgress !== null}
                   accessibilityRole="button"
                   accessibilityLabel={addResults ? "إعادة الإضافة إلى السيرفر" : "إضافة إلى السيرفر"}
-                  accessibilityState={{ disabled: batchAdd.isPending }}
+                  accessibilityState={{ disabled: addProgress !== null }}
                 >
-                  {batchAdd.isPending ? (
+                  {addProgress ? (
                     <>
                       <ActivityIndicator size="small" color={Colors.primaryFg} />
-                      <Text style={sheet.uploadBtnText}>جاري الإضافة...</Text>
+                      <Text style={sheet.uploadBtnText}>
+                        جاري الإضافة... {addProgress.done}/{addProgress.total}
+                      </Text>
                     </>
                   ) : (
                     <>
@@ -706,6 +743,16 @@ function AddUsersSheet({
                     </>
                   )}
                 </TouchableOpacity>
+                {addProgress && (
+                  <View style={sheet.progressBar}>
+                    <View
+                      style={[
+                        sheet.progressFill,
+                        { width: `${Math.round((addProgress.done / addProgress.total) * 100)}%` },
+                      ]}
+                    />
+                  </View>
+                )}
               </View>
             )}
 
@@ -832,6 +879,18 @@ const sheet = StyleSheet.create({
   },
   uploadBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
   btnDisabled: { opacity: 0.5 },
+  progressBar: {
+    height: 4,
+    backgroundColor: Colors.border,
+    borderRadius: 2,
+    marginTop: Spacing.sm,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: 4,
+    backgroundColor: Colors.success,
+    borderRadius: 2,
+  },
   // Share / Print
   shareRow: { flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.sm },
   shareBtn: {
