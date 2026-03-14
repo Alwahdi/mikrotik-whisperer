@@ -2,12 +2,14 @@ import React, { useState, useMemo, useCallback } from "react";
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, Alert, RefreshControl, Modal, ScrollView,
-  KeyboardAvoidingView, Platform, Pressable, Switch,
-  ActivityIndicator,
+  KeyboardAvoidingView, Platform, Pressable,
+  ActivityIndicator, Share,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 import {
   useUserManagerUsers, useUserManagerProfiles, useUserManagerSessions,
   useUserManagerAction, useUserManagerBatchAdd, useRawBatchAction,
@@ -22,19 +24,35 @@ import { lightTap, notifySuccess, notifyError } from "@/lib/haptics";
 const MONO_FONT = Platform.select({ ios: "Courier", android: "monospace", default: "monospace" });
 
 type Tab = "users" | "profiles" | "sessions";
-type UsernameMode = "usernameAndPassword" | "usernameOnly";
-type CharMode = "alphanumeric" | "numbersOnly";
+/** How credentials appear on the printed card / are generated */
+type CredentialMode =
+  | "usernameAndPassword"   // separate username & password (different values)
+  | "sameCredentials"       // same value used for both username and password
+  | "usernameOnly"          // card shows only username (password stored = username)
+  | "passwordOnly";         // card shows only password (username stored = password)
+type CharMode = "alphanumeric" | "lettersOnly" | "numbersOnly";
 
 interface GeneratedUser {
   username: string;
   password: string;
   profile: string;
+  /** what to display as the primary credential on a printed card */
+  cardDisplay: "both" | "usernameOnly" | "passwordOnly" | "same";
+}
+
+interface AddResult {
+  user: GeneratedUser;
+  ok: boolean;
+  error?: string;
 }
 
 function genChars(mode: CharMode, length: number): string {
-  const pool = mode === "numbersOnly"
-    ? "0123456789"
-    : "abcdefghjkmnpqrstuvwxyz23456789";
+  const pool =
+    mode === "numbersOnly"
+      ? "0123456789"
+      : mode === "lettersOnly"
+        ? "abcdefghjkmnpqrstuvwxyz"
+        : "abcdefghjkmnpqrstuvwxyz23456789";
   let out = "";
   if (typeof crypto !== "undefined" && crypto.getRandomValues) {
     const buf = new Uint8Array(length);
@@ -46,38 +64,53 @@ function genChars(mode: CharMode, length: number): string {
   return out;
 }
 
-function RadioGroup({
+function OptionChips({
   options, value, onChange,
 }: {
-  options: { label: string; value: string }[];
+  options: { label: string; value: string; icon?: string }[];
   value: string;
   onChange: (v: string) => void;
 }) {
   return (
-    <View style={radioStyles.row}>
-      {options.map((opt) => (
-        <TouchableOpacity
-          key={opt.value}
-          style={radioStyles.option}
-          onPress={() => { lightTap(); onChange(opt.value); }}
-        >
-          <View style={[radioStyles.circle, value === opt.value && radioStyles.circleActive]}>
-            {value === opt.value && <View style={radioStyles.dot} />}
-          </View>
-          <Text style={radioStyles.label}>{opt.label}</Text>
-        </TouchableOpacity>
-      ))}
+    <View style={chipGroupStyles.row}>
+      {options.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <TouchableOpacity
+            key={opt.value}
+            style={[chipGroupStyles.chip, active && chipGroupStyles.chipActive]}
+            onPress={() => { lightTap(); onChange(opt.value); }}
+            activeOpacity={0.75}
+          >
+            {opt.icon ? (
+              <Ionicons
+                name={opt.icon as any}
+                size={13}
+                color={active ? Colors.primaryFg : Colors.mutedFg}
+              />
+            ) : null}
+            <Text style={[chipGroupStyles.label, active && chipGroupStyles.labelActive]}>
+              {opt.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
 
-const radioStyles = StyleSheet.create({
-  row: { flexDirection: "row-reverse", gap: Spacing.lg, flexWrap: "wrap" },
-  option: { flexDirection: "row-reverse", alignItems: "center", gap: 6 },
-  circle: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
-  circleActive: { borderColor: Colors.primary },
-  dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.primary },
-  label: { fontSize: 13, color: Colors.foreground },
+const chipGroupStyles = StyleSheet.create({
+  row: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  chip: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.muted,
+    borderWidth: 1, borderColor: Colors.border,
+  },
+  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  label: { fontSize: 12, fontWeight: "600", color: Colors.mutedFg },
+  labelActive: { color: Colors.primaryFg },
 });
 
 // ─── User Context Menu Sheet ──────────────────────
@@ -271,6 +304,31 @@ const ctx = StyleSheet.create({
 });
 
 // ─── Add Users Sheet ──────────────────────────────
+/** Build HTML for printing cards */
+function buildPrintHtml(users: GeneratedUser[], profileName: string): string {
+  const cardHtml = users.map((u) => {
+    const showBoth = u.cardDisplay === "both" || u.cardDisplay === "same";
+    const showUser = u.cardDisplay === "usernameOnly" || showBoth;
+    const showPass = u.cardDisplay === "passwordOnly" || showBoth;
+    const rows = [
+      showUser ? `<div class="row"><span class="lbl">اسم المستخدم:</span><span class="val">${u.username}</span></div>` : "",
+      showPass ? `<div class="row"><span class="lbl">كلمة المرور:</span><span class="val">${u.password}</span></div>` : "",
+    ].join("");
+    return `<div class="card"><div class="profile">${profileName}</div>${rows}</div>`;
+  }).join("");
+
+  return `<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"/>
+<style>
+  body { font-family: Arial, sans-serif; direction: rtl; margin: 0; padding: 12px; background: #fff; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .card { border: 1.5px solid #7c3aed; border-radius: 10px; padding: 10px 12px; background: #faf9ff; page-break-inside: avoid; }
+  .profile { font-size: 11px; font-weight: 700; color: #7c3aed; margin-bottom: 6px; border-bottom: 1px dashed #d1c4e9; padding-bottom: 4px; }
+  .row { display: flex; justify-content: space-between; align-items: center; margin-top: 3px; }
+  .lbl { font-size: 10px; color: #666; }
+  .val { font-size: 13px; font-weight: 700; color: #111; font-family: monospace; letter-spacing: 1px; }
+</style></head><body><div class="grid">${cardHtml}</div></body></html>`;
+}
+
 function AddUsersSheet({
   visible, onClose, profiles,
 }: {
@@ -280,15 +338,16 @@ function AddUsersSheet({
 }) {
   const batchAdd = useUserManagerBatchAdd();
 
-  const [usernameMode, setUsernameMode] = useState<UsernameMode>("usernameAndPassword");
+  const [credentialMode, setCredentialMode] = useState<CredentialMode>("usernameAndPassword");
   const [charMode, setCharMode] = useState<CharMode>("alphanumeric");
   const [profile, setProfile] = useState(profiles[0]?.name ?? "");
   const [count, setCount] = useState("5");
-  const [usernameLen, setUsernameLen] = useState("6");
+  const [codeLen, setCodeLen] = useState("6");
   const [passwordLen, setPasswordLen] = useState("6");
   const [prefix, setPrefix] = useState("");
-  const [matchPass, setMatchPass] = useState(false);
   const [preview, setPreview] = useState<GeneratedUser[]>([]);
+  const [addResults, setAddResults] = useState<AddResult[] | null>(null);
+  const [printing, setPrinting] = useState(false);
 
   // sync first profile when sheet opens
   React.useEffect(() => {
@@ -298,50 +357,132 @@ function AddUsersSheet({
   const handleGenerate = useCallback(() => {
     if (!profile) { Alert.alert("خطأ", "اختر باقة أولاً"); return; }
     const n = Math.min(Math.max(parseInt(count) || 5, 1), 500);
-    const uLen = Math.min(Math.max(parseInt(usernameLen) || 6, 2), 16);
+    const uLen = Math.min(Math.max(parseInt(codeLen) || 6, 2), 16);
     const pLen = Math.min(Math.max(parseInt(passwordLen) || 6, 2), 16);
     const safePrefix = prefix.length < uLen ? prefix : prefix.slice(0, uLen - 1);
+
     const users: GeneratedUser[] = [];
     for (let i = 0; i < n; i++) {
-      const uname = safePrefix
+      const baseCode = safePrefix
         ? `${safePrefix}${genChars(charMode, uLen - safePrefix.length)}`
         : genChars(charMode, uLen);
-      let pass: string;
-      if (matchPass) {
-        pass = uname;
-      } else if (usernameMode === "usernameOnly") {
-        pass = uname;
-      } else {
-        pass = genChars(charMode, pLen);
+
+      let username: string;
+      let password: string;
+      let cardDisplay: GeneratedUser["cardDisplay"];
+
+      switch (credentialMode) {
+        case "usernameAndPassword":
+          username = baseCode;
+          password = genChars(charMode, pLen);
+          cardDisplay = "both";
+          break;
+        case "sameCredentials":
+          username = baseCode;
+          password = baseCode;
+          cardDisplay = "same";
+          break;
+        case "usernameOnly":
+          username = baseCode;
+          password = baseCode;          // stored password = username
+          cardDisplay = "usernameOnly";
+          break;
+        case "passwordOnly":
+          password = baseCode;
+          username = baseCode;          // stored username = password code
+          cardDisplay = "passwordOnly";
+          break;
+        default:
+          username = baseCode;
+          password = genChars(charMode, pLen);
+          cardDisplay = "both";
       }
-      users.push({ username: uname, password: pass, profile });
+      users.push({ username, password, profile, cardDisplay });
     }
     setPreview(users);
+    setAddResults(null);
     notifySuccess();
-  }, [profile, count, usernameLen, passwordLen, prefix, charMode, matchPass, usernameMode]);
+  }, [profile, count, codeLen, passwordLen, prefix, charMode, credentialMode]);
 
   const handleAddToServer = useCallback(async () => {
+    if (!preview.length) return;
     const commands = preview.map((u) => ({
       command: "/user-manager/user/add",
       args: [`=username=${u.username}`, `=password=${u.password}`, `=group=${u.profile}`],
     }));
     batchAdd.mutate({ commands }, {
       onSuccess: (result: any) => {
-        const failed = (result?.errors || []).filter(Boolean).length;
-        const total = preview.length;
-        const success = total - failed;
-        notifySuccess();
-        Alert.alert("النتيجة", `تمت إضافة ${success} من ${total}${failed ? `\nفشل: ${failed}` : ""}`, [
-          { text: "حسناً", onPress: () => { setPreview([]); onClose(); } },
-        ]);
+        const errors: string[] = result?.errors ?? [];
+        const results: AddResult[] = preview.map((u, i) => ({
+          user: u,
+          ok: !errors[i],
+          error: errors[i] || undefined,
+        }));
+        setAddResults(results);
+        const failCount = results.filter((r) => !r.ok).length;
+        const okCount = results.filter((r) => r.ok).length;
+        if (failCount === 0) notifySuccess(); else notifyError();
+        if (okCount > 0 && failCount === 0) {
+          // all success — close after short delay
+          setTimeout(() => { setPreview([]); setAddResults(null); onClose(); }, 1200);
+        }
       },
     });
   }, [preview, batchAdd, onClose]);
 
+  const handlePrint = useCallback(async () => {
+    if (!preview.length) return;
+    setPrinting(true);
+    try {
+      const html = buildPrintHtml(preview, profile);
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        const { uri } = await Print.printToFileAsync({ html });
+        await Sharing.shareAsync(uri, { mimeType: "application/pdf", UTI: ".pdf" });
+      } else {
+        await Print.printAsync({ html });
+      }
+    } catch (err) {
+      notifyError();
+      if (__DEV__) console.warn("[Print]", err);
+    } finally {
+      setPrinting(false);
+    }
+  }, [preview, profile]);
+
+  const handleShareText = useCallback(async () => {
+    if (!preview.length) return;
+    const lines = preview.map((u, i) => {
+      if (u.cardDisplay === "usernameOnly") return `${i + 1}. ${u.username}`;
+      if (u.cardDisplay === "passwordOnly") return `${i + 1}. ${u.password}`;
+      return `${i + 1}. ${u.username} / ${u.password}`;
+    });
+    await Share.share({ message: `باقة: ${profile}\n\n${lines.join("\n")}` });
+  }, [preview, profile]);
+
   const handleClose = useCallback(() => {
     setPreview([]);
+    setAddResults(null);
     onClose();
   }, [onClose]);
+
+  const credentialOptions = [
+    { value: "usernameAndPassword", label: "مختلفان", icon: "shuffle-outline" },
+    { value: "sameCredentials",     label: "متطابقان", icon: "copy-outline" },
+    { value: "usernameOnly",        label: "مستخدم فقط", icon: "person-outline" },
+    { value: "passwordOnly",        label: "كلمة مرور فقط", icon: "key-outline" },
+  ];
+
+  const charOptions = [
+    { value: "alphanumeric", label: "أرقام+حروف", icon: "grid-outline" },
+    { value: "lettersOnly",  label: "حروف فقط",   icon: "text-outline" },
+    { value: "numbersOnly",  label: "أرقام فقط",  icon: "keypad-outline" },
+  ];
+
+  const showPasswordLen = credentialMode === "usernameAndPassword";
+
+  const successCount = addResults ? addResults.filter((r) => r.ok).length : 0;
+  const failCount    = addResults ? addResults.filter((r) => !r.ok).length : 0;
 
   return (
     <Modal
@@ -359,55 +500,60 @@ function AddUsersSheet({
           {/* Handle */}
           <View style={sheet.handle} />
           <View style={sheet.headerRow}>
-            <Text style={sheet.title}>إضافة مستخدمين يوزر مانجر</Text>
-            <TouchableOpacity onPress={handleClose} style={sheet.closeBtn}>
+            <View style={sheet.headerTitleWrap}>
+              <Ionicons name="person-add-outline" size={16} color={Colors.primaryLight} />
+              <Text style={sheet.title}>إضافة كروت — يوزر مانجر</Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleClose}
+              style={sheet.closeBtn}
+              accessibilityRole="button"
+              accessibilityLabel="إغلاق"
+            >
               <Ionicons name="close" size={20} color={Colors.mutedFg} />
             </TouchableOpacity>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {/* Username mode */}
-            <Text style={sheet.fieldLabel}>نوع الإنشاء</Text>
-            <RadioGroup
-              value={usernameMode}
-              onChange={(v) => setUsernameMode(v as UsernameMode)}
-              options={[
-                { label: "اسم مستخدم وكلمة مرور", value: "usernameAndPassword" },
-                { label: "اسم مستخدم فقط", value: "usernameOnly" },
-              ]}
+
+            {/* ── Section: Credential mode ── */}
+            <Text style={sheet.sectionLabel}>نوع بيانات الكرت</Text>
+            <OptionChips
+              value={credentialMode}
+              onChange={(v) => setCredentialMode(v as CredentialMode)}
+              options={credentialOptions}
             />
 
-            {/* Char mode */}
-            <Text style={[sheet.fieldLabel, { marginTop: Spacing.md }]}>نوع الأحرف</Text>
-            <RadioGroup
+            {/* ── Section: Character type ── */}
+            <Text style={[sheet.sectionLabel, { marginTop: Spacing.md }]}>نوع الرمز</Text>
+            <OptionChips
               value={charMode}
               onChange={(v) => setCharMode(v as CharMode)}
-              options={[
-                { label: "حروف وأرقام", value: "alphanumeric" },
-                { label: "أرقام فقط", value: "numbersOnly" },
-              ]}
+              options={charOptions}
             />
 
-            {/* Profile + Count */}
+            {/* ── Section: Profile + Count ── */}
             <View style={sheet.row2}>
               <View style={sheet.col}>
-                <Text style={sheet.fieldLabel}>الباقة</Text>
+                <Text style={sheet.sectionLabel}>الباقة</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 36 }}>
-                  <View style={sheet.profileChips}>
+                  <View style={sheet.chipRow}>
                     {profiles.map((p) => (
                       <TouchableOpacity
                         key={p[".id"] || p.name}
-                        style={[sheet.chip, profile === p.name && sheet.chipActive]}
+                        style={[sheet.profileChip, profile === p.name && sheet.profileChipActive]}
                         onPress={() => { lightTap(); setProfile(p.name); }}
                       >
-                        <Text style={[sheet.chipText, profile === p.name && sheet.chipTextActive]}>{p.name}</Text>
+                        <Text style={[sheet.profileChipText, profile === p.name && sheet.profileChipTextActive]}>
+                          {p.name}
+                        </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 </ScrollView>
               </View>
               <View style={sheet.colFixed}>
-                <Text style={sheet.fieldLabel}>عدد الكروت</Text>
+                <Text style={sheet.sectionLabel}>العدد</Text>
                 <TextInput
                   style={sheet.input}
                   value={count}
@@ -419,22 +565,24 @@ function AddUsersSheet({
               </View>
             </View>
 
-            {/* Lengths */}
+            {/* ── Section: Lengths + Prefix ── */}
             <View style={sheet.row3}>
               <View style={sheet.col3}>
-                <Text style={sheet.fieldLabel}>طول اسم المستخدم</Text>
+                <Text style={sheet.sectionLabel}>
+                  {credentialMode === "passwordOnly" ? "طول كلمة المرور" : "طول الرمز"}
+                </Text>
                 <TextInput
                   style={sheet.input}
-                  value={usernameLen}
-                  onChangeText={setUsernameLen}
+                  value={codeLen}
+                  onChangeText={setCodeLen}
                   keyboardType="numeric"
                   textAlign="center"
                   maxLength={2}
                 />
               </View>
-              {usernameMode === "usernameAndPassword" && !matchPass && (
+              {showPasswordLen && (
                 <View style={sheet.col3}>
-                  <Text style={sheet.fieldLabel}>طول كلمة المرور</Text>
+                  <Text style={sheet.sectionLabel}>طول كلمة المرور</Text>
                   <TextInput
                     style={sheet.input}
                     value={passwordLen}
@@ -446,7 +594,7 @@ function AddUsersSheet({
                 </View>
               )}
               <View style={sheet.col3}>
-                <Text style={sheet.fieldLabel}>بادئة (اختياري)</Text>
+                <Text style={sheet.sectionLabel}>بادئة (اختياري)</Text>
                 <TextInput
                   style={sheet.input}
                   value={prefix}
@@ -460,60 +608,136 @@ function AddUsersSheet({
               </View>
             </View>
 
-            {/* Match username = password */}
-            <View style={sheet.switchRow}>
-              <Switch
-                value={matchPass}
-                onValueChange={setMatchPass}
-                trackColor={{ false: Colors.border, true: Colors.primary }}
-                thumbColor={matchPass ? Colors.primaryFg : Colors.mutedFg}
-              />
-              <Text style={sheet.switchLabel}>مطابقة اسم المستخدم مع كلمة المرور</Text>
-            </View>
+            {/* ── Generate button ── */}
+            <TouchableOpacity
+              style={sheet.generateBtn}
+              onPress={handleGenerate}
+              accessibilityRole="button"
+              accessibilityLabel="توليد الكروت"
+            >
+              <Ionicons name="flash-outline" size={16} color={Colors.primaryFg} />
+              <Text style={sheet.generateBtnText}>توليد الكروت</Text>
+            </TouchableOpacity>
 
-            {/* Preview */}
+            {/* ── Preview ── */}
             {preview.length > 0 && (
               <View style={sheet.previewBox}>
-                <Text style={sheet.previewTitle}>معاينة ({preview.length} مستخدم)</Text>
-                <View style={sheet.previewHeader}>
-                  <Text style={sheet.previewCol}>الباقة</Text>
-                  <Text style={sheet.previewCol}>كلمة المرور</Text>
-                  <Text style={sheet.previewCol}>اسم المستخدم</Text>
+                <View style={sheet.previewTitleRow}>
+                  <Ionicons name="list-outline" size={13} color={Colors.textSecondary} />
+                  <Text style={sheet.previewTitle}>معاينة — {preview.length} كرت | باقة: {profile}</Text>
                 </View>
-                {preview.slice(0, 8).map((u, i) => (
-                  <View key={i} style={[sheet.previewRow, i % 2 === 0 && sheet.previewRowAlt]}>
-                    <Text style={sheet.previewCell} numberOfLines={1}>{u.profile}</Text>
-                    <Text style={sheet.previewCellMono} numberOfLines={1}>{u.password}</Text>
-                    <Text style={sheet.previewCellMono} numberOfLines={1}>{u.username}</Text>
-                  </View>
-                ))}
+                <View style={sheet.previewHeader}>
+                  {credentialMode !== "passwordOnly" && (
+                    <Text style={sheet.previewCol}>اسم المستخدم</Text>
+                  )}
+                  {credentialMode !== "usernameOnly" && (
+                    <Text style={sheet.previewCol}>كلمة المرور</Text>
+                  )}
+                  {(credentialMode === "usernameAndPassword" || credentialMode === "sameCredentials") && (
+                    <Text style={[sheet.previewCol, { flex: 0.6 }]}>الباقة</Text>
+                  )}
+                </View>
+                {preview.slice(0, 8).map((u, i) => {
+                  const res = addResults?.[i];
+                  return (
+                    <View key={i} style={[sheet.previewRow, i % 2 === 0 && sheet.previewRowAlt]}>
+                      {credentialMode !== "passwordOnly" && (
+                        <Text style={sheet.previewCellMono} numberOfLines={1}>{u.username}</Text>
+                      )}
+                      {credentialMode !== "usernameOnly" && (
+                        <Text style={sheet.previewCellMono} numberOfLines={1}>{u.password}</Text>
+                      )}
+                      {res ? (
+                        <View style={[sheet.resultDot, res.ok ? sheet.resultDotOk : sheet.resultDotFail]}>
+                          <Ionicons
+                            name={res.ok ? "checkmark" : "close"}
+                            size={10}
+                            color="#fff"
+                          />
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
                 {preview.length > 8 && (
                   <Text style={sheet.previewMore}>... و {preview.length - 8} آخرون</Text>
                 )}
               </View>
             )}
 
-            {/* Action buttons */}
-            <View style={sheet.actionRow}>
-              <TouchableOpacity style={sheet.generateBtn} onPress={handleGenerate}>
-                <Ionicons name="flash-outline" size={16} color={Colors.primaryFg} />
-                <Text style={sheet.generateBtnText}>توليد</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[sheet.uploadBtn, (!preview.length || batchAdd.isPending) && sheet.btnDisabled]}
-                onPress={handleAddToServer}
-                disabled={!preview.length || batchAdd.isPending}
-              >
-                {batchAdd.isPending ? (
-                  <ActivityIndicator size="small" color={Colors.primaryFg} />
-                ) : (
-                  <>
-                    <Ionicons name="cloud-upload-outline" size={16} color={Colors.primaryFg} />
-                    <Text style={sheet.uploadBtnText}>إضافة إلى السيرفر</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
+            {/* ── Add results summary ── */}
+            {addResults && (
+              <View style={[sheet.resultSummary, failCount > 0 ? sheet.resultSummaryWarn : sheet.resultSummaryOk]}>
+                <Ionicons
+                  name={failCount === 0 ? "checkmark-circle" : "alert-circle"}
+                  size={18}
+                  color={failCount === 0 ? Colors.success : Colors.warning}
+                />
+                <Text style={[sheet.resultSummaryText, { color: failCount === 0 ? Colors.success : Colors.warning }]}>
+                  {failCount === 0
+                    ? `تمت إضافة ${successCount} كرت بنجاح ✓`
+                    : `تمت إضافة ${successCount} | فشل ${failCount}`}
+                </Text>
+              </View>
+            )}
+
+            {/* ── Action buttons ── */}
+            {preview.length > 0 && (
+              <View style={sheet.actionRow}>
+                <TouchableOpacity
+                  style={[sheet.uploadBtn, batchAdd.isPending && sheet.btnDisabled]}
+                  onPress={handleAddToServer}
+                  disabled={batchAdd.isPending}
+                  accessibilityRole="button"
+                  accessibilityLabel={addResults ? "إعادة الإضافة إلى السيرفر" : "إضافة إلى السيرفر"}
+                  accessibilityState={{ disabled: batchAdd.isPending }}
+                >
+                  {batchAdd.isPending ? (
+                    <>
+                      <ActivityIndicator size="small" color={Colors.primaryFg} />
+                      <Text style={sheet.uploadBtnText}>جاري الإضافة...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-upload-outline" size={16} color={Colors.primaryFg} />
+                      <Text style={sheet.uploadBtnText}>
+                        {addResults ? "إعادة الإضافة" : "إضافة إلى السيرفر"}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* ── Print / Share buttons ── */}
+            {preview.length > 0 && (
+              <View style={sheet.shareRow}>
+                <TouchableOpacity
+                  style={[sheet.shareBtn, printing && sheet.btnDisabled]}
+                  onPress={handlePrint}
+                  disabled={printing}
+                  accessibilityRole="button"
+                  accessibilityLabel="طباعة PDF"
+                  accessibilityState={{ disabled: printing }}
+                >
+                  {printing
+                    ? <ActivityIndicator size="small" color={Colors.primaryFg} />
+                    : <Ionicons name="print-outline" size={15} color={Colors.primaryFg} />}
+                  <Text style={sheet.shareBtnText}>طباعة PDF</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={sheet.shareBtn}
+                  onPress={handleShareText}
+                  accessibilityRole="button"
+                  accessibilityLabel="مشاركة الكروت كنص"
+                >
+                  <Ionicons name="share-outline" size={15} color={Colors.primaryFg} />
+                  <Text style={sheet.shareBtnText}>مشاركة نص</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <View style={{ height: Spacing.xl }} />
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -524,40 +748,105 @@ function AddUsersSheet({
 const sheet = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: Colors.overlay },
   kvWrapper: { justifyContent: "flex-end" },
-  container: { backgroundColor: Colors.card, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, padding: Spacing.lg, paddingBottom: Platform.OS === "ios" ? 36 : Spacing.xl, maxHeight: "90%" },
+  container: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
+    padding: Spacing.lg,
+    paddingBottom: Platform.OS === "ios" ? 36 : Spacing.xl,
+    maxHeight: "92%",
+  },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.border, alignSelf: "center", marginBottom: Spacing.md },
   headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.md },
-  title: { fontSize: 16, fontWeight: "800", color: Colors.foreground },
-  closeBtn: { padding: 4, borderRadius: Radius.sm, backgroundColor: Colors.muted },
-  fieldLabel: { fontSize: 11, fontWeight: "700", color: Colors.textSecondary, marginBottom: 6, textAlign: "right" },
+  headerTitleWrap: { flexDirection: "row", alignItems: "center", gap: 7 },
+  title: { fontSize: 15, fontWeight: "800", color: Colors.foreground },
+  closeBtn: { padding: 6, borderRadius: Radius.sm, backgroundColor: Colors.muted },
+  sectionLabel: { fontSize: 11, fontWeight: "700", color: Colors.textSecondary, marginBottom: 7, textAlign: "right" },
   row2: { flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.md, alignItems: "flex-start" },
   row3: { flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.md },
   col: { flex: 1 },
-  colFixed: { width: 80 },
+  colFixed: { width: 72 },
   col3: { flex: 1 },
-  input: { backgroundColor: Colors.muted, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.md, paddingHorizontal: Spacing.sm, paddingVertical: 8, fontSize: 13, color: Colors.foreground },
-  profileChips: { flexDirection: "row", gap: 6 },
-  chip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.full, backgroundColor: Colors.muted, borderWidth: 1, borderColor: Colors.border },
-  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  chipText: { fontSize: 11, color: Colors.mutedFg, fontWeight: "600" },
-  chipTextActive: { color: Colors.primaryFg },
-  switchRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10, marginTop: Spacing.md, paddingVertical: Spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border },
-  switchLabel: { flex: 1, fontSize: 13, color: Colors.foreground, textAlign: "right" },
-  previewBox: { marginTop: Spacing.md, backgroundColor: Colors.muted, borderRadius: Radius.md, overflow: "hidden" },
-  previewTitle: { fontSize: 11, fontWeight: "700", color: Colors.textSecondary, textAlign: "right", padding: Spacing.sm },
+  input: {
+    backgroundColor: Colors.muted,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 9,
+    fontSize: 13,
+    color: Colors.foreground,
+  },
+  chipRow: { flexDirection: "row", gap: 6 },
+  profileChip: {
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.muted,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  profileChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  profileChipText: { fontSize: 11, color: Colors.mutedFg, fontWeight: "600" },
+  profileChipTextActive: { color: Colors.primaryFg },
+  // Generate button
+  generateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: Colors.primary,
+    borderRadius: Radius.md,
+    paddingVertical: 13,
+    marginTop: Spacing.md,
+  },
+  generateBtnText: { fontSize: 14, fontWeight: "700", color: Colors.primaryFg },
+  // Preview
+  previewBox: { marginTop: Spacing.md, backgroundColor: Colors.muted, borderRadius: Radius.md, overflow: "hidden", borderWidth: 1, borderColor: Colors.border },
+  previewTitleRow: { flexDirection: "row", alignItems: "center", gap: 5, padding: Spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border },
+  previewTitle: { fontSize: 11, fontWeight: "700", color: Colors.textSecondary, flex: 1, textAlign: "right" },
   previewHeader: { flexDirection: "row", backgroundColor: Colors.sidebar, paddingHorizontal: Spacing.sm, paddingVertical: 4 },
-  previewRow: { flexDirection: "row", paddingHorizontal: Spacing.sm, paddingVertical: 5 },
+  previewRow: { flexDirection: "row", paddingHorizontal: Spacing.sm, paddingVertical: 5, alignItems: "center" },
   previewRowAlt: { backgroundColor: "rgba(255,255,255,0.02)" },
   previewCol: { flex: 1, fontSize: 10, fontWeight: "700", color: Colors.mutedFg, textAlign: "center" },
-  previewCell: { flex: 1, fontSize: 10, color: Colors.textSecondary, textAlign: "center" },
-  previewCellMono: { flex: 1, fontSize: 10, color: Colors.foreground, textAlign: "center", fontFamily: MONO_FONT },
+  previewCellMono: { flex: 1, fontSize: 11, color: Colors.foreground, textAlign: "center", fontFamily: MONO_FONT },
   previewMore: { fontSize: 10, color: Colors.mutedFg, textAlign: "center", padding: Spacing.sm },
-  actionRow: { flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.md },
-  generateBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.primary, borderRadius: Radius.md, paddingVertical: 12 },
-  generateBtnText: { fontSize: 14, fontWeight: "700", color: Colors.primaryFg },
-  uploadBtn: { flex: 1.5, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: Colors.success, borderRadius: Radius.md, paddingVertical: 12 },
+  // Result indicators
+  resultDot: { width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  resultDotOk: { backgroundColor: Colors.success },
+  resultDotFail: { backgroundColor: Colors.destructive },
+  resultSummary: { flexDirection: "row", alignItems: "center", gap: 8, padding: Spacing.sm, borderRadius: Radius.md, marginTop: Spacing.sm, borderWidth: 1 },
+  resultSummaryOk: { backgroundColor: Colors.successBg, borderColor: Colors.successBorder },
+  resultSummaryWarn: { backgroundColor: Colors.warningBg, borderColor: Colors.warningBorder },
+  resultSummaryText: { fontSize: 13, fontWeight: "700" },
+  // Action buttons
+  actionRow: { marginTop: Spacing.md },
+  uploadBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: Colors.success,
+    borderRadius: Radius.md,
+    paddingVertical: 13,
+  },
   uploadBtnText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-  btnDisabled: { opacity: 0.45 },
+  btnDisabled: { opacity: 0.5 },
+  // Share / Print
+  shareRow: { flexDirection: "row", gap: Spacing.sm, marginTop: Spacing.sm },
+  shareBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(124,58,237,0.18)",
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  shareBtnText: { fontSize: 12, fontWeight: "700", color: Colors.primaryLight },
 });
 
 export default function UserManagerScreen() {
