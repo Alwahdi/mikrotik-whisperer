@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Alert, ActivityIndicator, Image, Dimensions,
+  TextInput, Alert, ActivityIndicator, Image, Dimensions, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -38,6 +38,15 @@ const CARD_TEMPLATES: CardTemplate[] = [
   { id: "minimal", label: "بسيط", icon: "square-outline" },
   { id: "custom", label: "صورة مخصصة", icon: "image-outline" },
 ];
+
+/** Platform-safe monospace font family */
+const MONO_FONT = Platform.select({ ios: "Courier", android: "monospace", default: "monospace" });
+
+/** Opacity for the dark overlay on top of custom background images */
+const CUSTOM_OVERLAY_OPACITY = 0.45;
+
+/** ISO/IEC 7810 ID-1 credit-card aspect ratio (85.60 × 53.98 mm ≈ 85 × 54) */
+const CARD_ASPECT: [number, number] = [85, 54];
 
 function generatePassword(length = 8): string {
   const chars = "abcdefghjkmnpqrstuvwxyz23456789";
@@ -176,7 +185,7 @@ function buildPrintHtml(
       position: relative;
       overflow: hidden;
     ">
-      ${(template === "custom" && bgImage) ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);border-radius:10px;"></div>` : ""}
+      ${(template === "custom" && bgImage) ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,${CUSTOM_OVERLAY_OPACITY});border-radius:10px;"></div>` : ""}
       <div style="position:relative;">
         <div style="font-size:11px; font-weight:700; color:${textColor}; margin-bottom:2px;">${networkName || "Wi-Fi Network"}</div>
         <div style="font-size:9px; color:${subColor};">${v.profile}</div>
@@ -242,7 +251,7 @@ export default function VouchersScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [85, 54],
+      aspect: CARD_ASPECT,
       quality: 0.8,
       base64: true,
     });
@@ -594,7 +603,7 @@ const cardStyles = StyleSheet.create({
   darkNet: { fontSize: 9, fontWeight: "700", color: Colors.primaryLight, flex: 1 },
   darkDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.success },
   darkLabel: { fontSize: 7, color: Colors.mutedFg },
-  darkValue: { fontSize: 10, fontWeight: "800", color: Colors.foreground, fontFamily: "Courier", letterSpacing: 0.5 },
+  darkValue: { fontSize: 10, fontWeight: "800", color: Colors.foreground, fontFamily: MONO_FONT, letterSpacing: 0.5 },
   darkProfile: { fontSize: 7, color: Colors.mutedFg, marginTop: 3 },
   // Gradient template
   gradientTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
@@ -603,19 +612,19 @@ const cardStyles = StyleSheet.create({
   gradientBadgeText: { fontSize: 7, color: "#fff", fontWeight: "600" },
   gradientBody: { flex: 1, justifyContent: "flex-end" },
   gradientLabel: { fontSize: 7, color: "rgba(255,255,255,0.7)" },
-  gradientValue: { fontSize: 10, fontWeight: "800", color: "#fff", fontFamily: "Courier", letterSpacing: 0.5 },
+  gradientValue: { fontSize: 10, fontWeight: "800", color: "#fff", fontFamily: MONO_FONT, letterSpacing: 0.5 },
   // Minimal template
   minimalCard: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#e2e8f0", padding: 10, justifyContent: "space-between" },
   minimalNet: { fontSize: 10, fontWeight: "800", color: "#0f172a" },
   minimalDivider: { height: 1, backgroundColor: "#e2e8f0", marginVertical: 4 },
-  minimalLabel: { fontSize: 9, color: "#334155", fontFamily: "Courier" },
+  minimalLabel: { fontSize: 9, color: "#334155", fontFamily: MONO_FONT },
   minimalProfile: { fontSize: 7, color: "#94a3b8", marginTop: 2 },
   // Custom template
-  customOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.5)", padding: 10, justifyContent: "space-between" },
+  customOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: `rgba(0,0,0,${CUSTOM_OVERLAY_OPACITY})`, padding: 10, justifyContent: "space-between" },
   customNet: { fontSize: 9, fontWeight: "700", color: "#fff" },
   credRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   customLabel: { fontSize: 9 },
-  customCred: { fontSize: 9, fontWeight: "800", color: "#fff", fontFamily: "Courier" },
+  customCred: { fontSize: 9, fontWeight: "800", color: "#fff", fontFamily: MONO_FONT },
   customProfile: { fontSize: 7, color: "rgba(255,255,255,0.7)" },
 });
 
@@ -654,7 +663,7 @@ const styles = StyleSheet.create({
   optionInput: {
     backgroundColor: Colors.muted, borderWidth: 1, borderColor: Colors.border,
     borderRadius: Radius.md, paddingHorizontal: 12, paddingVertical: 8,
-    fontSize: 14, color: Colors.foreground, fontFamily: "Courier",
+    fontSize: 14, color: Colors.foreground, fontFamily: MONO_FONT,
   },
   optionInputFull: {
     backgroundColor: Colors.muted, borderWidth: 1, borderColor: Colors.border,

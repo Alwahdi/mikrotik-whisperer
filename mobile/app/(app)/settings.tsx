@@ -29,10 +29,11 @@ type NetworkType = "local" | "cloud";
 
 function detectNetworkType(host: string): NetworkType {
   if (!host) return "local";
-  // Local IPs: 192.168.x.x, 10.x.x.x, 172.16-31.x.x, or plain hostnames without dots
+  // Local IPs: 192.168.x.x, 10.x.x.x, 172.16–31.x.x (RFC 1918), localhost, or plain hostnames
   if (
     /^192\.168\.\d+\.\d+$/.test(host) ||
     /^10\.\d+\.\d+\.\d+$/.test(host) ||
+    // 172.16.0.0/12 covers 172.16.x.x through 172.31.x.x
     /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host) ||
     /^(localhost|127\.0\.0\.1)$/.test(host) ||
     (!host.includes(".") && host.length > 0)
@@ -88,11 +89,7 @@ export default function SettingsScreen() {
   const handleNetworkTypeChange = (type: NetworkType) => {
     lightTap();
     setNetworkType(type);
-    if (type === "local") {
-      setForm((prev) => ({ ...prev, host: "" }));
-    } else {
-      setForm((prev) => ({ ...prev, host: "" }));
-    }
+    setForm((prev) => ({ ...prev, host: "" }));
     setConnected(false);
   };
 
