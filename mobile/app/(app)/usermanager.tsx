@@ -303,6 +303,215 @@ const ctx = StyleSheet.create({
   loadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.25)", alignItems: "center", justifyContent: "center", borderRadius: Radius.xxl },
 });
 
+// ─── Performance Tips Sheet ───────────────────────
+const PERF_TIPS = [
+  {
+    num: "١",
+    emoji: "🔌",
+    title: "إنشاء اتصال جديد لكل مستخدم",
+    body: "إنشاء اتصال TCP جديد لكل مستخدم يستغرق 100–400 ملي ثانية (مصافحة + تسجيل دخول + جلسة API). لإضافة 100 مستخدم قد تُهدر 20–40 ثانية فقط في إعادة الاتصال.\n\nالحل: استخدم اتصالاً دائماً (Connection Pool) يُعاد استخدامه لجميع الأوامر.",
+  },
+  {
+    num: "٢",
+    emoji: "🖥️",
+    title: "استخدام SSH بدلاً من API الأصلي",
+    body: "أوامر SSH أبطأ بسبب: تحليل CLI، تحليل مخرجات نصية، وتشفير SSH الإضافي.\n\nمثال:\n/tool user-manager user add username=test password=***\n\nالحل: استخدم RouterOS API مباشرةً — يتجنب كل هذه الخطوات ويكون أسرع بكثير.",
+  },
+  {
+    num: "٣",
+    emoji: "📋",
+    title: "إضافة المستخدمين فرداً فرداً",
+    body: "كل أمر منفرد يضيف زمن استجابة مضاعف:\n  أضف مستخدم ← انتظر ← أضف ← انتظر ...\n\nالحل: أرسل عدة أوامر معاً (Pipelining) عبر نفس الاتصال دون انتظار كل استجابة على حدة.",
+  },
+  {
+    num: "٤",
+    emoji: "🔎",
+    title: "الاستعلام من الراوتر بعد كل إدخال",
+    body: "نمط خاطئ:\n  أنشئ مستخدم ← اجلب القائمة ← أنشئ ← اجلب ...\n\nأمر print في User Manager قد يكون ثقيلاً خاصةً مع قاعدة بيانات كبيرة.\n\nالحل: أنشئ المستخدمين دفعةً واحدة ثم اجلب القائمة مرةً واحدة فقط.",
+  },
+  {
+    num: "٥",
+    emoji: "🗄️",
+    title: "بطء قاعدة بيانات User Manager",
+    body: "قاعدة بيانات User Manager داخل RouterOS ليست محسّنة للأعداد الكبيرة. مع آلاف المستخدمين أو الجلسات أو السجلات تتباطأ العمليات.\n\nللتشخيص:\n/tool user-manager user print count-only\n\nالحلول:\n• أرشفة الجلسات القديمة\n• مسح السجلات (logs)\n• تحسين قاعدة البيانات",
+  },
+  {
+    num: "٦",
+    emoji: "⚙️",
+    title: "ضغط CPU على الراوتر",
+    body: "للتحقق من حمل المعالج:\n/system resource print\n\nإذا تجاوز CPU 70% تتباطأ إضافة المستخدمين.\n\nأسباب شائعة:\n• محاسبة Hotspot\n• قواعد جدار الحماية\n• قوائم الانتظار (Queues)\n• السكربتات",
+  },
+  {
+    num: "٧",
+    emoji: "🌐",
+    title: "تأخير الشبكة بين التطبيق والراوتر",
+    body: "إذا كان خادم التطبيق بعيداً جغرافياً عن الراوتر (مثلاً أوروبا ← اليمن) قد يصل التأخير إلى 150–300 ملي ثانية لكل أمر.\n\nالحلول:\n• شغّل Worker قريباً من الراوتر\n• أو استخدم Message Queue لإرسال الأوامر دفعةً",
+  },
+  {
+    num: "٨",
+    emoji: "🏗️",
+    title: "بنية الباك إند البطيئة",
+    body: "نمط بطيء:\n  طلب API ← تحقق ← اكتب DB ← اتصل راوتر ← انتظر ← حدّث UI\n\nالبنية الأمثل:\n  طلب API ← أدرج في Queue ← Worker يُنشئ المستخدم ← حدّث الحالة\n\nاستخدم Redis Queue + Background Workers لمعالجة دفعات كبيرة.",
+  },
+  {
+    num: "٩",
+    emoji: "🔗",
+    title: "عمليات متسلسلة كثيرة",
+    body: "إذا كان الكود يُنفّذ:\n  أنشئ مستخدم ← أنشئ ملف ← عيّن ملف ← ضبط حد ← أنشئ جلسة\n\nكل خطوة منفصلة تضاعف زمن الاستجابة الكلي.\n\nالحل: ادمج العمليات في أمر واحد حيثما أمكن.",
+  },
+] as const;
+
+function PerformanceTipsSheet({
+  visible, onClose,
+}: {
+  visible: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <Pressable style={tips.backdrop} onPress={onClose} />
+      <View style={tips.container}>
+        <View style={tips.handle} />
+        {/* Header */}
+        <View style={tips.headerRow}>
+          <View style={tips.headerLeft}>
+            <View style={tips.headerIcon}>
+              <Ionicons name="flash-outline" size={16} color={Colors.warning} />
+            </View>
+            <Text style={tips.headerTitle}>دليل الأداء والتشخيص</Text>
+          </View>
+          <TouchableOpacity onPress={onClose} style={tips.closeBtn}>
+            <Ionicons name="close" size={18} color={Colors.mutedFg} />
+          </TouchableOpacity>
+        </View>
+        <Text style={tips.headerSub}>
+          أسباب بطء إضافة المستخدمين والحلول الموصى بها
+        </Text>
+
+        <ScrollView showsVerticalScrollIndicator={false} style={tips.scroll}>
+          {PERF_TIPS.map((tip) => (
+            <View key={tip.num} style={tips.card}>
+              <View style={tips.cardHeader}>
+                <Text style={tips.cardEmoji}>{tip.emoji}</Text>
+                <Text style={tips.cardNum}>{tip.num}</Text>
+                <Text style={tips.cardTitle}>{tip.title}</Text>
+              </View>
+              <Text style={tips.cardBody}>{tip.body}</Text>
+            </View>
+          ))}
+          <View style={tips.diagSection}>
+            <View style={tips.diagHeader}>
+              <Ionicons name="search-outline" size={15} color={Colors.primaryLight} />
+              <Text style={tips.diagTitle}>كيف تشخّص المشكلة الحقيقية؟</Text>
+            </View>
+            {[
+              {
+                step: "اختبار ١",
+                desc: "قِس زمن إضافة مستخدم مباشرةً في CLI الراوتر:\n/tool user-manager user add ...\nإذا كان بطيئاً → المشكلة في الراوتر.",
+              },
+              {
+                step: "اختبار ٢",
+                desc: "قِس زمن إضافة مستخدم عبر سكربت API.\nإذا كان بطيئاً → المشكلة في طريقة استخدام API.",
+              },
+              {
+                step: "اختبار ٣",
+                desc: "قِس الزمن داخل سجلات التطبيق (Application Logs).\nإذا كان بطيئاً → المشكلة في بنية الباك إند.",
+              },
+            ].map((item) => (
+              <View key={item.step} style={tips.diagItem}>
+                <View style={tips.diagBadge}>
+                  <Text style={tips.diagBadgeText}>{item.step}</Text>
+                </View>
+                <Text style={tips.diagDesc}>{item.desc}</Text>
+              </View>
+            ))}
+          </View>
+          <View style={tips.bestPracticeBox}>
+            <View style={tips.bestPracticeHeader}>
+              <Ionicons name="rocket-outline" size={15} color={Colors.success} />
+              <Text style={tips.bestPracticeTitle}>أفضل بنية لأنظمة MikroTik عالية الأداء</Text>
+            </View>
+            <Text style={tips.bestPracticeBody}>
+              {"لوحة تحكم\n        ↓\nباك إند API\n        ↓\nJob Queue (Redis)\n        ↓\nWorker Pool\n        ↓\nاتصالات API دائمة\n        ↓\nراوترات MikroTik"}
+            </Text>
+            <Text style={tips.bestPracticeNote}>
+              هذه البنية تتيح إضافة مئات المستخدمين في الثانية الواحدة.
+            </Text>
+          </View>
+          <View style={tips.bottomSpacer} />
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+const tips = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: Colors.overlay },
+  container: {
+    backgroundColor: Colors.card,
+    borderTopLeftRadius: Radius.xxl,
+    borderTopRightRadius: Radius.xxl,
+    padding: Spacing.lg,
+    paddingBottom: Platform.OS === "ios" ? 36 : Spacing.xl,
+    maxHeight: "92%",
+  },
+  handle: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: Colors.border, alignSelf: "center", marginBottom: Spacing.md,
+  },
+  headerRow: {
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between", marginBottom: 4,
+  },
+  headerLeft: { flexDirection: "row", alignItems: "center", gap: 8 },
+  headerIcon: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: Colors.warningBg, alignItems: "center", justifyContent: "center",
+  },
+  headerTitle: { fontSize: 15, fontWeight: "800", color: Colors.foreground },
+  headerSub: { fontSize: 11, color: Colors.mutedFg, textAlign: "right", marginBottom: Spacing.md },
+  closeBtn: { padding: 6, borderRadius: Radius.sm, backgroundColor: Colors.muted },
+  scroll: { flex: 1 },
+  card: {
+    backgroundColor: Colors.muted, borderRadius: Radius.md, borderWidth: 1,
+    borderColor: Colors.border, padding: Spacing.md, marginBottom: Spacing.sm,
+  },
+  cardHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  cardEmoji: { fontSize: 18 },
+  cardNum: {
+    fontSize: 11, fontWeight: "800", color: Colors.primaryLight,
+    backgroundColor: "rgba(124,58,237,0.12)", paddingHorizontal: 6,
+    paddingVertical: 2, borderRadius: Radius.full,
+  },
+  cardTitle: { flex: 1, fontSize: 13, fontWeight: "700", color: Colors.foreground, textAlign: "right" },
+  cardBody: { fontSize: 12, color: Colors.textSecondary, lineHeight: 20, textAlign: "right" },
+  diagSection: {
+    backgroundColor: "rgba(124,58,237,0.06)", borderRadius: Radius.md,
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.2)", padding: Spacing.md, marginBottom: Spacing.sm,
+  },
+  diagHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: Spacing.sm },
+  diagTitle: { fontSize: 13, fontWeight: "700", color: Colors.primaryLight },
+  diagItem: { flexDirection: "row", gap: Spacing.sm, marginBottom: Spacing.sm, alignItems: "flex-start" },
+  diagBadge: {
+    backgroundColor: Colors.primary, paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: Radius.sm, minWidth: 70, alignItems: "center",
+  },
+  diagBadgeText: { fontSize: 10, fontWeight: "700", color: Colors.primaryFg },
+  diagDesc: { flex: 1, fontSize: 11, color: Colors.textSecondary, lineHeight: 18, textAlign: "right" },
+  bestPracticeBox: {
+    backgroundColor: Colors.successBg, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: Colors.successBorder, padding: Spacing.md, marginBottom: Spacing.sm,
+  },
+  bestPracticeHeader: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: Spacing.sm },
+  bestPracticeTitle: { fontSize: 13, fontWeight: "700", color: Colors.success },
+  bestPracticeBody: {
+    fontSize: 12, color: Colors.textSecondary, lineHeight: 20,
+    fontFamily: MONO_FONT, textAlign: "center", marginBottom: 8,
+  },
+  bestPracticeNote: { fontSize: 11, color: Colors.success, textAlign: "center", fontWeight: "600" },
+  bottomSpacer: { height: 24 },
+});
+
 // ─── Add Users Sheet ──────────────────────────────
 /** Build HTML for printing cards */
 function buildPrintHtml(users: GeneratedUser[], profileName: string): string {
@@ -913,6 +1122,7 @@ export default function UserManagerScreen() {
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [addSheetVisible, setAddSheetVisible] = useState(false);
+  const [tipsVisible, setTipsVisible] = useState(false);
 
   // Multi-select state
   const [selectMode, setSelectMode] = useState(false);
@@ -1065,6 +1275,12 @@ export default function UserManagerScreen() {
           )}
         </View>
         <View style={styles.headerActions}>
+          <AnimatedPressable
+            style={styles.tipsBtn}
+            onPress={() => { lightTap(); setTipsVisible(true); }}
+          >
+            <Ionicons name="flash-outline" size={15} color={Colors.warning} />
+          </AnimatedPressable>
           {tab === "users" && (
             <AnimatedPressable
               style={[styles.selectToggleBtn, selectMode ? styles.selectToggleBtnActive : undefined] as any}
@@ -1345,6 +1561,12 @@ export default function UserManagerScreen() {
         action={action}
         onViewSessions={handleViewSessions}
       />
+
+      {/* Performance Tips Sheet */}
+      <PerformanceTipsSheet
+        visible={tipsVisible}
+        onClose={() => setTipsVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -1369,6 +1591,7 @@ const styles = StyleSheet.create({
   // Buttons
   addFab: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.full },
   addFabText: { fontSize: 13, fontWeight: "700", color: Colors.primaryFg },
+  tipsBtn: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: Colors.warningBg, borderWidth: 1, borderColor: Colors.warningBorder },
   selectToggleBtn: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: Colors.muted, paddingHorizontal: 12, paddingVertical: 7, borderRadius: Radius.full, borderWidth: 1, borderColor: Colors.border },
   selectToggleBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   selectToggleText: { fontSize: 12, fontWeight: "700", color: Colors.textSecondary },
