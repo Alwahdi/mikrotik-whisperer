@@ -25,6 +25,23 @@ import Button from "@/components/Button";
 import AnimatedPressable from "@/components/AnimatedPressable";
 import { lightTap, notifySuccess, notifyError, notifyWarning } from "@/lib/haptics";
 
+type NetworkType = "local" | "cloud";
+
+function detectNetworkType(host: string): NetworkType {
+  if (!host) return "local";
+  // Local IPs: 192.168.x.x, 10.x.x.x, 172.16-31.x.x, or plain hostnames without dots
+  if (
+    /^192\.168\.\d+\.\d+$/.test(host) ||
+    /^10\.\d+\.\d+\.\d+$/.test(host) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host) ||
+    /^(localhost|127\.0\.0\.1)$/.test(host) ||
+    (!host.includes(".") && host.length > 0)
+  ) {
+    return "local";
+  }
+  return "cloud";
+}
+
 export default function SettingsScreen() {
   const { user, signOut, role } = useAuth();
   const queryClient = useQueryClient();
@@ -34,10 +51,16 @@ export default function SettingsScreen() {
   const [connected, setConnected] = useState(false);
   const [testing, setTesting] = useState(false);
   const [routerInfo, setRouterInfo] = useState("");
+  const [networkType, setNetworkType] = useState<NetworkType>("local");
 
   useEffect(() => {
     getMikrotikConfig().then((saved) => {
-      if (saved) { setForm(saved); setConnected(true); setRouterInfo(saved.label || ""); }
+      if (saved) {
+        setForm(saved);
+        setConnected(true);
+        setRouterInfo(saved.label || "");
+        setNetworkType(detectNetworkType(saved.host));
+      }
     });
   }, []);
 
@@ -54,8 +77,22 @@ export default function SettingsScreen() {
       if (field === "protocol") {
         updated.port = getDefaultPort(updated.mode, value as ConnectionProtocol);
       }
+      if (field === "host") {
+        setNetworkType(detectNetworkType(value.trim()));
+      }
       return updated;
     });
+    setConnected(false);
+  };
+
+  const handleNetworkTypeChange = (type: NetworkType) => {
+    lightTap();
+    setNetworkType(type);
+    if (type === "local") {
+      setForm((prev) => ({ ...prev, host: "" }));
+    } else {
+      setForm((prev) => ({ ...prev, host: "" }));
+    }
     setConnected(false);
   };
 
@@ -136,6 +173,41 @@ export default function SettingsScreen() {
           </Animated.View>
         )}
 
+        {/* Network Type */}
+        <Animated.View entering={FadeInDown.delay(90).springify()} style={styles.card}>
+          <Text style={styles.cardTitle}>نوع الشبكة</Text>
+          <View style={styles.modeRow}>
+            <AnimatedPressable
+              style={[styles.modeBtn, networkType === "local" ? styles.modeBtnActive : undefined] as any}
+              onPress={() => handleNetworkTypeChange("local")}
+            >
+              <Ionicons name="home-outline" size={18} color={networkType === "local" ? Colors.primaryLight : Colors.mutedFg} />
+              <Text style={[styles.modeBtnText, networkType === "local" && { color: Colors.foreground }]}>شبكة محلية</Text>
+              <Text style={styles.modeSubText}>IP مثل: 192.168.x.x</Text>
+            </AnimatedPressable>
+            <AnimatedPressable
+              style={[styles.modeBtn, networkType === "cloud" ? styles.modeBtnActive : undefined] as any}
+              onPress={() => handleNetworkTypeChange("cloud")}
+            >
+              <Ionicons name="cloud-outline" size={18} color={networkType === "cloud" ? Colors.primaryLight : Colors.mutedFg} />
+              <Text style={[styles.modeBtnText, networkType === "cloud" && { color: Colors.foreground }]}>DNS سحابي</Text>
+              <Text style={styles.modeSubText}>xxx.sn.mynetname.net</Text>
+            </AnimatedPressable>
+          </View>
+          {networkType === "local" && (
+            <View style={styles.networkHint}>
+              <Ionicons name="information-circle-outline" size={14} color={Colors.primaryLight} />
+              <Text style={styles.networkHintText}>تأكد أن هاتفك متصل بنفس الشبكة Wi-Fi</Text>
+            </View>
+          )}
+          {networkType === "cloud" && (
+            <View style={styles.networkHint}>
+              <Ionicons name="information-circle-outline" size={14} color={Colors.warning} />
+              <Text style={[styles.networkHintText, { color: Colors.warning }]}>فعّل IP → Cloud في الراوتر للحصول على العنوان</Text>
+            </View>
+          )}
+        </Animated.View>
+
         {/* Connection Mode */}
         <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.card}>
           <Text style={styles.cardTitle}>طريقة الاتصال</Text>
@@ -181,7 +253,7 @@ export default function SettingsScreen() {
               style={[styles.input, styles.monoInput]}
               value={form.host}
               onChangeText={(v) => handleFieldChange("host", v.trim())}
-              placeholder="192.168.88.1"
+              placeholder={networkType === "local" ? "192.168.88.1" : "abc123.sn.mynetname.net"}
               placeholderTextColor={Colors.mutedFg}
               keyboardType="url"
               autoCapitalize="none"
@@ -230,13 +302,18 @@ export default function SettingsScreen() {
 
         {/* Tips */}
         <Animated.View entering={FadeInDown.delay(180).springify()} style={styles.card}>
-          <Text style={styles.cardTitle}>نصائح</Text>
-          {[
+          <Text style={styles.cardTitle}>نصائح الاتصال</Text>
+          {(networkType === "local" ? [
+            "تأكد أن هاتفك متصل بنفس Wi-Fi الخاص بالراوتر",
             "REST API: فعّل www أو www-ssl من IP → Services",
             "MikroTik API: فعّل api أو api-ssl من IP → Services",
-            "Cloud: فعّل IP → Cloud واستخدم xxx.sn.mynetname.net",
-            "تأكد من فتح البورت في الفايروول",
-          ].map((tip, i) => (
+            "تأكد من فتح البورت في الفايروول للوصول المحلي",
+          ] : [
+            "فعّل IP → Cloud في الراوتر للحصول على عنوان DNS",
+            "استخدم xxx.sn.mynetname.net كعنوان الاتصال",
+            "REST API: فعّل www-ssl من IP → Services",
+            "تأكد من السماح بالوصول من الإنترنت في الفايروول",
+          ]).map((tip, i) => (
             <Text key={i} style={styles.tipText}>• {tip}</Text>
           ))}
         </Animated.View>
@@ -312,6 +389,8 @@ const styles = StyleSheet.create({
   monoInput: { textAlign: "left", fontFamily: "Courier" },
   rowGroup: { flexDirection: "row", gap: Spacing.sm },
   tipText: { fontSize: 11, color: Colors.mutedFg, lineHeight: 18 },
+  networkHint: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(139,92,246,0.08)", borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 7 },
+  networkHintText: { fontSize: 11, color: Colors.primaryLight, flex: 1, lineHeight: 16 },
   linkRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingVertical: 8, borderTopWidth: 1, borderTopColor: Colors.border },
   linkText: { flex: 1, fontSize: 13, color: Colors.foreground },
   signOutBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: Colors.destructiveBg, borderWidth: 1, borderColor: Colors.destructiveBorder, borderRadius: Radius.md, paddingVertical: 14 },
