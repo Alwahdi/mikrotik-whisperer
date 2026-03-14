@@ -251,6 +251,7 @@ export function useUserManagerAction() {
       const endpointMap: Record<string, string> = {
         disable: "/user-manager/user/set",
         enable: "/user-manager/user/set",
+        set: "/user-manager/user/set",
         remove: "/user-manager/user/remove",
         add: "/user-manager/user/add",
       };
@@ -347,6 +348,42 @@ export function useRawBatchAction() {
     }: {
       commands: { command: string; args?: string[] }[];
     }) => callMikrotikAction("batch", { commands }),
+  });
+}
+
+export function useHotspotBatchAdd() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      commands,
+    }: {
+      commands: { command: string; args: string[] }[];
+    }) => callMikrotikAction("batch", { commands }),
+    onSuccess: () => {
+      const routerKey = getRouterKey();
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "hotspot"] });
+    },
+    onError: (err: any) => {
+      Alert.alert("خطأ", err.message || "فشلت العملية");
+    },
+  });
+}
+
+export function useUserManagerBatchAdd() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      commands,
+    }: {
+      commands: { command: string; args: string[] }[];
+    }) => callMikrotikAction("batch", { commands }),
+    onSuccess: () => {
+      const routerKey = getRouterKey();
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager"] });
+    },
+    onError: (err: any) => {
+      Alert.alert("خطأ", err.message || "فشلت العملية");
+    },
   });
 }
 
