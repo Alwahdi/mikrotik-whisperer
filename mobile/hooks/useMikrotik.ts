@@ -350,6 +350,24 @@ export function useRawBatchAction() {
   });
 }
 
+export function useUserManagerBatchAdd() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      commands,
+    }: {
+      commands: { command: string; args: string[] }[];
+    }) => callMikrotikAction("batch", { commands }),
+    onSuccess: () => {
+      const routerKey = getRouterKey();
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager"] });
+    },
+    onError: (err: any) => {
+      Alert.alert("خطأ", err.message || "فشلت العملية");
+    },
+  });
+}
+
 // ─── System Logs ─────────────────────────────────
 export function useSystemLogs() {
   const routerKey = getRouterKey();
