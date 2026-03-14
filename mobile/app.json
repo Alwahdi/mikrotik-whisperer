@@ -2,6 +2,7 @@
   "expo": {
     "name": "MikroTik Manager",
     "slug": "mikrotik-manager",
+    "owner": "alwahdi",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -46,6 +47,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "fee3d900-d17b-44c4-976a-e2218e3023b1"
+      }
     }
   }
 }
