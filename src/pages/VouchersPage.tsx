@@ -333,9 +333,10 @@ export default function VouchersPage() {
 
     const commandForIndex = (idx: number) => {
       const card = cards[idx];
+      // v6 user-manager uses "name" instead of "username", and "customer" instead of "owner"
       const args: string[] = type === "hotspot"
         ? [`=name=${card.username}`, `=password=${card.password}`, `=profile=${card.profile}`]
-        : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`];
+        : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`, `=owner=admin`];
       return { command: addEndpoint, args };
     };
 
