@@ -231,6 +231,16 @@ export default function VouchersPage() {
     return Array.isArray(raw) ? raw : [];
   }, [type, hotspotProfiles, umProfiles]);
 
+  // Auto-populate unit price from selected profile's price field
+  useEffect(() => {
+    if (!selectedProfile || type !== "usermanager") return;
+    const profile = profiles.find((p: any) => p.name === selectedProfile);
+    if (profile?.price) {
+      const price = parseFloat(profile.price);
+      if (!isNaN(price) && price > 0) setUnitPrice(price);
+    }
+  }, [selectedProfile, profiles, type]);
+
   const routerBatches = useMemo(() => {
     if (!currentRouterHost) return batches;
     return batches.filter(b => !b.routerHost || b.routerHost === currentRouterHost);
@@ -333,9 +343,10 @@ export default function VouchersPage() {
 
     const commandForIndex = (idx: number) => {
       const card = cards[idx];
+      // v6 user-manager uses "name" instead of "username", and "customer" instead of "owner"
       const args: string[] = type === "hotspot"
         ? [`=name=${card.username}`, `=password=${card.password}`, `=profile=${card.profile}`]
-        : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`];
+        : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`, `=owner=admin`];
       return { command: addEndpoint, args };
     };
 
@@ -456,12 +467,13 @@ export default function VouchersPage() {
 
     try {
       const isLargeBatch = cards.length >= 600;
+      // Optimized for v6 RouterOS: smaller chunks to avoid router CPU overload
       const firstChunk = isRestMode
-        ? (type === "usermanager" ? (isLargeBatch ? 6 : 8) : (isLargeBatch ? 8 : 12))
-        : (type === "usermanager" ? (isLargeBatch ? 30 : 45) : (isLargeBatch ? 45 : 70));
+        ? (type === "usermanager" ? (isLargeBatch ? 4 : 6) : (isLargeBatch ? 6 : 10))
+        : (type === "usermanager" ? (isLargeBatch ? 20 : 30) : (isLargeBatch ? 30 : 50));
       const firstConcurrency = isRestMode
-        ? (type === "usermanager" ? 1 : 2)
-        : (type === "usermanager" ? (isLargeBatch ? 3 : 4) : (isLargeBatch ? 4 : 5));
+        ? 1
+        : (type === "usermanager" ? (isLargeBatch ? 2 : 3) : (isLargeBatch ? 3 : 4));
 
       let pending = await runPass(
         cards.map((_, idx) => idx),

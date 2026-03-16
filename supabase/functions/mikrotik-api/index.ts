@@ -702,11 +702,13 @@ function buildRestBodyVariants(command: string, body?: Record<string, any>): (Re
 
     const optionalKeys = ["name-for-users", "override-shared-users", "transfer-limit", "uptime-limit", "price"];
     for (const key of optionalKeys) {
-      if (body[key] !== undefined) {
-        variants.push(omitBodyKeys(body, [key]));
+      if (body && body[key] !== undefined) {
+        const omitted = omitBodyKeys(body, [key]);
+        if (omitted) variants.push(omitted);
       }
     }
-    variants.push(omitBodyKeys(body, optionalKeys)!);
+    const minimalBody = omitBodyKeys(body ?? {}, optionalKeys);
+    if (minimalBody) variants.push(minimalBody);
   }
 
   if (isUserManagerUserAddCommand(command)) {
