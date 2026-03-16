@@ -231,6 +231,16 @@ export default function VouchersPage() {
     return Array.isArray(raw) ? raw : [];
   }, [type, hotspotProfiles, umProfiles]);
 
+  // Auto-populate unit price from selected profile's price field
+  useEffect(() => {
+    if (!selectedProfile || type !== "usermanager") return;
+    const profile = profiles.find((p: any) => p.name === selectedProfile);
+    if (profile?.price) {
+      const price = parseFloat(profile.price);
+      if (!isNaN(price) && price > 0) setUnitPrice(price);
+    }
+  }, [selectedProfile, profiles, type]);
+
   const routerBatches = useMemo(() => {
     if (!currentRouterHost) return batches;
     return batches.filter(b => !b.routerHost || b.routerHost === currentRouterHost);
