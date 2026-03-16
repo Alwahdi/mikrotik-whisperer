@@ -467,12 +467,13 @@ export default function VouchersPage() {
 
     try {
       const isLargeBatch = cards.length >= 600;
+      // Optimized for v6 RouterOS: smaller chunks to avoid router CPU overload
       const firstChunk = isRestMode
-        ? (type === "usermanager" ? (isLargeBatch ? 6 : 8) : (isLargeBatch ? 8 : 12))
-        : (type === "usermanager" ? (isLargeBatch ? 30 : 45) : (isLargeBatch ? 45 : 70));
+        ? (type === "usermanager" ? (isLargeBatch ? 4 : 6) : (isLargeBatch ? 6 : 10))
+        : (type === "usermanager" ? (isLargeBatch ? 20 : 30) : (isLargeBatch ? 30 : 50));
       const firstConcurrency = isRestMode
-        ? (type === "usermanager" ? 1 : 2)
-        : (type === "usermanager" ? (isLargeBatch ? 3 : 4) : (isLargeBatch ? 4 : 5));
+        ? 1
+        : (type === "usermanager" ? (isLargeBatch ? 2 : 3) : (isLargeBatch ? 3 : 4));
 
       let pending = await runPass(
         cards.map((_, idx) => idx),
