@@ -23,12 +23,13 @@ import {
 import {
   Printer, CreditCard, Plus, Trash2, Download, Home, Upload, Loader2,
   History, ChevronLeft, ChevronRight, Check, X, Save, FolderOpen, GripVertical,
-  Store, FileDown, LayoutGrid,
+  Store, FileDown, LayoutGrid, QrCode, Type,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import QRCode from "qrcode";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -73,7 +74,7 @@ interface PrintTemplate {
 
 interface FieldPosition {
   id: string;
-  type: "username" | "password" | "profile" | "title" | "subtitle" | "price";
+  type: "username" | "password" | "profile" | "title" | "subtitle" | "price" | "sales_point" | "qr";
   label: string;
   x: number;
   y: number;
@@ -140,6 +141,8 @@ function defaultFields(): FieldPosition[] {
     { id: "f4", type: "title", label: "العنوان", x: 50, y: 20, fontSize: 14, color: "#000000", visible: false },
     { id: "f5", type: "subtitle", label: "العنوان الفرعي", x: 50, y: 35, fontSize: 10, color: "#666666", visible: false },
     { id: "f6", type: "price", label: "السعر", x: 85, y: 15, fontSize: 11, color: "#2563EB", visible: false },
+    { id: "f7", type: "sales_point", label: "نقطة البيع", x: 18, y: 15, fontSize: 10, color: "#111827", visible: false },
+    { id: "f8", type: "qr", label: "QR", x: 84, y: 78, fontSize: 10, color: "#111827", visible: false },
   ];
 }
 
