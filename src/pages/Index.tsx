@@ -122,7 +122,7 @@ export default function Index() {
         <div>
           <h2 className="text-xl font-bold text-foreground tracking-tight">{routerName}</h2>
           <p className="text-muted-foreground text-xs flex items-center gap-2 mt-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-accent inline-block" />
+            <span className="h-1.5 w-1.5 rounded-full bg-success inline-block" />
             <span>{sysResource?.version || "RouterOS"} • {config.mode === "rest" ? "REST" : "API"}</span>
             {latency != null && <span className="font-mono text-muted-foreground/70">• {latency}ms</span>}
           </p>
