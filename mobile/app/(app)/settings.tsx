@@ -19,7 +19,7 @@ import {
   type ConnectionMode,
   type ConnectionProtocol,
 } from "@/lib/mikrotikConfig";
-import { supabase } from "@/lib/supabase";
+import { testMikrotikConnection, shouldUseDirectLocalRest } from "@/lib/mikrotikDirect";
 import { Colors, Radius, Spacing } from "@/lib/theme";
 import Button from "@/components/Button";
 import AnimatedPressable from "@/components/AnimatedPressable";
