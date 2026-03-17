@@ -101,18 +101,17 @@ export default function SettingsScreen() {
     }
     setTesting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("mikrotik-api", {
-        body: { endpoint: "/system/identity/print", host: form.host, user: form.user, pass: form.pass, port: form.port, protocol: form.protocol, mode: form.mode },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      const data = await testMikrotikConnection(form);
       const name = Array.isArray(data) ? data[0]?.name : data?.name;
       await saveMikrotikConfig({ ...form, label: name || "MikroTik" });
       setConnected(true);
       setRouterInfo(name || "MikroTik");
       queryClient.invalidateQueries({ queryKey: ["mikrotik"] });
       notifySuccess();
-      Alert.alert("تم الاتصال ✓", `متصل بـ: ${name || "MikroTik"}`);
+      Alert.alert(
+        "تم الاتصال ✓",
+        `${shouldUseDirectLocalRest(form) ? "اتصال محلي مباشر سريع" : "اتصال عبر السحابة"}\nمتصل بـ: ${name || "MikroTik"}`
+      );
     } catch (err: any) {
       setConnected(false);
       notifyError();
