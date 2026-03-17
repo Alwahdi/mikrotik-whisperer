@@ -120,11 +120,11 @@ export default function Index() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-lg font-bold text-foreground">{routerName}</h2>
-          <p className="text-muted-foreground text-xs flex items-center gap-2 mt-0.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-success inline-block" />
-            {sysResource?.version || "RouterOS"} • {config.mode === "rest" ? "REST" : "API"}
-            {latency != null && <span className="font-mono">• {latency}ms</span>}
+          <h2 className="text-xl font-bold text-foreground tracking-tight">{routerName}</h2>
+          <p className="text-muted-foreground text-xs flex items-center gap-2 mt-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-accent inline-block" />
+            <span>{sysResource?.version || "RouterOS"} • {config.mode === "rest" ? "REST" : "API"}</span>
+            {latency != null && <span className="font-mono text-muted-foreground/70">• {latency}ms</span>}
           </p>
         </div>
       </div>
@@ -132,20 +132,20 @@ export default function Index() {
       {/* Quick Actions */}
       <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-1">
         <Link to="/vouchers">
-          <Button size="sm" variant="outline" className="text-xs whitespace-nowrap">
-            <CreditCard className="h-3.5 w-3.5 ml-1" />
+          <Button size="sm" variant="outline" className="text-xs whitespace-nowrap gap-1.5">
+            <CreditCard className="h-3.5 w-3.5" />
             توليد كروت
           </Button>
         </Link>
         <Link to="/usermanager">
-          <Button size="sm" variant="outline" className="text-xs whitespace-nowrap">
-            <UserPlus className="h-3.5 w-3.5 ml-1" />
+          <Button size="sm" variant="outline" className="text-xs whitespace-nowrap gap-1.5">
+            <UserPlus className="h-3.5 w-3.5" />
             يوزر مانجر
           </Button>
         </Link>
         <Link to="/hotspot">
-          <Button size="sm" variant="outline" className="text-xs whitespace-nowrap">
-            <Wifi className="h-3.5 w-3.5 ml-1" />
+          <Button size="sm" variant="outline" className="text-xs whitespace-nowrap gap-1.5">
+            <Wifi className="h-3.5 w-3.5" />
             الهوتسبوت
           </Button>
         </Link>
@@ -155,10 +155,10 @@ export default function Index() {
       {alerts.length > 0 && (
         <div className="mb-5 space-y-2">
           {alerts.map((a, i) => (
-            <div key={i} className={`flex items-center gap-2 p-3 rounded-lg border text-xs ${
-              a.type === "error" 
-                ? "bg-destructive/5 border-destructive/20 text-destructive" 
-                : "bg-warning/5 border-warning/20 text-warning"
+            <div key={i} className={`flex items-center gap-2.5 p-3 rounded-xl border text-xs font-medium ${
+              a.type === "error"
+                ? "bg-destructive/6 border-destructive/20 text-destructive"
+                : "bg-warning/6 border-warning/20 text-warning"
             }`}>
               <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
               {a.msg}
@@ -182,13 +182,13 @@ export default function Index() {
         <StatCard title="مبيعات اليوم" value={todayRevenue.toLocaleString()} icon={DollarSign} variant="accent" />
         <StatCard title="كروت اليوم" value={todayCardsCount} icon={CreditCard} />
         <Link to="/sales" className="col-span-2 sm:col-span-1">
-          <div className="rounded-lg border border-border bg-card p-4 hover:border-primary/30 transition-colors h-full flex flex-col justify-center">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+          <div className="rounded-xl border border-border bg-card p-4 hover:border-primary/30 card-hover h-full flex flex-col justify-center shadow-card">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1.5">
               <TrendingUp className="h-3.5 w-3.5" />
               أفضل باقة اليوم
             </div>
             <p className="text-sm font-semibold text-foreground truncate">{topPackageToday || "—"}</p>
-            <p className="text-[10px] text-primary mt-1 flex items-center gap-1">عرض التقارير <ArrowRight className="h-2.5 w-2.5" /></p>
+            <p className="text-[10px] text-primary mt-1.5 flex items-center gap-1 font-medium">عرض التقارير <ArrowRight className="h-2.5 w-2.5" /></p>
           </div>
         </Link>
       </div>
@@ -212,13 +212,14 @@ export default function Index() {
 
       {/* Active Hotspot Users */}
       {Array.isArray(hotspotUsers) && hotspotUsers.length > 0 && (
-        <div className="rounded-lg border border-border bg-card shadow-card p-5 mb-6">
+        <div className="rounded-xl border border-border bg-card shadow-card p-5 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide flex items-center gap-2">
+            <h3 className="text-xs font-semibold text-foreground uppercase tracking-widest flex items-center gap-2">
+              <span className="h-3.5 w-0.5 rounded-full bg-accent" />
               <Wifi className="h-3.5 w-3.5" />
               المتصلين ({hotspotUsers.length})
             </h3>
-            <Link to="/hotspot" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+            <Link to="/hotspot" className="text-xs text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 font-medium">
               عرض الكل <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
@@ -226,23 +227,23 @@ export default function Index() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-muted-foreground border-b border-border">
-                  <th className="text-right p-2 font-medium">المستخدم</th>
-                  <th className="text-right p-2 font-medium">IP</th>
-                  <th className="text-right p-2 font-medium hidden sm:table-cell">MAC</th>
-                  <th className="text-right p-2 font-medium">المدة</th>
-                  <th className="text-right p-2 font-medium">↓</th>
-                  <th className="text-right p-2 font-medium">↑</th>
+                  <th className="text-right pb-2.5 pt-0.5 font-medium">المستخدم</th>
+                  <th className="text-right pb-2.5 pt-0.5 font-medium">IP</th>
+                  <th className="text-right pb-2.5 pt-0.5 font-medium hidden sm:table-cell">MAC</th>
+                  <th className="text-right pb-2.5 pt-0.5 font-medium">المدة</th>
+                  <th className="text-right pb-2.5 pt-0.5 font-medium">↓</th>
+                  <th className="text-right pb-2.5 pt-0.5 font-medium">↑</th>
                 </tr>
               </thead>
               <tbody>
                 {hotspotUsers.slice(0, 8).map((u: any, i: number) => (
-                  <tr key={i} className="border-b border-border/30 hover:bg-muted/50 transition-colors">
-                    <td className="p-2 font-medium text-foreground">{u.user || "—"}</td>
-                    <td className="p-2 font-mono text-muted-foreground">{u.address || "—"}</td>
-                    <td className="p-2 font-mono text-muted-foreground hidden sm:table-cell">{u["mac-address"] || "—"}</td>
-                    <td className="p-2 text-muted-foreground">{u.uptime || "—"}</td>
-                    <td className="p-2 font-mono text-foreground">{formatSize(u["bytes-in"])}</td>
-                    <td className="p-2 font-mono text-foreground">{formatSize(u["bytes-out"])}</td>
+                  <tr key={i} className="border-b border-border/30 hover:bg-muted/40 transition-colors">
+                    <td className="py-2.5 font-semibold text-foreground">{u.user || "—"}</td>
+                    <td className="py-2.5 font-mono text-muted-foreground">{u.address || "—"}</td>
+                    <td className="py-2.5 font-mono text-muted-foreground hidden sm:table-cell">{u["mac-address"] || "—"}</td>
+                    <td className="py-2.5 text-muted-foreground">{u.uptime || "—"}</td>
+                    <td className="py-2.5 font-mono text-foreground">{formatSize(u["bytes-in"])}</td>
+                    <td className="py-2.5 font-mono text-foreground">{formatSize(u["bytes-out"])}</td>
                   </tr>
                 ))}
               </tbody>
@@ -253,19 +254,20 @@ export default function Index() {
 
       {/* Interfaces */}
       {Array.isArray(interfaces) && interfaces.length > 0 && (
-        <div className="rounded-lg border border-border bg-card shadow-card p-5">
-          <h3 className="text-xs font-semibold text-foreground mb-4 uppercase tracking-wide flex items-center gap-2">
+        <div className="rounded-xl border border-border bg-card shadow-card p-5">
+          <h3 className="text-xs font-semibold text-foreground mb-4 uppercase tracking-widest flex items-center gap-2">
+            <span className="h-3.5 w-0.5 rounded-full bg-primary" />
             <Network className="h-3.5 w-3.5" />
             الواجهات
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
             {interfaces.filter((i: any) => i.type !== "loopback").slice(0, 9).map((iface: any, i: number) => {
               const running = iface.running === "true" || iface.running === true;
               return (
-                <div key={i} className={`p-3 rounded-md border transition-colors ${running ? "border-success/20 bg-success/5" : "border-border bg-muted/50"}`}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-foreground font-mono">{iface.name}</span>
-                    <span className={`h-1.5 w-1.5 rounded-full ${running ? "bg-success" : "bg-muted-foreground/30"}`} />
+                <div key={i} className={`p-3 rounded-lg border transition-all ${running ? "border-accent/25 bg-accent/5" : "border-border bg-muted/30"}`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-semibold text-foreground font-mono">{iface.name}</span>
+                    <span className={`h-2 w-2 rounded-full ${running ? "bg-accent animate-pulse-glow" : "bg-muted-foreground/25"}`} />
                   </div>
                   <div className="text-[10px] text-muted-foreground font-mono">
                     ↓ {formatSize(iface["rx-byte"])} / ↑ {formatSize(iface["tx-byte"])}
