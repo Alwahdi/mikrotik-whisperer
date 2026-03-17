@@ -9,14 +9,14 @@
     "type-check": "tsc --noEmit"
   },
   "peerDependencies": {
-    "react": "^18.3.1 || ^19.0.0",
-    "react-dom": "^18.3.1 || ^19.0.0"
+    "react": ">=18.3.1",
+    "react-dom": ">=18.3.1"
   },
   "devDependencies": {
     "@mikrotik-whisperer/eslint-config": "*",
     "@mikrotik-whisperer/tsconfig": "*",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7",
     "typescript": "^5"
   },
   "dependencies": {
