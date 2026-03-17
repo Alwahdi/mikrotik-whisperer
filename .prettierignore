@@ -1,0 +1,7 @@
+dist
+node_modules
+.next
+coverage
+*.min.js
+bun.lockb
+public

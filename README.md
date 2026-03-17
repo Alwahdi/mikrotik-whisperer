@@ -1,73 +1,143 @@
-# Welcome to your Lovable project
+# MikroTik Whisperer
 
-## Project info
+A modern web application for managing MikroTik routers — hotspot management, user management, vouchers, backups, and more.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## ✨ Features
 
-## How can I edit this code?
+- 🔐 **Authentication** — Secure sign-in/sign-up powered by Supabase
+- 🌐 **Router Management** — Connect and manage multiple MikroTik routers
+- 📡 **Hotspot Management** — Monitor and control hotspot users in real time
+- 👥 **User Manager** — Full PPPoE/hotspot user lifecycle management
+- 🎫 **Vouchers** — Generate, print, and manage hotspot vouchers
+- 💾 **Backups** — Scheduled and on-demand router configuration backups
+- 📊 **Dashboard** — Live traffic charts and system health cards
+- 💰 **Sales** — Revenue tracking and reporting
+- 🌙 **Dark/Light mode** — Full theme support with system preference detection
 
-There are several ways of editing your application.
+## 🛠 Tech Stack
 
-**Use Lovable**
+| Layer          | Technology               |
+| -------------- | ------------------------ |
+| Framework      | React 18 + Vite          |
+| Language       | TypeScript (strict mode) |
+| Styling        | Tailwind CSS + ShadCN UI |
+| Data fetching  | TanStack Query v5        |
+| Backend / Auth | Supabase                 |
+| Forms          | React Hook Form + Zod    |
+| Charts         | Recharts                 |
+| Routing        | React Router DOM v6      |
+| Testing        | Vitest + Testing Library |
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## 🚀 Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js 20+
+- npm 10+
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Installation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+```bash
+# Clone the repository
+git clone https://github.com/Alwahdi/mikrotik-whisperer.git
+cd mikrotik-whisperer
 
-Follow these steps:
+# Install dependencies
+npm install
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# Copy environment variables
+cp .env.example .env
+# Edit .env with your Supabase credentials
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start the development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The app will be available at [http://localhost:8080](http://localhost:8080).
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Environment Variables
 
-**Use GitHub Codespaces**
+| Variable                 | Description                 |
+| ------------------------ | --------------------------- |
+| `VITE_SUPABASE_URL`      | Your Supabase project URL   |
+| `VITE_SUPABASE_ANON_KEY` | Your Supabase anonymous key |
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 📜 Available Scripts
 
-## What technologies are used for this project?
+| Command                | Description                 |
+| ---------------------- | --------------------------- |
+| `npm run dev`          | Start development server    |
+| `npm run build`        | Build for production        |
+| `npm run preview`      | Preview production build    |
+| `npm run lint`         | Run ESLint                  |
+| `npm run lint:fix`     | Run ESLint with auto-fix    |
+| `npm run format`       | Format code with Prettier   |
+| `npm run format:check` | Check code formatting       |
+| `npm run typecheck`    | Run TypeScript type checker |
+| `npm test`             | Run tests once              |
+| `npm run test:watch`   | Run tests in watch mode     |
 
-This project is built with:
+## 🏗 Project Structure
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+```
+src/
+├── components/       # Reusable UI components
+│   └── ui/           # ShadCN base components
+├── contexts/         # React contexts (AuthContext)
+├── hooks/            # Custom React hooks
+├── integrations/     # Third-party integrations (Supabase)
+├── lib/              # Utility functions
+├── pages/            # Page-level components
+├── stores/           # Zustand / state stores
+└── test/             # Test setup and utilities
+```
 
-## How can I deploy this project?
+## 🔄 CI/CD Pipeline
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+The project uses GitHub Actions for continuous integration:
 
-## Can I connect a custom domain to my Lovable project?
+| Job            | Trigger                     | What it does                            |
+| -------------- | --------------------------- | --------------------------------------- |
+| **Lint**       | Every PR / push             | Runs ESLint across all TypeScript files |
+| **Type Check** | Every PR / push             | Verifies TypeScript types (strict mode) |
+| **Build**      | After lint + typecheck pass | Produces production bundle              |
+| **Test**       | After lint + typecheck pass | Runs Vitest test suite                  |
 
-Yes, you can!
+Merges to `main` or `develop` are blocked unless all CI jobs pass.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## 🐶 Git Hooks (Husky)
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+| Hook         | Command                                        |
+| ------------ | ---------------------------------------------- |
+| `pre-commit` | `lint-staged` — lints and formats staged files |
+| `commit-msg` | `commitlint` — enforces Conventional Commits   |
+| `pre-push`   | `tsc --noEmit` — TypeScript type check         |
+
+## 📝 Commit Convention
+
+This project follows [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<type>(<scope>): <subject>
+
+Examples:
+feat(hotspot): add bulk user disconnect
+fix(auth): handle expired session redirect
+docs(readme): add environment variables table
+```
+
+**Allowed types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
+
+## 🤝 Contributing
+
+Please read [CONTRIBUTING.md](.github/CONTRIBUTING.md) for guidelines on how to contribute.
+
+1. Fork the repository
+2. Create your feature branch: `git checkout -b feat/amazing-feature`
+3. Commit your changes following Conventional Commits
+4. Push to the branch: `git push origin feat/amazing-feature`
+5. Open a Pull Request using the provided template
+
+## 📄 License
+
+This project is private and proprietary.
