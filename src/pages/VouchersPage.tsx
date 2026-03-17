@@ -74,7 +74,7 @@ interface PrintTemplate {
 
 interface FieldPosition {
   id: string;
-  type: "username" | "password" | "profile" | "title" | "subtitle" | "price";
+  type: "username" | "password" | "profile" | "title" | "subtitle" | "price" | "sales_point" | "qr";
   label: string;
   x: number;
   y: number;
