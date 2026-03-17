@@ -1,0 +1,10 @@
+{
+  "extends": "@mikrotik-whisperer/tsconfig/react-library.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "jsx": "react-jsx"
+  },
+  "include": ["."],
+  "exclude": ["node_modules", "dist"]
+}

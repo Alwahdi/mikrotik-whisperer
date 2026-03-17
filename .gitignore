@@ -7,14 +7,35 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+.pnp
+.pnp.js
+
+# Build outputs
 dist
 dist-ssr
+build
+.next
+.turbo
+out
+
+# Environment files
 *.local
+.env*.local
+.env
 
 # Mobile (Expo)
 mobile/.expo/
 mobile/dist/
+
+# Testing
+coverage
+.nyc_output
+
+# Cache
+.cache
+.parcel-cache
 
 # Editor directories and files
 .vscode/*
@@ -26,3 +47,13 @@ mobile/dist/
 *.njsproj
 *.sln
 *.sw?
+
+# OS
+Thumbs.db
+
+# Debug
+.vscode/
+.DS_Store
+.AppleDouble
+.LSOverride
+
