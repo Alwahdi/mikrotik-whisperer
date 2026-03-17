@@ -20,6 +20,7 @@ import BackupsPage from "./pages/BackupsPage";
 import SalesPage from "./pages/SalesPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import NotFound from "./pages/NotFound";
+import { Analytics } from "@vercel/analytics/react";
 
 const queryClient = new QueryClient();
 
@@ -63,6 +64,7 @@ const App = () => (
           </Routes>
         </AuthProvider>
       </BrowserRouter>
+      <Analytics />
     </TooltipProvider>
   </QueryClientProvider>
 );
