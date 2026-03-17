@@ -1,3 +1,1 @@
-# Temporarily disabled for initial commit
-# npm run type-check
-# npm run test
+npm run type-check
