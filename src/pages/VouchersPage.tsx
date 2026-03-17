@@ -23,12 +23,13 @@ import {
 import {
   Printer, CreditCard, Plus, Trash2, Download, Home, Upload, Loader2,
   History, ChevronLeft, ChevronRight, Check, X, Save, FolderOpen, GripVertical,
-  Store, FileDown, LayoutGrid,
+  Store, FileDown, LayoutGrid, QrCode, Type,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import QRCode from "qrcode";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
