@@ -1471,19 +1471,37 @@ export default function VouchersPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[60dvh] overflow-y-auto pr-1">
-                  {cards.slice(0, 100).map((card, i) => (
+                  {cards.slice(0, 100).map((card, i) => {
+                    const visibleF = fields.filter(f => f.visible);
+                    const showPass = visibleF.some(f => f.type === "password");
+                    const showProfile = visibleF.some(f => f.type === "profile");
+                    const showPrice = visibleF.some(f => f.type === "price") && unitPrice > 0;
+                    const showSP = visibleF.some(f => f.type === "sales_point") && selectedSalesPoint;
+                    const showQr = visibleF.some(f => f.type === "qr");
+                    const showTitle = visibleF.some(f => f.type === "title");
+                    const showSubtitle = visibleF.some(f => f.type === "subtitle");
+
+                    return (
                     <div key={i} className="relative">
                       {bgImage ? (
                         <div className="rounded-md border border-border overflow-hidden relative" style={{ aspectRatio: CARD_ASPECT_STANDARD }}>
                           <img src={bgImage} alt="" className="w-full h-full object-fill" />
-                          {fields.filter(f => f.visible).map(f => {
+                          {visibleF.map(f => {
+                            if (f.type === "qr") {
+                              return (
+                                <div key={f.id} className="absolute bg-white p-0.5 rounded-sm" style={{ top: `${f.y}%`, left: `${f.x}%`, transform: "translate(-50%,-50%)" }}>
+                                  <QrCode className="h-5 w-5 text-foreground" />
+                                </div>
+                              );
+                            }
                             let text = "";
                             if (f.type === "username") text = card.username;
-                            else if (f.type === "password") text = card.password || "—";
+                            else if (f.type === "password") text = card.password || "";
                             else if (f.type === "profile") text = card.profile;
                             else if (f.type === "title") text = cardTitle;
                             else if (f.type === "subtitle") text = cardSubtitle;
-                            else if (f.type === "price") text = unitPrice > 0 ? `${unitPrice}` : "";
+                            else if (f.type === "price") text = unitPrice > 0 ? `${unitPrice} ر.س` : "";
+                            else if (f.type === "sales_point") text = selectedSalesPoint || "";
                             return text ? (
                               <div key={f.id} className="absolute font-mono font-bold"
                                 style={{
@@ -1497,22 +1515,33 @@ export default function VouchersPage() {
                           })}
                         </div>
                       ) : (
-                        <div className="rounded-md border border-border bg-card p-2.5 text-right">
-                          <p className="font-semibold text-foreground text-[10px] mb-0.5">{cardTitle}</p>
-                          <p className="text-[9px] text-muted-foreground mb-1.5">{cardSubtitle}</p>
-                          <div className="mb-1">
-                            <span className="text-[8px] text-muted-foreground">اسم المستخدم</span>
-                            <p className="font-mono text-[10px] font-semibold text-foreground tracking-wider">{card.username}</p>
-                          </div>
-                          {card.password && (
-                            <div className="mb-1">
-                              <span className="text-[8px] text-muted-foreground">كلمة المرور</span>
-                              <p className="font-mono text-[10px] font-semibold text-foreground tracking-wider">{card.password}</p>
+                        <div className="rounded-md border border-border bg-gradient-to-br from-card to-muted/30 overflow-hidden">
+                          <div className="flex items-center">
+                            <div className="flex-1 p-2.5 text-right">
+                              {showTitle && <p className="font-bold text-foreground text-[10px] mb-0.5">{cardTitle}</p>}
+                              {showSubtitle && <p className="text-[8px] text-muted-foreground mb-1">{cardSubtitle}</p>}
+                              {(showTitle || showSubtitle) && <div className="h-px bg-gradient-to-l from-border to-transparent mb-1" />}
+                              <div className="mb-1">
+                                <span className="text-[7px] text-muted-foreground uppercase tracking-wider">USERNAME</span>
+                                <p className="font-mono text-[10px] font-bold text-foreground tracking-widest">{card.username}</p>
+                              </div>
+                              {showPass && card.password && (
+                                <div className="mb-1">
+                                  <span className="text-[7px] text-muted-foreground uppercase tracking-wider">PASSWORD</span>
+                                  <p className="font-mono text-[10px] font-bold text-foreground tracking-widest">{card.password}</p>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1 mt-1 flex-wrap">
+                                {showProfile && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-muted text-muted-foreground border border-border">{card.profile}</span>}
+                                {showSP && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-accent text-accent-foreground">{selectedSalesPoint}</span>}
+                                {showPrice && <span className="text-[8px] font-bold text-primary mr-auto">{unitPrice} ر.س</span>}
+                              </div>
                             </div>
-                          )}
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="inline-block px-1.5 py-0.5 rounded text-[8px] bg-muted text-muted-foreground">{card.profile}</span>
-                            {unitPrice > 0 && <span className="text-[9px] font-bold text-primary">{unitPrice}</span>}
+                            {showQr && (
+                              <div className="w-12 min-w-12 flex items-center justify-center border-r border-dashed border-border p-1.5">
+                                <QrCode className="h-8 w-8 text-muted-foreground/40" />
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1527,7 +1556,8 @@ export default function VouchersPage() {
                         </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                   {cards.length > 100 && (
                     <div className="col-span-full text-center py-3 text-xs text-muted-foreground">
                       عرض أول 100 كرت من {cards.length}
