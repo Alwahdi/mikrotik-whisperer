@@ -40,21 +40,31 @@ export default function SettingsPage() {
     setConnected(false);
   };
 
+  const isLocal = shouldUseLocalRest(form);
+
   const testConnection = async () => {
     if (!form.host || !form.user || !form.pass) { toast.error("يرجى تعبئة جميع الحقول"); return; }
     setTesting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("mikrotik-api", {
-        body: { endpoint: "/system/identity/print", host: form.host, user: form.user, pass: form.pass, port: form.port, protocol: form.protocol, mode: form.mode },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      let data: any;
+      if (shouldUseLocalRest(form)) {
+        // Direct local REST — no edge function needed
+        data = await localRestCall(form, "/system/identity/print");
+      } else {
+        const res = await supabase.functions.invoke("mikrotik-api", {
+          body: { endpoint: "/system/identity/print", host: form.host, user: form.user, pass: form.pass, port: form.port, protocol: form.protocol, mode: form.mode },
+        });
+        if (res.error) throw res.error;
+        if (res.data?.error) throw new Error(res.data.error);
+        data = res.data;
+      }
       const name = Array.isArray(data) ? data[0]?.name : data?.name;
       saveMikrotikConfig({ ...form, label: name || "MikroTik" });
       setConnected(true);
       setRouterInfo(name || "MikroTik");
       queryClient.invalidateQueries({ queryKey: ["mikrotik"] });
-      toast.success(`تم الاتصال! ${name || ""}`);
+      const modeLabel = shouldUseLocalRest(form) ? "⚡ اتصال محلي مباشر" : "☁️ اتصال سحابي";
+      toast.success(`تم الاتصال! ${name || ""} — ${modeLabel}`);
     } catch (err: any) {
       setConnected(false);
       toast.error("فشل: " + (err.message || "خطأ"));
