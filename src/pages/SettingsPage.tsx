@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Settings, CheckCircle, Loader2, WifiOff, Server, Wifi } from "lucide-react";
+import { Settings, CheckCircle, Loader2, WifiOff, Server, Wifi, Zap } from "lucide-react";
 import {
   getMikrotikConfig, saveMikrotikConfig, clearMikrotikConfig,
   getDefaultPort, getProtocolOptions,
   type MikrotikConfig, type ConnectionMode, type ConnectionProtocol,
 } from "@/lib/mikrotikConfig";
+import { shouldUseLocalRest, localRestCall } from "@/lib/localRest";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
