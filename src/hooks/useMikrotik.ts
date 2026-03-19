@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
+import { shouldUseLocalRest, localRestCall, localRestBatch } from "@/lib/localRest";
 import { toast } from "sonner";
 
 // Router-scoped cache key prefix to prevent cross-router data leaks
@@ -12,6 +13,11 @@ function getRouterKey(): string {
 async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>) {
   const config = getMikrotikConfig();
   if (!config) throw new Error("لم يتم إعداد بيانات الاتصال بالمايكروتيك");
+
+  // ── Fast path: direct local REST when on same LAN ──
+  if (shouldUseLocalRest(config)) {
+    return localRestCall(config, endpoint, extraBody?.args);
+  }
 
   const timeoutMs = extraBody?.timeoutMs ?? (endpoint.endsWith("/print") ? 30000 : 15000);
   const { timeoutMs: _timeoutMs, ...safeExtraBody } = extraBody || {};
@@ -45,6 +51,12 @@ async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>
 async function callMikrotikAction(action: string, extraBody?: Record<string, any>) {
   const config = getMikrotikConfig();
   if (!config) throw new Error("لم يتم إعداد بيانات الاتصال بالمايكروتيك");
+
+  // ── Fast path: batch via local REST ──
+  if (shouldUseLocalRest(config) && action === "batch" && extraBody?.commands) {
+    const { results, errors } = await localRestBatch(config, extraBody.commands, 2);
+    return { results, errors };
+  }
 
   const timeoutMs = extraBody?.timeoutMs ?? (action === "batch" ? 70000 : 20000);
   const { timeoutMs: _timeoutMs, ...safeExtraBody } = extraBody || {};

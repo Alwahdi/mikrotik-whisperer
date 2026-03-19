@@ -96,6 +96,11 @@ export default function SettingsPage() {
               <p className="text-sm font-medium text-foreground">متصل: {routerInfo}</p>
               <p className="text-[10px] text-muted-foreground font-mono">{form.mode === "rest" ? "REST" : "API"} • {form.host}:{form.port}</p>
             </div>
+            {isLocal && (
+              <span className="mr-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">
+                <Zap className="h-3 w-3" /> محلي مباشر
+              </span>
+            )}
           </div>
         )}
 
