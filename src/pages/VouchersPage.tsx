@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import QRCode from "qrcode";
+import { jsPDF } from "jspdf";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -75,7 +76,7 @@ interface PrintTemplate {
 
 interface FieldPosition {
   id: string;
-  type: "username" | "password" | "profile" | "title" | "subtitle" | "price" | "sales_point" | "qr" | "days" | "transfer_limit";
+  type: "username" | "password" | "profile" | "package_name" | "title" | "subtitle" | "price" | "sales_point" | "qr" | "days" | "hours" | "data_quota" | "transfer_limit";
   label: string;
   x: number;
   y: number;
@@ -126,6 +127,52 @@ function parseLocalizedFloat(raw: string, fallback: number, min: number, max: nu
   const parsed = Number.parseFloat(normalized);
   if (Number.isNaN(parsed)) return fallback;
   return Math.min(max, Math.max(min, parsed));
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const normalized = hex.replace("#", "").trim();
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return [17, 24, 39];
+  const r = Number.parseInt(normalized.slice(0, 2), 16);
+  const g = Number.parseInt(normalized.slice(2, 4), 16);
+  const b = Number.parseInt(normalized.slice(4, 6), 16);
+  return [r, g, b];
+}
+
+function humanizeDuration(value: string): string {
+  if (!value) return "";
+  const normalized = value.trim();
+  const parts = Array.from(normalized.matchAll(/(\d+)([wdhms])/gi));
+  if (parts.length === 0) return normalized;
+  const labels: Record<string, string> = { w: "أسبوع", d: "يوم", h: "ساعة", m: "دقيقة", s: "ثانية" };
+  return parts.map(([, count, unit]) => `${count} ${labels[unit.toLowerCase()] || unit}`).join(" • ");
+}
+
+function extractHoursLabel(value: string): string {
+  if (!value) return "";
+  const parts = Array.from(value.matchAll(/(\d+)([wdhms])/gi));
+  if (parts.length === 0) return value;
+  let hours = 0;
+  for (const [, countRaw, unitRaw] of parts) {
+    const count = Number.parseInt(countRaw, 10);
+    const unit = unitRaw.toLowerCase();
+    if (unit === "w") hours += count * 24 * 7;
+    else if (unit === "d") hours += count * 24;
+    else if (unit === "h") hours += count;
+    else if (unit === "m") hours += count / 60;
+  }
+  if (hours <= 0) return value;
+  return `${Math.round(hours * 10) / 10} ساعة`;
+}
+
+function formatBytesLabel(value: string): string {
+  if (!value) return "";
+  const plain = value.split("/").filter(Boolean)[0]?.trim() || value.trim();
+  const numeric = Number.parseFloat(plain);
+  if (!Number.isFinite(numeric) || !/^\d+(\.\d+)?$/.test(plain)) return value;
+  if (numeric >= 1024 ** 3) return `${(numeric / 1024 ** 3).toFixed(1).replace(/\.0$/, "")} GB`;
+  if (numeric >= 1024 ** 2) return `${(numeric / 1024 ** 2).toFixed(1).replace(/\.0$/, "")} MB`;
+  if (numeric >= 1024) return `${(numeric / 1024).toFixed(1).replace(/\.0$/, "")} KB`;
+  return `${numeric} B`;
 }
 
 // ─── Storage Helpers ──────────────────────────
@@ -211,12 +258,15 @@ function defaultFields(): FieldPosition[] {
     { id: "f1", type: "username", label: "اسم المستخدم", x: 50, y: 55, fontSize: 13, color: "#000000", visible: true },
     { id: "f2", type: "password", label: "كلمة المرور", x: 50, y: 75, fontSize: 13, color: "#000000", visible: true },
     { id: "f3", type: "profile", label: "الباقة", x: 50, y: 90, fontSize: 9, color: "#666666", visible: false },
+    { id: "f3b", type: "package_name", label: "اسم الباقة", x: 50, y: 41, fontSize: 10, color: "#334155", visible: false },
     { id: "f4", type: "title", label: "العنوان", x: 50, y: 20, fontSize: 14, color: "#000000", visible: false },
     { id: "f5", type: "subtitle", label: "العنوان الفرعي", x: 50, y: 35, fontSize: 10, color: "#666666", visible: false },
     { id: "f6", type: "price", label: "السعر", x: 85, y: 15, fontSize: 11, color: "#2563EB", visible: false },
     { id: "f7", type: "sales_point", label: "نقطة البيع", x: 18, y: 15, fontSize: 10, color: "#111827", visible: false },
     { id: "f8", type: "qr", label: "QR", x: 84, y: 78, fontSize: 10, color: "#111827", visible: false },
     { id: "f9", type: "days", label: "الصلاحية", x: 18, y: 89, fontSize: 9, color: "#334155", visible: false },
+    { id: "f9b", type: "hours", label: "الساعات", x: 50, y: 89, fontSize: 9, color: "#334155", visible: false },
+    { id: "f9c", type: "data_quota", label: "البيانات", x: 18, y: 78, fontSize: 9, color: "#334155", visible: false },
     { id: "f10", type: "transfer_limit", label: "حد التحويل", x: 82, y: 89, fontSize: 9, color: "#334155", visible: false },
   ];
 }
@@ -298,6 +348,53 @@ const BG_PRESETS: BackgroundPreset[] = [
       </svg>
     `),
   },
+  {
+    id: "hotel-gold",
+    name: "Hotel Gold",
+    dataUrl: "data:image/svg+xml;utf8," + encodeURIComponent(`
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 700'>
+        <defs>
+          <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
+            <stop offset='0%' stop-color='#1f2937'/>
+            <stop offset='50%' stop-color='#4b5563'/>
+            <stop offset='100%' stop-color='#111827'/>
+          </linearGradient>
+          <linearGradient id='gold' x1='0' y1='0' x2='1' y2='0'>
+            <stop offset='0%' stop-color='#fbbf24'/>
+            <stop offset='100%' stop-color='#fde68a'/>
+          </linearGradient>
+        </defs>
+        <rect width='1200' height='700' fill='url(#bg)'/>
+        <rect x='40' y='40' width='1120' height='620' rx='26' fill='none' stroke='url(#gold)' stroke-width='8' opacity='0.65'/>
+        <circle cx='190' cy='120' r='52' fill='none' stroke='url(#gold)' stroke-width='12'/>
+        <rect x='240' y='105' width='230' height='30' rx='15' fill='url(#gold)' opacity='0.8'/>
+        <path d='M950 180 L1050 180 L1090 230 L1090 500 L910 500 L910 230 Z' fill='rgba(251,191,36,0.14)' stroke='url(#gold)' stroke-width='6'/>
+        <circle cx='1000' cy='300' r='26' fill='none' stroke='url(#gold)' stroke-width='8'/>
+        <path d='M1000 326 L1000 390' stroke='url(#gold)' stroke-width='8' stroke-linecap='round'/>
+        <circle cx='1000' cy='410' r='18' fill='url(#gold)' opacity='0.85'/>
+      </svg>
+    `),
+  },
+  {
+    id: "hotel-ocean",
+    name: "Hotel Ocean",
+    dataUrl: "data:image/svg+xml;utf8," + encodeURIComponent(`
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 700'>
+        <defs>
+          <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
+            <stop offset='0%' stop-color='#082f49'/>
+            <stop offset='55%' stop-color='#155e75'/>
+            <stop offset='100%' stop-color='#0f766e'/>
+          </linearGradient>
+        </defs>
+        <rect width='1200' height='700' fill='url(#bg)'/>
+        <path d='M0 560 C180 470 360 650 540 560 C720 470 880 500 1200 430 L1200 700 L0 700 Z' fill='rgba(255,255,255,0.12)'/>
+        <path d='M100 120 H460' stroke='rgba(255,255,255,0.8)' stroke-width='14' stroke-linecap='round'/>
+        <path d='M100 165 H340' stroke='rgba(255,255,255,0.45)' stroke-width='10' stroke-linecap='round'/>
+        <path d='M950 120 a70 70 0 1 0 0.1 0 M950 190 v120' fill='none' stroke='rgba(255,255,255,0.72)' stroke-width='10' stroke-linecap='round'/>
+      </svg>
+    `),
+  },
 ];
 
 const DESIGN_THEMES: Array<{
@@ -313,16 +410,19 @@ const DESIGN_THEMES: Array<{
     id: "hotel-luxe",
     name: "فندق فاخر",
     subtitle: "طابع أنيق للنزلاء",
-    presetId: "midnight",
+    presetId: "hotel-gold",
     cardTitle: "Hotel Guest Access",
     cardSubtitle: "Premium Internet Service",
     overrides: [
       { type: "title", visible: true, x: 50, y: 16, fontSize: 13, color: "#f8fafc" },
       { type: "subtitle", visible: true, x: 50, y: 27, fontSize: 9, color: "#e2e8f0" },
+      { type: "package_name", visible: true, x: 50, y: 40, fontSize: 9, color: "#fde68a" },
       { type: "username", visible: true, x: 44, y: 56, fontSize: 14, color: "#ffffff" },
       { type: "password", visible: true, x: 44, y: 72, fontSize: 14, color: "#ffffff" },
       { type: "price", visible: true, x: 84, y: 16, fontSize: 10, color: "#fde68a" },
       { type: "days", visible: true, x: 16, y: 88, fontSize: 9, color: "#f8fafc" },
+      { type: "hours", visible: true, x: 49, y: 88, fontSize: 9, color: "#f8fafc" },
+      { type: "data_quota", visible: true, x: 17, y: 77, fontSize: 8, color: "#fde68a" },
       { type: "transfer_limit", visible: true, x: 82, y: 88, fontSize: 9, color: "#f8fafc" },
       { type: "sales_point", visible: false },
       { type: "profile", visible: false },
@@ -339,10 +439,13 @@ const DESIGN_THEMES: Array<{
     overrides: [
       { type: "title", visible: true, x: 50, y: 16, fontSize: 13, color: "#0f172a" },
       { type: "subtitle", visible: true, x: 50, y: 28, fontSize: 9, color: "#0f172a" },
+      { type: "package_name", visible: true, x: 50, y: 40, fontSize: 9, color: "#0f172a" },
       { type: "username", visible: true, x: 42, y: 56, fontSize: 14, color: "#0f172a" },
       { type: "password", visible: true, x: 42, y: 72, fontSize: 14, color: "#0f172a" },
       { type: "price", visible: true, x: 86, y: 16, fontSize: 10, color: "#1d4ed8" },
       { type: "days", visible: true, x: 18, y: 88, fontSize: 9, color: "#0f172a" },
+      { type: "hours", visible: true, x: 50, y: 88, fontSize: 9, color: "#0f172a" },
+      { type: "data_quota", visible: true, x: 18, y: 77, fontSize: 8, color: "#0f172a" },
       { type: "transfer_limit", visible: true, x: 84, y: 88, fontSize: 9, color: "#0f172a" },
       { type: "sales_point", visible: true, x: 18, y: 16, fontSize: 8, color: "#1f2937" },
       { type: "profile", visible: true, x: 50, y: 90, fontSize: 9, color: "#0f172a" },
@@ -359,10 +462,13 @@ const DESIGN_THEMES: Array<{
     overrides: [
       { type: "title", visible: true, x: 50, y: 16, fontSize: 13, color: "#ecfeff" },
       { type: "subtitle", visible: true, x: 50, y: 28, fontSize: 9, color: "#dcfce7" },
+      { type: "package_name", visible: true, x: 50, y: 40, fontSize: 9, color: "#dcfce7" },
       { type: "username", visible: true, x: 44, y: 56, fontSize: 14, color: "#f8fafc" },
       { type: "password", visible: true, x: 44, y: 72, fontSize: 14, color: "#f8fafc" },
       { type: "price", visible: true, x: 84, y: 16, fontSize: 10, color: "#fef08a" },
       { type: "days", visible: true, x: 16, y: 88, fontSize: 9, color: "#ecfeff" },
+      { type: "hours", visible: true, x: 50, y: 88, fontSize: 9, color: "#ecfeff" },
+      { type: "data_quota", visible: true, x: 17, y: 77, fontSize: 8, color: "#d1fae5" },
       { type: "transfer_limit", visible: true, x: 82, y: 88, fontSize: 9, color: "#ecfeff" },
       { type: "sales_point", visible: true, x: 18, y: 16, fontSize: 8, color: "#d1fae5" },
       { type: "profile", visible: true, x: 50, y: 90, fontSize: 9, color: "#ecfeff" },
@@ -390,6 +496,9 @@ export default function VouchersPage() {
   const [unitPrice, setUnitPrice] = useState(0);
   const [validityDays, setValidityDays] = useState(0);
   const [transferLimit, setTransferLimit] = useState(0);
+  const [packageDisplayName, setPackageDisplayName] = useState("");
+  const [hoursLabel, setHoursLabel] = useState("");
+  const [dataQuotaLabel, setDataQuotaLabel] = useState("");
 
   // Sales points
   const [salesPoints, setSalesPoints] = useState<string[]>(loadSalesPoints);
@@ -455,6 +564,9 @@ export default function VouchersPage() {
     if (saved.unitPrice !== undefined) setUnitPrice(saved.unitPrice);
     if (saved.validityDays !== undefined) setValidityDays(saved.validityDays);
     if (saved.transferLimit !== undefined) setTransferLimit(saved.transferLimit);
+    if (saved.packageDisplayName) setPackageDisplayName(saved.packageDisplayName);
+    if (saved.hoursLabel) setHoursLabel(saved.hoursLabel);
+    if (saved.dataQuotaLabel) setDataQuotaLabel(saved.dataQuotaLabel);
     if (saved.printLayoutMode) setPrintLayoutMode(saved.printLayoutMode);
     if (saved.cardsPerPageTarget !== undefined) setCardsPerPageTarget(saved.cardsPerPageTarget);
     if (saved.salesPoint) setSelectedSalesPoint(saved.salesPoint);
@@ -470,11 +582,14 @@ export default function VouchersPage() {
       unitPrice,
       validityDays,
       transferLimit,
+      packageDisplayName,
+      hoursLabel,
+      dataQuotaLabel,
       printLayoutMode,
       cardsPerPageTarget,
       salesPoint: selectedSalesPoint,
     });
-  }, [charType, passwordMode, prefix, nameLength, passLength, unitPrice, validityDays, transferLimit, printLayoutMode, cardsPerPageTarget, selectedSalesPoint]);
+  }, [charType, passwordMode, prefix, nameLength, passLength, unitPrice, validityDays, transferLimit, packageDisplayName, hoursLabel, dataQuotaLabel, printLayoutMode, cardsPerPageTarget, selectedSalesPoint]);
 
   const resolvedPrintLayout = useMemo(() => {
     const maxRows = 20;
@@ -511,15 +626,49 @@ export default function VouchersPage() {
     return Array.isArray(raw) ? raw : [];
   }, [type, hotspotProfiles, umProfiles]);
 
+  const selectedProfileData = useMemo(() => {
+    if (!selectedProfile) return null;
+    return profiles.find((p: any) => p.name === selectedProfile) ?? null;
+  }, [profiles, selectedProfile]);
+
+  const derivedValidityText = useMemo(() => {
+    const value = selectedProfileData?.validity || "";
+    return humanizeDuration(String(value));
+  }, [selectedProfileData]);
+
+  const derivedHoursText = useMemo(() => {
+    const value = selectedProfileData?.["uptime-limit"] || selectedProfileData?.uptime || "";
+    return extractHoursLabel(String(value));
+  }, [selectedProfileData]);
+
+  const derivedDataQuotaText = useMemo(() => {
+    const value = selectedProfileData?.["transfer-limit"] || "";
+    return formatBytesLabel(String(value));
+  }, [selectedProfileData]);
+
+  const resolvedValidityText = validityDays > 0 ? `${validityDays} يوم` : derivedValidityText;
+  const resolvedTransferText = transferLimit > 0 ? `${transferLimit} تحويل` : "";
+  const resolvedPackageName = packageDisplayName.trim() || selectedProfileData?.["name-for-users"] || selectedProfileData?.name || selectedProfile;
+  const resolvedHoursText = hoursLabel.trim() || derivedHoursText;
+  const resolvedDataQuotaText = dataQuotaLabel.trim() || derivedDataQuotaText;
+
   // Auto-populate unit price from selected profile's price field
   useEffect(() => {
-    if (!selectedProfile || type !== "usermanager") return;
-    const profile = profiles.find((p: any) => p.name === selectedProfile);
-    if (profile?.price) {
-      const price = parseFloat(profile.price);
+    if (!selectedProfileData) return;
+    if (selectedProfileData?.price) {
+      const price = parseFloat(selectedProfileData.price);
       if (!isNaN(price) && price > 0) setUnitPrice(price);
     }
-  }, [selectedProfile, profiles, type]);
+    if (!packageDisplayName.trim()) {
+      setPackageDisplayName(selectedProfileData?.["name-for-users"] || selectedProfileData?.name || selectedProfile);
+    }
+    if (!hoursLabel.trim() && derivedHoursText) {
+      setHoursLabel(derivedHoursText);
+    }
+    if (!dataQuotaLabel.trim() && derivedDataQuotaText) {
+      setDataQuotaLabel(derivedDataQuotaText);
+    }
+  }, [selectedProfile, selectedProfileData, packageDisplayName, hoursLabel, dataQuotaLabel, derivedHoursText, derivedDataQuotaText]);
 
   const routerBatches = useMemo(() => {
     if (!currentRouterHost) return batches;
@@ -1121,18 +1270,16 @@ export default function VouchersPage() {
     const safeCols = Math.max(1, Math.min(20, resolvedPrintLayout.cols));
     const safeRows = Math.max(1, Math.min(20, resolvedPrintLayout.rows));
     const cardsPerPage = safeCols * safeRows;
-    const totalPages = Math.max(1, Math.ceil(cardsToPrint.length / cardsPerPage));
     const visibleFields = fields.filter(f => f.visible);
     const hasQr = visibleFields.some(f => f.type === "qr");
     const density = Math.max(safeCols / 3, safeRows / 4, 1);
     const cardGapMm = density >= 1.8 ? 1.2 : density >= 1.35 ? 1.6 : 2;
     const pageMarginMm = density >= 1.8 ? 4 : density >= 1.35 ? 5 : 6;
-    const footerMm = 3.5;
+    const safetyMm = 0.15;
     const fontScale = Math.max(0.62, Math.min(1, 1 / density));
     const overlayScale = Math.max(0.68, Math.min(1, fontScale + 0.08));
-    const pageInnerHeightMm = 297 - (pageMarginMm * 2) - footerMm;
-    const cardHeightMm = Math.max(6, (pageInnerHeightMm - (cardGapMm * (safeRows - 1))) / safeRows);
-    const gridHeightMm = (cardHeightMm * safeRows) + (cardGapMm * Math.max(0, safeRows - 1));
+    const pageInnerHeightMm = 297 - (pageMarginMm * 2);
+    const cardHeightMm = Math.max(6, ((pageInnerHeightMm - (cardGapMm * (safeRows - 1))) / safeRows) - safetyMm);
     const defaultCardBg = "data:image/svg+xml;utf8," + encodeURIComponent(`
       <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 460'>
         <defs>
@@ -1164,22 +1311,19 @@ export default function VouchersPage() {
       }
     }
 
-    const pages: string[] = [];
-
-    for (let p = 0; p < cardsToPrint.length; p += cardsPerPage) {
-      const pageIndex = Math.floor(p / cardsPerPage) + 1;
-      const pageCards = cardsToPrint.slice(p, p + cardsPerPage);
-
-      const cardHtml = pageCards.map(c => {
+    const renderCardHtml = (c: VoucherCard) => {
         const usernameEsc = escapeHtml(c.username || "");
         const passwordEsc = escapeHtml(c.password || "");
         const profileEsc = escapeHtml(c.profile || "");
+        const packageNameEsc = escapeHtml(resolvedPackageName || "");
         const titleEsc = escapeHtml(cardTitle || "");
         const subtitleEsc = escapeHtml(cardSubtitle || "");
         const salesPointEsc = escapeHtml(selectedSalesPoint || "");
         const unitPriceEsc = escapeHtml(unitPrice > 0 ? `${unitPrice} ر.س` : "");
-        const validityDaysEsc = escapeHtml(validityDays > 0 ? `${validityDays} يوم` : "");
-        const transferLimitEsc = escapeHtml(transferLimit > 0 ? `${transferLimit} تحويل` : "");
+        const validityDaysEsc = escapeHtml(resolvedValidityText || "");
+        const hoursEsc = escapeHtml(resolvedHoursText || "");
+        const dataQuotaEsc = escapeHtml(resolvedDataQuotaText || "");
+        const transferLimitEsc = escapeHtml(resolvedTransferText || "");
         const qrSrc = qrMap.get(c.username) || "";
 
         if (bgImage) {
@@ -1195,12 +1339,15 @@ export default function VouchersPage() {
             if (f.type === "username") text = c.username;
             else if (f.type === "password") text = c.password || "";
             else if (f.type === "profile") text = c.profile;
+            else if (f.type === "package_name") text = resolvedPackageName;
             else if (f.type === "title") text = cardTitle;
             else if (f.type === "subtitle") text = cardSubtitle;
             else if (f.type === "price") text = unitPrice > 0 ? `${unitPrice} ر.س` : "";
             else if (f.type === "sales_point") text = selectedSalesPoint || "";
-            else if (f.type === "days") text = validityDays > 0 ? `${validityDays} يوم` : "";
-            else if (f.type === "transfer_limit") text = transferLimit > 0 ? `${transferLimit} تحويل` : "";
+            else if (f.type === "days") text = resolvedValidityText;
+            else if (f.type === "hours") text = resolvedHoursText;
+            else if (f.type === "data_quota") text = resolvedDataQuotaText;
+            else if (f.type === "transfer_limit") text = resolvedTransferText;
             const safeText = escapeHtml(text || "");
             const fontPx = Math.max(7, Math.round(f.fontSize * overlayScale));
             return text
@@ -1217,10 +1364,13 @@ export default function VouchersPage() {
         // Default clean card design
         const showPassword = visibleFields.some(f => f.type === "password");
         const showProfile = visibleFields.some(f => f.type === "profile");
+        const showPackageName = visibleFields.some(f => f.type === "package_name") && !!resolvedPackageName;
         const showPrice = visibleFields.some(f => f.type === "price") && unitPrice > 0;
         const showSalesPoint = visibleFields.some(f => f.type === "sales_point") && selectedSalesPoint;
-        const showDays = visibleFields.some(f => f.type === "days") && validityDays > 0;
-        const showTransferLimit = visibleFields.some(f => f.type === "transfer_limit") && transferLimit > 0;
+        const showDays = visibleFields.some(f => f.type === "days") && !!resolvedValidityText;
+        const showHours = visibleFields.some(f => f.type === "hours") && !!resolvedHoursText;
+        const showDataQuota = visibleFields.some(f => f.type === "data_quota") && !!resolvedDataQuotaText;
+        const showTransferLimit = visibleFields.some(f => f.type === "transfer_limit") && !!resolvedTransferText;
         const showTitle = visibleFields.some(f => f.type === "title");
         const showSubtitle = visibleFields.some(f => f.type === "subtitle");
 
@@ -1231,6 +1381,7 @@ export default function VouchersPage() {
               <div class="card-left">
                 ${showTitle ? `<div class="card-title">${titleEsc}</div>` : ""}
                 ${showSubtitle ? `<div class="card-sub">${subtitleEsc}</div>` : ""}
+                ${showPackageName ? `<div class="card-sub">${packageNameEsc}</div>` : ""}
                 ${showTitle || showSubtitle ? '<div class="divider"></div>' : ""}
                 <div class="field">
                   <div class="label">USERNAME</div>
@@ -1241,6 +1392,8 @@ export default function VouchersPage() {
                   ${showProfile ? `<span class="profile-badge">${profileEsc}</span>` : ""}
                   ${showSalesPoint ? `<span class="sp-badge">${salesPointEsc}</span>` : ""}
                   ${showDays ? `<span class="sp-badge">${validityDaysEsc}</span>` : ""}
+                  ${showHours ? `<span class="sp-badge">${hoursEsc}</span>` : ""}
+                  ${showDataQuota ? `<span class="sp-badge">${dataQuotaEsc}</span>` : ""}
                   ${showTransferLimit ? `<span class="sp-badge">${transferLimitEsc}</span>` : ""}
                   ${showPrice ? `<span class="price-badge">${unitPriceEsc}</span>` : ""}
                 </div>
@@ -1248,13 +1401,27 @@ export default function VouchersPage() {
               ${hasQr && qrSrc ? `<div class="card-qr"><img src="${qrSrc}" /></div>` : ""}
             </div>
           </div>`;
-      }).join("");
+    };
+
+    const pages: string[] = [];
+
+    for (let p = 0; p < cardsToPrint.length; p += cardsPerPage) {
+      const pageCards = cardsToPrint.slice(p, p + cardsPerPage);
+      const rowsHtml: string[] = [];
+      for (let r = 0; r < safeRows; r += 1) {
+        const cells: string[] = [];
+        for (let c = 0; c < safeCols; c += 1) {
+          const idx = (r * safeCols) + c;
+          const card = pageCards[idx];
+          cells.push(`<td class="card-cell">${card ? renderCardHtml(card) : ""}</td>`);
+        }
+        rowsHtml.push(`<tr>${cells.join("")}</tr>`);
+      }
 
       pages.push(`
         <div class="page">
           <div class="sheet">
-            <div class="grid">${cardHtml}</div>
-            <div class="page-footer">${pageIndex} / ${totalPages}</div>
+            <table class="cards-table"><tbody>${rowsHtml.join("")}</tbody></table>
           </div>
         </div>`);
     }
@@ -1267,11 +1434,6 @@ export default function VouchersPage() {
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
   :root {
-    --page-width: 210mm;
-    --page-height: 297mm;
-    --page-margin: ${pageMarginMm}mm;
-    --grid-gap: ${cardGapMm}mm;
-    --footer-height: ${footerMm}mm;
     --font-scale: ${fontScale};
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1282,33 +1444,36 @@ export default function VouchersPage() {
     print-color-adjust: exact;
   }
   .page {
-    width: var(--page-width);
-    height: var(--page-height);
+    width: 210mm;
+    padding: ${pageMarginMm}mm;
     page-break-after: always;
-    padding: var(--page-margin);
+    break-after: page;
     display: block;
     page-break-inside: avoid;
     break-inside: avoid;
   }
   .page:last-child {
     page-break-after: auto;
+    break-after: auto;
   }
   .sheet {
-    width: calc(var(--page-width) - (var(--page-margin) * 2));
-    height: calc(var(--page-height) - (var(--page-margin) * 2));
-    display: block;
-    overflow: hidden;
+    width: 100%;
   }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(${safeCols}, minmax(0, 1fr));
-    grid-template-rows: repeat(${safeRows}, ${cardHeightMm}mm);
-    gap: var(--grid-gap);
-    align-content: start;
-    height: ${gridHeightMm}mm;
-    overflow: hidden;
+  .cards-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
     page-break-inside: avoid;
     break-inside: avoid;
+  }
+  .cards-table tr {
+    height: ${cardHeightMm}mm;
+  }
+  .card-cell {
+    width: ${100 / safeCols}%;
+    height: ${cardHeightMm}mm;
+    vertical-align: top;
+    padding: ${cardGapMm / 2}mm;
   }
   /* ── Custom background card ── */
   .card {
@@ -1418,21 +1583,8 @@ export default function VouchersPage() {
     font-size: calc(6px * var(--font-scale)); color: #92400e; font-weight: 600;
   }
   .price-badge { font-size: calc(8px * var(--font-scale)); font-weight: 800; color: #2563eb; white-space: nowrap; margin-right: auto; }
-  .page-footer {
-    margin-top: calc(var(--page-height) - (var(--page-margin) * 2) - ${gridHeightMm}mm - var(--footer-height));
-    height: var(--footer-height);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 6px;
-    color: #94a3b8;
-    letter-spacing: 0.4px;
-  }
   @media print {
-    html, body {
-      width: var(--page-width);
-      height: auto;
-    }
+    html, body { width: 210mm; height: auto; }
     @page { margin: 0; size: A4 portrait; }
   }
 </style>
@@ -1507,6 +1659,127 @@ export default function VouchersPage() {
     });
   };
 
+  const toRasterDataUrl = async (src: string): Promise<string | null> => {
+    if (!src) return null;
+    if (!src.startsWith("data:image/svg+xml")) return src;
+
+    return await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, img.width);
+        canvas.height = Math.max(1, img.height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  };
+
+  const buildVoucherPdf = async (cardsToPrint: VoucherCard[]) => {
+    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
+
+    const safeCols = Math.max(1, Math.min(20, resolvedPrintLayout.cols));
+    const safeRows = Math.max(1, Math.min(20, resolvedPrintLayout.rows));
+    const cardsPerPage = safeCols * safeRows;
+    const density = Math.max(safeCols / 3, safeRows / 4, 1);
+    const cardGapMm = density >= 1.8 ? 1.2 : density >= 1.35 ? 1.6 : 2;
+    const pageMarginMm = density >= 1.8 ? 4 : density >= 1.35 ? 5 : 6;
+    const pageW = 210;
+    const pageH = 297;
+    const innerW = pageW - (pageMarginMm * 2);
+    const innerH = pageH - (pageMarginMm * 2);
+    const cardW = (innerW - (cardGapMm * (safeCols - 1))) / safeCols;
+    const cardH = (innerH - (cardGapMm * (safeRows - 1))) / safeRows;
+    const visibleFields = fields.filter((f) => f.visible);
+    const hasQr = visibleFields.some((f) => f.type === "qr");
+    const rasterBg = bgImage ? await toRasterDataUrl(bgImage) : null;
+
+    const qrMap = new Map<string, string>();
+    if (hasQr) {
+      for (const c of cardsToPrint) {
+        const key = `${c.username}|${c.password || ""}`;
+        if (qrMap.has(key)) continue;
+        const qr = await generateQrDataUrl(c.password ? `${c.username}\n${c.password}` : c.username, 180);
+        qrMap.set(key, qr);
+      }
+    }
+
+    const textForField = (fType: FieldPosition["type"], card: VoucherCard) => {
+      if (fType === "username") return card.username;
+      if (fType === "password") return card.password || "";
+      if (fType === "profile") return card.profile || "";
+      if (fType === "package_name") return resolvedPackageName || "";
+      if (fType === "title") return cardTitle || "";
+      if (fType === "subtitle") return cardSubtitle || "";
+      if (fType === "price") return unitPrice > 0 ? `${unitPrice} ر.س` : "";
+      if (fType === "sales_point") return selectedSalesPoint || "";
+      if (fType === "days") return resolvedValidityText || "";
+      if (fType === "hours") return resolvedHoursText || "";
+      if (fType === "data_quota") return resolvedDataQuotaText || "";
+      if (fType === "transfer_limit") return resolvedTransferText || "";
+      return "";
+    };
+
+    const totalPages = Math.max(1, Math.ceil(cardsToPrint.length / cardsPerPage));
+    for (let page = 0; page < totalPages; page += 1) {
+      if (page > 0) doc.addPage("a4", "portrait");
+
+      const start = page * cardsPerPage;
+      const pageCards = cardsToPrint.slice(start, start + cardsPerPage);
+
+      for (let i = 0; i < pageCards.length; i += 1) {
+        const row = Math.floor(i / safeCols);
+        const col = i % safeCols;
+        const x = pageMarginMm + (col * (cardW + cardGapMm));
+        const y = pageMarginMm + (row * (cardH + cardGapMm));
+        const card = pageCards[i];
+
+        if (rasterBg) {
+          doc.addImage(rasterBg, "PNG", x, y, cardW, cardH, undefined, "FAST");
+        } else {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(x, y, cardW, cardH, "F");
+        }
+
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.25);
+        doc.rect(x, y, cardW, cardH, "S");
+
+        for (const f of visibleFields) {
+          if (f.type === "qr") {
+            const key = `${card.username}|${card.password || ""}`;
+            const qr = qrMap.get(key);
+            if (!qr) continue;
+            const size = Math.min(cardW, cardH) * 0.24;
+            const qx = x + ((f.x / 100) * cardW) - (size / 2);
+            const qy = y + ((f.y / 100) * cardH) - (size / 2);
+            doc.addImage(qr, "PNG", qx, qy, size, size, undefined, "FAST");
+            continue;
+          }
+
+          const text = textForField(f.type, card);
+          if (!text) continue;
+          const [r, g, b] = hexToRgb(f.color);
+          doc.setTextColor(r, g, b);
+          doc.setFont("helvetica", f.type === "title" ? "bold" : "normal");
+          doc.setFontSize(Math.max(6, Math.min(18, f.fontSize * 0.72)));
+          const tx = x + ((f.x / 100) * cardW);
+          const ty = y + ((f.y / 100) * cardH);
+          doc.text(String(text), tx, ty, { align: "center" });
+        }
+      }
+    }
+
+    return doc;
+  };
+
   const handlePrint = async (cardsToPrint?: VoucherCard[]) => {
     const toPrint = cardsToPrint || cards;
     if (toPrint.length === 0) {
@@ -1517,12 +1790,32 @@ export default function VouchersPage() {
       toast.error("اختر الباقة أولاً قبل الطباعة");
       return;
     }
-    toast.info("جاري تجهيز الطباعة...");
-    const html = await buildPrintHtml(toPrint);
-    openPrintWindow(html);
+    toast.info("جاري تجهيز ملف الطباعة...");
+    const doc = await buildVoucherPdf(toPrint);
+    const blob = doc.output("blob");
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, "_blank");
+    if (!win) {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${cardTitle || "WiFi-Card"}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast.info("تم تنزيل الملف، اطبعه من قارئ PDF");
+      return;
+    }
+    setTimeout(() => {
+      try {
+        win.focus();
+        win.print();
+      } catch {
+        // If print is blocked, user can print manually from opened PDF tab.
+      }
+    }, 700);
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
-  // PDF export: same flow as print but hints the user to choose "Save as PDF"
   const handleExportPdf = async (cardsToPrint?: VoucherCard[]) => {
     const toPrint = cardsToPrint || cards;
     if (toPrint.length === 0) {
@@ -1530,12 +1823,9 @@ export default function VouchersPage() {
       return;
     }
     toast.info("جاري تجهيز الـ PDF...");
-    const html = (await buildPrintHtml(toPrint)).replace(
-      "</title>",
-      '</title><meta name="description" content="PDF export">'
-    );
-    openPrintWindow(html);
-    toast.info("اختر «حفظ كـ PDF» من نافذة الطباعة");
+    const doc = await buildVoucherPdf(toPrint);
+    const safeName = (cardTitle || "WiFi-Card").replace(/[^\w\u0600-\u06FF-]+/g, "-");
+    doc.save(`${safeName}.pdf`);
   };
 
   const handleExportCsv = (cardsToExport?: VoucherCard[]) => {
@@ -1550,11 +1840,14 @@ export default function VouchersPage() {
       "username",
       "password",
       "profile",
+      "package_name",
       "status",
       "error",
       "unit_price",
       "sales_point",
       "validity_days",
+      "hours",
+      "data_quota",
       "transfer_limit",
     ];
 
@@ -1562,12 +1855,15 @@ export default function VouchersPage() {
       card.username,
       card.password || "",
       card.profile || "",
+      resolvedPackageName || "",
       card.status || "",
       card.error || "",
       unitPrice > 0 ? String(unitPrice) : "",
       selectedSalesPoint || "",
-      validityDays > 0 ? String(validityDays) : "",
-      transferLimit > 0 ? String(transferLimit) : "",
+      resolvedValidityText || "",
+      resolvedHoursText || "",
+      resolvedDataQuotaText || "",
+      resolvedTransferText || "",
     ]);
 
     const csv = [headers, ...rows].map((line) => line.map((cell) => escapeCsv(cell)).join(",")).join("\n");
@@ -1805,8 +2101,8 @@ export default function VouchersPage() {
               {/* Price & Sales Point */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">سعر الكرت</label>
-                  <Input type="text" inputMode="decimal" value={unitPrice} onChange={e => setUnitPrice(parseLocalizedFloat(e.target.value, 0, 0, 1_000_000))} className="h-9" />
+                  <label className="text-xs text-muted-foreground mb-1 block">سعر الكرت من الباقة</label>
+                  <Input value={unitPrice > 0 ? `${unitPrice} ر.س` : "غير متوفر في الباقة"} disabled className="h-9" />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">نقطة البيع</label>
@@ -1822,7 +2118,27 @@ export default function VouchersPage() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">الصلاحية بالأيام (اختياري)</label>
+                  <label className="text-xs text-muted-foreground mb-1 block">اسم الباقة على الكرت</label>
+                  <Input value={packageDisplayName} onChange={e => setPackageDisplayName(e.target.value)} placeholder={selectedProfileData?.["name-for-users"] || selectedProfile || "اسم الباقة"} className="h-9" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">الساعات على الكرت</label>
+                  <Input value={hoursLabel} onChange={e => setHoursLabel(e.target.value)} placeholder={derivedHoursText || "مثال: 12 ساعة"} className="h-9" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">البيانات / الميجا</label>
+                  <Input value={dataQuotaLabel} onChange={e => setDataQuotaLabel(e.target.value)} placeholder={derivedDataQuotaText || "مثال: 1 GB"} className="h-9" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">الصلاحية من الباقة</label>
+                  <Input value={resolvedValidityText || "غير متوفرة"} disabled className="h-9" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">تجاوز الصلاحية بالأيام (اختياري)</label>
                   <Input type="text" inputMode="numeric" value={validityDays} onChange={e => setValidityDays(parseLocalizedInt(e.target.value, 0, 0, 3650))} className="h-9" />
                 </div>
                 <div>
@@ -2167,10 +2483,13 @@ export default function VouchersPage() {
                     const visibleF = fields.filter(f => f.visible);
                     const showPass = visibleF.some(f => f.type === "password");
                     const showProfile = visibleF.some(f => f.type === "profile");
+                    const showPackageName = visibleF.some(f => f.type === "package_name") && !!resolvedPackageName;
                     const showPrice = visibleF.some(f => f.type === "price") && unitPrice > 0;
                     const showSP = visibleF.some(f => f.type === "sales_point") && selectedSalesPoint;
-                    const showDays = visibleF.some(f => f.type === "days") && validityDays > 0;
-                    const showTransferLimit = visibleF.some(f => f.type === "transfer_limit") && transferLimit > 0;
+                    const showDays = visibleF.some(f => f.type === "days") && !!resolvedValidityText;
+                    const showHours = visibleF.some(f => f.type === "hours") && !!resolvedHoursText;
+                    const showDataQuota = visibleF.some(f => f.type === "data_quota") && !!resolvedDataQuotaText;
+                    const showTransferLimit = visibleF.some(f => f.type === "transfer_limit") && !!resolvedTransferText;
                     const showQr = visibleF.some(f => f.type === "qr");
                     const showTitle = visibleF.some(f => f.type === "title");
                     const showSubtitle = visibleF.some(f => f.type === "subtitle");
@@ -2192,12 +2511,15 @@ export default function VouchersPage() {
                             if (f.type === "username") text = card.username;
                             else if (f.type === "password") text = card.password || "";
                             else if (f.type === "profile") text = card.profile;
+                            else if (f.type === "package_name") text = resolvedPackageName;
                             else if (f.type === "title") text = cardTitle;
                             else if (f.type === "subtitle") text = cardSubtitle;
                             else if (f.type === "price") text = unitPrice > 0 ? `${unitPrice} ر.س` : "";
                             else if (f.type === "sales_point") text = selectedSalesPoint || "";
-                            else if (f.type === "days") text = validityDays > 0 ? `${validityDays} يوم` : "";
-                            else if (f.type === "transfer_limit") text = transferLimit > 0 ? `${transferLimit} تحويل` : "";
+                            else if (f.type === "days") text = resolvedValidityText;
+                            else if (f.type === "hours") text = resolvedHoursText;
+                            else if (f.type === "data_quota") text = resolvedDataQuotaText;
+                            else if (f.type === "transfer_limit") text = resolvedTransferText;
                             return text ? (
                               <div key={f.id} className="absolute font-mono font-bold"
                                 style={{
@@ -2216,6 +2538,7 @@ export default function VouchersPage() {
                             <div className="flex-1 p-2.5 text-right">
                               {showTitle && <p className="font-bold text-foreground text-[10px] mb-0.5">{cardTitle}</p>}
                               {showSubtitle && <p className="text-[8px] text-muted-foreground mb-1">{cardSubtitle}</p>}
+                              {showPackageName && <p className="text-[8px] text-primary/80 mb-1">{resolvedPackageName}</p>}
                               {(showTitle || showSubtitle) && <div className="h-px bg-gradient-to-l from-border to-transparent mb-1" />}
                               <div className="mb-1">
                                 <span className="text-[7px] text-muted-foreground uppercase tracking-wider">USERNAME</span>
@@ -2230,8 +2553,10 @@ export default function VouchersPage() {
                               <div className="flex items-center gap-1 mt-1 flex-wrap">
                                 {showProfile && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-muted text-muted-foreground border border-border">{card.profile}</span>}
                                 {showSP && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-accent text-accent-foreground">{selectedSalesPoint}</span>}
-                                {showDays && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-accent/60 text-accent-foreground">{validityDays} يوم</span>}
-                                {showTransferLimit && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-accent/60 text-accent-foreground">{transferLimit} تحويل</span>}
+                                {showDays && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-accent/60 text-accent-foreground">{resolvedValidityText}</span>}
+                                {showHours && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-accent/60 text-accent-foreground">{resolvedHoursText}</span>}
+                                {showDataQuota && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-accent/60 text-accent-foreground">{resolvedDataQuotaText}</span>}
+                                {showTransferLimit && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-accent/60 text-accent-foreground">{resolvedTransferText}</span>}
                                 {showPrice && <span className="text-[8px] font-bold text-primary mr-auto">{unitPrice} ر.س</span>}
                               </div>
                             </div>
