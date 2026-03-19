@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
   useUserManagerUsers,
@@ -49,10 +49,14 @@ const PAGE_SIZE = 20;
 
 export default function UserManagerPage() {
   const [activeTab, setActiveTab] = useState<"users" | "profiles" | "sessions">("users");
+  const [loadAllUsers, setLoadAllUsers] = useState(false);
+  const [fullLoadProgress, setFullLoadProgress] = useState(0);
+  const [fullLoadStage, setFullLoadStage] = useState<"idle" | "starting" | "loading" | "done">("idle");
   // Fast count query — always loads (lightweight)
   const { data: countData, isLoading: loadingCount } = useUserManagerCount({ enabled: activeTab === "users" });
+  const shouldLoadFullUsers = activeTab === "users" && loadAllUsers && debouncedSearch.trim().length < 2;
   // Full user list — lazy, only when tab is active
-  const { data: users, isLoading: loadingUsers, error: usersError } = useUserManagerUsers({ enabled: activeTab === "users" });
+  const { data: users, isLoading: loadingUsers, error: usersError } = useUserManagerUsers({ enabled: shouldLoadFullUsers });
   const { data: profiles, isLoading: loadingProfiles, error: profilesError } = useUserManagerProfiles();
   const { data: sessions, isLoading: loadingSessions, error: sessionsError } = useUserManagerSessions({ enabled: activeTab === "sessions" });
   const queryClient = useQueryClient();
@@ -90,6 +94,7 @@ export default function UserManagerPage() {
     setSearch(val);
     setUsersPage(1);
     setSessionsPage(1);
+    if (val.trim().length >= 2 && !loadAllUsers) setLoadAllUsers(false);
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => setDebouncedSearch(val), 400);
   };
@@ -120,10 +125,42 @@ export default function UserManagerPage() {
     toast.success("جاري تحديث البيانات...");
   };
 
-  const hasError = usersError || profilesError || sessionsError;
-  const isNotInstalled = hasError && (
-    (usersError as any)?.message?.includes("غير مثبّت") ||
-    (usersError as any)?.message?.includes("no such command")
+  const getErrorMessage = (error: unknown) => (error as any)?.message as string | undefined;
+  const isCommandNotFoundError = (error: unknown) => {
+    const msg = (getErrorMessage(error) || "").toLowerCase();
+    if (!msg) return false;
+    return (
+      msg.includes("no such command") ||
+      msg.includes("unknown command") ||
+      msg.includes("bad command") ||
+      msg.includes("not recognized") ||
+      msg.includes("غير مثب")
+    );
+  };
+
+  const usersReady = users !== undefined;
+  const profilesReady = profiles !== undefined;
+  const sessionsReady = sessions !== undefined;
+  const usersBlockingError = !!usersError && !usersReady;
+  const profilesBlockingError = !!profilesError && !profilesReady;
+  const sessionsBlockingError = !!sessionsError && !sessionsReady;
+  const hasError = usersBlockingError || profilesBlockingError || sessionsBlockingError;
+  const usersLoadedOk = users !== undefined && !usersError;
+  const profilesLoadedOk = profiles !== undefined && !profilesError;
+  const sessionsLoadedOk = sessions !== undefined && !sessionsError;
+  const hasAnyUmSuccess = usersLoadedOk || profilesLoadedOk || sessionsLoadedOk;
+
+  const usersCmdMissing = isCommandNotFoundError(usersError);
+  const profilesCmdMissing = isCommandNotFoundError(profilesError);
+  const sessionsCmdMissing = isCommandNotFoundError(sessionsError);
+  const isUmAuthMismatch = [usersError, profilesError, sessionsError].some((error) => {
+    const msg = (getErrorMessage(error) || "").toLowerCase();
+    return msg.includes("invalid user name or password (6)");
+  });
+
+  const isNotInstalled = !hasAnyUmSuccess && (
+    (usersCmdMissing && profilesCmdMissing) ||
+    (usersCmdMissing && sessionsCmdMissing)
   );
 
   const profileMap = useMemo(() => {
@@ -198,6 +235,39 @@ export default function UserManagerPage() {
   const disabledCount = countData?.disabled ?? allUsers.filter((u: any) => u.disabled === "true" || u.disabled === true).length;
 
   const isSearching = debouncedSearch.trim().length >= 2 && loadingSearch;
+  const isFullLoadInProgress = shouldLoadFullUsers && loadingUsers;
+  const disableHeavyActions = isFullLoadInProgress || batchImporting || bulkDeleting;
+
+  useEffect(() => {
+    if (!isFullLoadInProgress) return;
+    if (fullLoadStage === "idle" || fullLoadStage === "done") {
+      setFullLoadStage("starting");
+      setFullLoadProgress(6);
+    }
+
+    const timer = setInterval(() => {
+      setFullLoadStage("loading");
+      setFullLoadProgress((prev) => {
+        if (prev < 60) return Math.min(60, prev + 7);
+        if (prev < 85) return Math.min(85, prev + 3);
+        return Math.min(95, prev + 1);
+      });
+    }, 450);
+
+    return () => clearInterval(timer);
+  }, [isFullLoadInProgress, fullLoadStage]);
+
+  useEffect(() => {
+    if (!loadAllUsers) {
+      setFullLoadStage("idle");
+      setFullLoadProgress(0);
+      return;
+    }
+    if (!loadingUsers && Array.isArray(users)) {
+      setFullLoadProgress(100);
+      setFullLoadStage("done");
+    }
+  }, [loadAllUsers, loadingUsers, users]);
 
   const handleAction = (userAction: string, user: any) => {
     const id = user[".id"] || user.id;
@@ -422,15 +492,15 @@ export default function UserManagerPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={() => setBatchImportOpen(true)} className="h-8" title="استيراد دفعي">
+          <Button size="sm" variant="outline" onClick={() => setBatchImportOpen(true)} className="h-8" title="استيراد دفعي" disabled={disableHeavyActions}>
             <Upload className="h-3.5 w-3.5 ml-1" />
             <span className="hidden sm:inline">استيراد</span>
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setAddOpen(true)} className="h-8">
+          <Button size="sm" variant="outline" onClick={() => setAddOpen(true)} className="h-8" disabled={disableHeavyActions}>
             <UserPlus className="h-3.5 w-3.5 ml-1" />
             <span className="hidden sm:inline">إضافة</span>
           </Button>
-          <Button size="icon" variant="outline" onClick={refresh} className="h-8 w-8">
+          <Button size="icon" variant="outline" onClick={refresh} className="h-8 w-8" disabled={disableHeavyActions}>
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
@@ -448,7 +518,22 @@ export default function UserManagerPage() {
         </div>
       )}
 
-      {hasError && !isNotInstalled && (
+      {isUmAuthMismatch && !isNotInstalled && (
+        <div className="mb-4 p-3 rounded-lg bg-warning/5 border border-warning/20">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-foreground text-sm">فشل مصادقة User Manager</p>
+              <p className="text-muted-foreground text-xs mt-1">
+                الراوتر متصل، لكن أوامر User Manager تُرجع "invalid user name or password (6)".
+                تحقق من إعدادات User Manager على الراوتر وصلاحيات حساب API المستخدم حاليًا.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hasError && !isNotInstalled && !isUmAuthMismatch && (
         <div className="mb-4 p-3 rounded-lg bg-destructive/5 border border-destructive/20">
           <div className="flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
@@ -478,9 +563,58 @@ export default function UserManagerPage() {
           value={search}
           onChange={(e) => handleSearch(e.target.value)}
           className="pr-10 text-sm h-9"
+          disabled={isFullLoadInProgress}
         />
         {isSearching && <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-primary" />}
       </div>
+
+      {activeTab === "users" && debouncedSearch.trim().length < 2 && !loadAllUsers && (
+        <div className="mb-3 p-3 rounded-lg bg-primary/5 border border-primary/20 flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
+            عدد مستخدمي User Manager كبير جدًا. للسرعة استخدم البحث (حرفين+) أو حمّل القائمة كاملة يدويًا.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setLoadAllUsers(true);
+              setFullLoadStage("starting");
+              setFullLoadProgress(6);
+            }}
+            className="h-8 shrink-0"
+            disabled={disableHeavyActions}
+          >
+            تحميل القائمة الكاملة
+          </Button>
+        </div>
+      )}
+
+      {activeTab === "users" && loadAllUsers && isFullLoadInProgress && (
+        <div className="mb-3 p-3 rounded-lg bg-primary/5 border border-primary/20 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+              جاري تحميل القائمة الكاملة بسلاسة... يمكنك المتابعة بعد الاكتمال
+            </p>
+            <span className="text-[10px] text-primary font-semibold">{fullLoadProgress}%</span>
+          </div>
+          <Progress value={fullLoadProgress} className="h-1.5" />
+          <p className="text-[10px] text-muted-foreground">
+            {countData?.total ? `إجمالي تقريبي: ${countData.total} مستخدم` : "يتم جلب البيانات من الراوتر..."}
+          </p>
+        </div>
+      )}
+
+      {activeTab === "users" && loadAllUsers && fullLoadStage === "done" && !isFullLoadInProgress && (
+        <div className="mb-3 p-3 rounded-lg bg-success/5 border border-success/20 flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
+            تم تحميل القائمة بنجاح ({Array.isArray(users) ? users.length : 0} مستخدم).
+          </p>
+          <Button size="sm" variant="outline" className="h-8" onClick={refresh}>
+            تحديث
+          </Button>
+        </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "profiles" | "sessions")} dir="rtl">
         <TabsList className="bg-muted mb-3 w-full justify-start">
@@ -497,12 +631,12 @@ export default function UserManagerPage() {
 
         <TabsContent value="users">
           <div className="flex gap-2 mb-3 flex-wrap items-center">
-            <Button size="sm" variant={userFilter === "all" ? "default" : "outline"} className="text-xs h-7" onClick={() => { setUserFilter("all"); setUsersPage(1); setSelectedUsers(new Set()); }}>الكل</Button>
-            <Button size="sm" variant={userFilter === "expired" ? "default" : "outline"} className="text-xs h-7" onClick={() => { setUserFilter("expired"); setUsersPage(1); setSelectedUsers(new Set()); }}>
+            <Button size="sm" variant={userFilter === "all" ? "default" : "outline"} className="text-xs h-7" disabled={isFullLoadInProgress} onClick={() => { setUserFilter("all"); setUsersPage(1); setSelectedUsers(new Set()); }}>الكل</Button>
+            <Button size="sm" variant={userFilter === "expired" ? "default" : "outline"} className="text-xs h-7" disabled={isFullLoadInProgress} onClick={() => { setUserFilter("expired"); setUsersPage(1); setSelectedUsers(new Set()); }}>
               <AlertCircle className="h-3 w-3 ml-1" /> منتهية
             </Button>
             {selectedUsers.size > 0 && (
-              <Button size="sm" variant="destructive" className="text-xs h-7 mr-auto" disabled={bulkDeleting} onClick={handleBulkDelete}>
+              <Button size="sm" variant="destructive" className="text-xs h-7 mr-auto" disabled={disableHeavyActions} onClick={handleBulkDelete}>
                 {bulkDeleting ? <Loader2 className="h-3 w-3 animate-spin ml-1" /> : <Trash2 className="h-3 w-3 ml-1" />}
                 حذف {selectedUsers.size} محدد
               </Button>
@@ -514,7 +648,7 @@ export default function UserManagerPage() {
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
                     <th className="p-2.5 w-8 text-center">
-                      <button onClick={toggleSelectAll} className="text-muted-foreground hover:text-foreground" title={`تحديد الكل (${filteredUsers.length})`}>
+                      <button onClick={toggleSelectAll} disabled={isFullLoadInProgress} className="text-muted-foreground hover:text-foreground disabled:opacity-50" title={`تحديد الكل (${filteredUsers.length})`}>
                         {selectedUsers.size === filteredUsers.length && filteredUsers.length > 0 ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
                       </button>
                     </th>
@@ -526,7 +660,17 @@ export default function UserManagerPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {loadingUsers ? (
+                  {isFullLoadInProgress ? (
+                    <tr>
+                      <td colSpan={6} className="p-8 text-center">
+                        <Loader2 className="h-8 w-8 text-primary mx-auto mb-2 animate-spin" />
+                        <p className="text-muted-foreground text-sm">جاري تجهيز القائمة الكاملة...</p>
+                        <div className="max-w-xs mx-auto mt-3">
+                          <Progress value={fullLoadProgress} className="h-1.5" />
+                        </div>
+                      </td>
+                    </tr>
+                  ) : loadingUsers ? (
                     Array.from({ length: 5 }).map((_, i) => (
                       <tr key={i} className="border-b border-border/50">
                         <td className="p-2.5"><Skeleton className="h-4 w-4" /></td>
@@ -551,7 +695,7 @@ export default function UserManagerPage() {
                       return (
                         <tr key={uid || i} className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
                           <td className="p-2.5 text-center">
-                            <button onClick={() => uid && toggleSelectUser(uid)} className="text-muted-foreground hover:text-foreground">
+                            <button onClick={() => uid && toggleSelectUser(uid)} disabled={isFullLoadInProgress} className="text-muted-foreground hover:text-foreground disabled:opacity-50">
                               {selectedUsers.has(uid) ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
                             </button>
                           </td>
@@ -571,7 +715,7 @@ export default function UserManagerPage() {
                           <td className="p-2.5 text-center">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 opacity-60 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button variant="ghost" size="icon" className="h-7 w-7 opacity-60 sm:opacity-0 group-hover:opacity-100 transition-opacity" disabled={isFullLoadInProgress}>
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>

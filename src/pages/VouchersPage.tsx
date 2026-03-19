@@ -59,6 +59,7 @@ interface VoucherBatch {
 
 type CharType = "alphanumeric" | "letters" | "numbers";
 type PasswordMode = "random" | "same" | "empty";
+type PrintLayoutMode = "grid" | "auto";
 
 interface PrintTemplate {
   id: string;
@@ -74,7 +75,7 @@ interface PrintTemplate {
 
 interface FieldPosition {
   id: string;
-  type: "username" | "password" | "profile" | "title" | "subtitle" | "price" | "sales_point" | "qr";
+  type: "username" | "password" | "profile" | "title" | "subtitle" | "price" | "sales_point" | "qr" | "days" | "transfer_limit";
   label: string;
   x: number;
   y: number;
@@ -83,11 +84,56 @@ interface FieldPosition {
   visible: boolean;
 }
 
+type BackgroundPreset = {
+  id: string;
+  name: string;
+  dataUrl: string;
+};
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function normalizeDigits(value: string): string {
+  const arabicIndic = "٠١٢٣٤٥٦٧٨٩";
+  const easternArabicIndic = "۰۱۲۳۴۵۶۷۸۹";
+  return value
+    .split("")
+    .map((ch) => {
+      const idxArabic = arabicIndic.indexOf(ch);
+      if (idxArabic >= 0) return String(idxArabic);
+      const idxEastern = easternArabicIndic.indexOf(ch);
+      if (idxEastern >= 0) return String(idxEastern);
+      return ch;
+    })
+    .join("");
+}
+
+function parseLocalizedInt(raw: string, fallback: number, min: number, max: number): number {
+  const normalized = normalizeDigits(raw).replace(/[^0-9-]/g, "");
+  const parsed = Number.parseInt(normalized, 10);
+  if (Number.isNaN(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function parseLocalizedFloat(raw: string, fallback: number, min: number, max: number): number {
+  const normalized = normalizeDigits(raw).replace(/[^0-9.-]/g, "");
+  const parsed = Number.parseFloat(normalized);
+  if (Number.isNaN(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
 // ─── Storage Helpers ──────────────────────────
 const BATCHES_KEY = "mikrotik_voucher_batches";
 const TEMPLATES_KEY = "mikrotik_print_templates";
 const GEN_SETTINGS_KEY = "mikrotik_gen_settings";
 const SALES_POINTS_KEY = "mikrotik_sales_points";
+const PENDING_SALES_KEY = "mikrotik_pending_sales";
 
 // Card aspect ratios for the preview widgets.
 // Standard credit-card ratio (1.586) is used for normal column counts;
@@ -120,6 +166,33 @@ function saveSalesPoints(points: string[]) {
   localStorage.setItem(SALES_POINTS_KEY, JSON.stringify(points));
 }
 
+type PendingSaleRecord = {
+  user_id: string;
+  batch_id: string;
+  profile_name: string;
+  card_count: number;
+  success_count: number;
+  failed_count: number;
+  unit_price: number;
+  total_amount: number;
+  voucher_type: string;
+  router_host: string;
+  notes: string;
+  sales_point: string;
+};
+
+function loadPendingSales(): PendingSaleRecord[] {
+  try {
+    return JSON.parse(localStorage.getItem(PENDING_SALES_KEY) || "[]") as PendingSaleRecord[];
+  } catch {
+    return [];
+  }
+}
+
+function savePendingSales(records: PendingSaleRecord[]) {
+  localStorage.setItem(PENDING_SALES_KEY, JSON.stringify(records));
+}
+
 // ─── Random String Generators ──────────────────
 const CHARS_ALPHA = "abcdefghjkmnpqrstuvwxyz";
 const CHARS_NUM = "23456789";
@@ -143,8 +216,160 @@ function defaultFields(): FieldPosition[] {
     { id: "f6", type: "price", label: "السعر", x: 85, y: 15, fontSize: 11, color: "#2563EB", visible: false },
     { id: "f7", type: "sales_point", label: "نقطة البيع", x: 18, y: 15, fontSize: 10, color: "#111827", visible: false },
     { id: "f8", type: "qr", label: "QR", x: 84, y: 78, fontSize: 10, color: "#111827", visible: false },
+    { id: "f9", type: "days", label: "الصلاحية", x: 18, y: 89, fontSize: 9, color: "#334155", visible: false },
+    { id: "f10", type: "transfer_limit", label: "حد التحويل", x: 82, y: 89, fontSize: 9, color: "#334155", visible: false },
   ];
 }
+
+const BG_PRESETS: BackgroundPreset[] = [
+  {
+    id: "aurora",
+    name: "Aurora",
+    dataUrl: "data:image/svg+xml;utf8," + encodeURIComponent(`
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 700'>
+        <defs>
+          <linearGradient id='g1' x1='0' y1='0' x2='1' y2='1'>
+            <stop offset='0%' stop-color='#0ea5e9'/>
+            <stop offset='40%' stop-color='#22c55e'/>
+            <stop offset='100%' stop-color='#f59e0b'/>
+          </linearGradient>
+          <radialGradient id='glow' cx='20%' cy='20%' r='70%'>
+            <stop offset='0%' stop-color='rgba(255,255,255,0.55)'/>
+            <stop offset='100%' stop-color='rgba(255,255,255,0)'/>
+          </radialGradient>
+        </defs>
+        <rect width='1200' height='700' fill='url(#g1)'/>
+        <circle cx='250' cy='130' r='260' fill='url(#glow)'/>
+        <circle cx='1000' cy='620' r='330' fill='rgba(255,255,255,0.15)'/>
+      </svg>
+    `),
+  },
+  {
+    id: "midnight",
+    name: "Midnight",
+    dataUrl: "data:image/svg+xml;utf8," + encodeURIComponent(`
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 700'>
+        <defs>
+          <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
+            <stop offset='0%' stop-color='#0b1020'/>
+            <stop offset='50%' stop-color='#1e293b'/>
+            <stop offset='100%' stop-color='#0f172a'/>
+          </linearGradient>
+        </defs>
+        <rect width='1200' height='700' fill='url(#bg)'/>
+        <path d='M0,560 C220,470 340,650 540,570 C720,500 850,390 1200,500 L1200,700 L0,700 Z' fill='rgba(56,189,248,0.24)'/>
+        <path d='M0,620 C250,520 450,720 700,610 C860,540 970,490 1200,560 L1200,700 L0,700 Z' fill='rgba(16,185,129,0.2)'/>
+      </svg>
+    `),
+  },
+  {
+    id: "sunset",
+    name: "Sunset",
+    dataUrl: "data:image/svg+xml;utf8," + encodeURIComponent(`
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 700'>
+        <defs>
+          <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
+            <stop offset='0%' stop-color='#fb7185'/>
+            <stop offset='45%' stop-color='#f97316'/>
+            <stop offset='100%' stop-color='#facc15'/>
+          </linearGradient>
+        </defs>
+        <rect width='1200' height='700' fill='url(#bg)'/>
+        <circle cx='940' cy='170' r='110' fill='rgba(255,255,255,0.35)'/>
+        <path d='M0,560 C210,430 470,680 760,560 C920,500 1040,470 1200,500 L1200,700 L0,700 Z' fill='rgba(255,255,255,0.18)'/>
+      </svg>
+    `),
+  },
+  {
+    id: "leaf",
+    name: "Leaf",
+    dataUrl: "data:image/svg+xml;utf8," + encodeURIComponent(`
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 700'>
+        <defs>
+          <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
+            <stop offset='0%' stop-color='#14532d'/>
+            <stop offset='45%' stop-color='#16a34a'/>
+            <stop offset='100%' stop-color='#86efac'/>
+          </linearGradient>
+        </defs>
+        <rect width='1200' height='700' fill='url(#bg)'/>
+        <ellipse cx='220' cy='580' rx='300' ry='220' fill='rgba(255,255,255,0.16)'/>
+        <ellipse cx='1080' cy='140' rx='260' ry='190' fill='rgba(255,255,255,0.14)'/>
+      </svg>
+    `),
+  },
+];
+
+const DESIGN_THEMES: Array<{
+  id: string;
+  name: string;
+  subtitle: string;
+  presetId: string;
+  cardTitle: string;
+  cardSubtitle: string;
+  overrides: Array<Partial<FieldPosition> & { type: FieldPosition["type"] }>;
+}> = [
+  {
+    id: "hotel-luxe",
+    name: "فندق فاخر",
+    subtitle: "طابع أنيق للنزلاء",
+    presetId: "midnight",
+    cardTitle: "Hotel Guest Access",
+    cardSubtitle: "Premium Internet Service",
+    overrides: [
+      { type: "title", visible: true, x: 50, y: 16, fontSize: 13, color: "#f8fafc" },
+      { type: "subtitle", visible: true, x: 50, y: 27, fontSize: 9, color: "#e2e8f0" },
+      { type: "username", visible: true, x: 44, y: 56, fontSize: 14, color: "#ffffff" },
+      { type: "password", visible: true, x: 44, y: 72, fontSize: 14, color: "#ffffff" },
+      { type: "price", visible: true, x: 84, y: 16, fontSize: 10, color: "#fde68a" },
+      { type: "days", visible: true, x: 16, y: 88, fontSize: 9, color: "#f8fafc" },
+      { type: "transfer_limit", visible: true, x: 82, y: 88, fontSize: 9, color: "#f8fafc" },
+      { type: "sales_point", visible: false },
+      { type: "profile", visible: false },
+      { type: "qr", visible: true, x: 88, y: 72, fontSize: 10, color: "#ffffff" },
+    ],
+  },
+  {
+    id: "wifi-modern",
+    name: "واي فاي حديث",
+    subtitle: "تصميم ملون وواضح",
+    presetId: "aurora",
+    cardTitle: "WiFi Access Card",
+    cardSubtitle: "Fast & Secure Connection",
+    overrides: [
+      { type: "title", visible: true, x: 50, y: 16, fontSize: 13, color: "#0f172a" },
+      { type: "subtitle", visible: true, x: 50, y: 28, fontSize: 9, color: "#0f172a" },
+      { type: "username", visible: true, x: 42, y: 56, fontSize: 14, color: "#0f172a" },
+      { type: "password", visible: true, x: 42, y: 72, fontSize: 14, color: "#0f172a" },
+      { type: "price", visible: true, x: 86, y: 16, fontSize: 10, color: "#1d4ed8" },
+      { type: "days", visible: true, x: 18, y: 88, fontSize: 9, color: "#0f172a" },
+      { type: "transfer_limit", visible: true, x: 84, y: 88, fontSize: 9, color: "#0f172a" },
+      { type: "sales_point", visible: true, x: 18, y: 16, fontSize: 8, color: "#1f2937" },
+      { type: "profile", visible: true, x: 50, y: 90, fontSize: 9, color: "#0f172a" },
+      { type: "qr", visible: true, x: 88, y: 72, fontSize: 10, color: "#111827" },
+    ],
+  },
+  {
+    id: "network-pro",
+    name: "شبكات احترافي",
+    subtitle: "نمط خدمات الشبكات",
+    presetId: "leaf",
+    cardTitle: "Network Service Voucher",
+    cardSubtitle: "Managed Connectivity",
+    overrides: [
+      { type: "title", visible: true, x: 50, y: 16, fontSize: 13, color: "#ecfeff" },
+      { type: "subtitle", visible: true, x: 50, y: 28, fontSize: 9, color: "#dcfce7" },
+      { type: "username", visible: true, x: 44, y: 56, fontSize: 14, color: "#f8fafc" },
+      { type: "password", visible: true, x: 44, y: 72, fontSize: 14, color: "#f8fafc" },
+      { type: "price", visible: true, x: 84, y: 16, fontSize: 10, color: "#fef08a" },
+      { type: "days", visible: true, x: 16, y: 88, fontSize: 9, color: "#ecfeff" },
+      { type: "transfer_limit", visible: true, x: 82, y: 88, fontSize: 9, color: "#ecfeff" },
+      { type: "sales_point", visible: true, x: 18, y: 16, fontSize: 8, color: "#d1fae5" },
+      { type: "profile", visible: true, x: 50, y: 90, fontSize: 9, color: "#ecfeff" },
+      { type: "qr", visible: true, x: 88, y: 72, fontSize: 10, color: "#ffffff" },
+    ],
+  },
+];
 
 // ─── Component ────────────────────────────────
 export default function VouchersPage() {
@@ -163,6 +388,8 @@ export default function VouchersPage() {
   const [charType, setCharType] = useState<CharType>("alphanumeric");
   const [passwordMode, setPasswordMode] = useState<PasswordMode>("random");
   const [unitPrice, setUnitPrice] = useState(0);
+  const [validityDays, setValidityDays] = useState(0);
+  const [transferLimit, setTransferLimit] = useState(0);
 
   // Sales points
   const [salesPoints, setSalesPoints] = useState<string[]>(loadSalesPoints);
@@ -184,6 +411,9 @@ export default function VouchersPage() {
   const [cardSubtitle, setCardSubtitle] = useState("اتصل بالإنترنت");
   const [printCols, setPrintCols] = useState(3);
   const [printRows, setPrintRows] = useState(4);
+  const [printLayoutMode, setPrintLayoutMode] = useState<PrintLayoutMode>("grid");
+  const [cardsPerPageTarget, setCardsPerPageTarget] = useState(0);
+  const [activeThemeId, setActiveThemeId] = useState<string>("");
   const [bgImage, setBgImage] = useState<string | null>(null);
   const [fields, setFields] = useState<FieldPosition[]>(defaultFields);
   const [draggingField, setDraggingField] = useState<string | null>(null);
@@ -196,6 +426,7 @@ export default function VouchersPage() {
 
   // Batches & history
   const [batches, setBatches] = useState<VoucherBatch[]>(loadBatches);
+  const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"generate" | "history">("generate");
   const [deleteBatchId, setDeleteBatchId] = useState<string | null>(null);
   const [deletingFromRouter, setDeletingFromRouter] = useState<string | null>(null);
@@ -222,12 +453,58 @@ export default function VouchersPage() {
     if (saved.nameLength) setNameLength(saved.nameLength);
     if (saved.passLength) setPassLength(saved.passLength);
     if (saved.unitPrice !== undefined) setUnitPrice(saved.unitPrice);
+    if (saved.validityDays !== undefined) setValidityDays(saved.validityDays);
+    if (saved.transferLimit !== undefined) setTransferLimit(saved.transferLimit);
+    if (saved.printLayoutMode) setPrintLayoutMode(saved.printLayoutMode);
+    if (saved.cardsPerPageTarget !== undefined) setCardsPerPageTarget(saved.cardsPerPageTarget);
     if (saved.salesPoint) setSelectedSalesPoint(saved.salesPoint);
   }, []);
 
   useEffect(() => {
-    saveGenSettings({ charType, passwordMode, prefix, nameLength, passLength, unitPrice, salesPoint: selectedSalesPoint });
-  }, [charType, passwordMode, prefix, nameLength, passLength, unitPrice, selectedSalesPoint]);
+    saveGenSettings({
+      charType,
+      passwordMode,
+      prefix,
+      nameLength,
+      passLength,
+      unitPrice,
+      validityDays,
+      transferLimit,
+      printLayoutMode,
+      cardsPerPageTarget,
+      salesPoint: selectedSalesPoint,
+    });
+  }, [charType, passwordMode, prefix, nameLength, passLength, unitPrice, validityDays, transferLimit, printLayoutMode, cardsPerPageTarget, selectedSalesPoint]);
+
+  const resolvedPrintLayout = useMemo(() => {
+    const maxRows = 20;
+    const maxCols = 20;
+    const targetAspect = 1.6;
+
+    if (printLayoutMode === "auto" && cardsPerPageTarget > 0) {
+      let best: { cols: number; rows: number; score: number } | null = null;
+      for (let rows = 1; rows <= maxRows; rows++) {
+        for (let cols = 1; cols <= maxCols; cols++) {
+          const slots = rows * cols;
+          if (slots < cardsPerPageTarget) continue;
+          const cellAspect = (210 * rows) / (297 * cols);
+          const slotPenalty = (slots - cardsPerPageTarget) * 4;
+          const aspectPenalty = Math.abs(cellAspect - targetAspect) * 10;
+          const score = slotPenalty + aspectPenalty;
+          if (!best || score < best.score) {
+            best = { cols, rows, score };
+          }
+        }
+      }
+      if (best) {
+        return { cols: best.cols, rows: best.rows, cardsPerPage: best.cols * best.rows };
+      }
+    }
+
+    const cols = Math.max(1, Math.min(maxCols, printCols));
+    const rows = Math.max(1, Math.min(maxRows, printRows));
+    return { cols, rows, cardsPerPage: cols * rows };
+  }, [printLayoutMode, cardsPerPageTarget, printCols, printRows]);
 
   const profiles = useMemo(() => {
     const raw = type === "hotspot" ? hotspotProfiles : umProfiles;
@@ -249,6 +526,42 @@ export default function VouchersPage() {
     return batches.filter(b => !b.routerHost || b.routerHost === currentRouterHost);
   }, [batches, currentRouterHost]);
 
+  const persistSaleRecord = useCallback(async (record: PendingSaleRecord) => {
+    const { error } = await supabase.from("sales").insert(record as any);
+    if (!error) return { ok: true as const };
+
+    const pending = loadPendingSales();
+    savePendingSales([record, ...pending]);
+    return { ok: false as const, error };
+  }, []);
+
+  const syncPendingSales = useCallback(async () => {
+    const pending = loadPendingSales();
+    if (pending.length === 0) return;
+
+    const remaining: PendingSaleRecord[] = [];
+    let synced = 0;
+
+    for (const record of pending) {
+      const { error } = await supabase.from("sales").insert(record as any);
+      if (error) {
+        remaining.push(record);
+      } else {
+        synced += 1;
+      }
+    }
+
+    savePendingSales(remaining);
+    if (synced > 0) {
+      toast.success(`تمت مزامنة ${synced} سجل مبيعات مؤجل`);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    void syncPendingSales();
+  }, [user?.id, syncPendingSales]);
+
   const addSalesPoint = () => {
     const name = newSalesPoint.trim();
     if (!name || salesPoints.includes(name)) return;
@@ -258,8 +571,13 @@ export default function VouchersPage() {
   };
 
   const generateVouchers = () => {
+    if (!selectedProfile) {
+      toast.error("اختر الباقة أولاً قبل التوليد");
+      return;
+    }
+
     const newCards: VoucherCard[] = [];
-    const prof = selectedProfile || profiles[0]?.name || "default";
+    const prof = selectedProfile;
     for (let i = 0; i < count; i++) {
       const username = `${prefix}${generateRandomString(nameLength, charType)}`;
       let password = "";
@@ -284,6 +602,7 @@ export default function VouchersPage() {
       unitPrice,
     };
     setBatches(prev => [batch, ...prev]);
+    setActiveBatchId(batch.id);
     toast.success(`تم توليد ${count} كرت`);
   };
 
@@ -534,32 +853,36 @@ export default function VouchersPage() {
 
       setBatches(prev => {
         const updated = [...prev];
-        const latest = updated.find(b => b.cards[0]?.username === cards[0]?.username);
-        if (latest) {
-          latest.pushed = true;
-          latest.pushResults = { success: totalSuccess, failed: totalFailed };
-          latest.cards = updatedCards;
+        const target = activeBatchId
+          ? updated.find(b => b.id === activeBatchId)
+          : updated.find(b => b.cards[0]?.username === cards[0]?.username);
+        if (target) {
+          target.pushed = true;
+          target.pushResults = { success: totalSuccess, failed: totalFailed };
+          target.cards = updatedCards;
         }
         return updated;
       });
 
       if (totalSuccess > 0 && user?.id) {
-        try {
-          await supabase.from("sales").insert({
-            user_id: user.id,
-            batch_id: crypto.randomUUID(),
-            profile_name: cards[0]?.profile || "",
-            card_count: cards.length,
-            success_count: totalSuccess,
-            failed_count: totalFailed,
-            unit_price: unitPrice,
-            total_amount: totalSuccess * unitPrice,
-            voucher_type: type,
-            router_host: currentRouterHost,
-            notes: `دفعة ${cards.length} كرت`,
-            sales_point: selectedSalesPoint,
-          } as any);
-        } catch {}
+        const saleRecord: PendingSaleRecord = {
+          user_id: user.id,
+          batch_id: crypto.randomUUID(),
+          profile_name: cards[0]?.profile || "",
+          card_count: cards.length,
+          success_count: totalSuccess,
+          failed_count: totalFailed,
+          unit_price: unitPrice,
+          total_amount: totalSuccess * unitPrice,
+          voucher_type: type,
+          router_host: currentRouterHost,
+          notes: `دفعة ${cards.length} كرت`,
+          sales_point: selectedSalesPoint,
+        };
+        const saleWrite = await persistSaleRecord(saleRecord);
+        if (!saleWrite.ok) {
+          toast.warning("تم الرفع للراوتر، لكن فشل حفظ المبيعات على السيرفر وتمت إضافتها لقائمة مزامنة لاحقة");
+        }
       }
 
       if (totalFailed === 0) {
@@ -687,8 +1010,39 @@ export default function VouchersPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => setBgImage(reader.result as string);
+    reader.onload = () => {
+      setActiveThemeId("");
+      setBgImage(reader.result as string);
+    };
     reader.readAsDataURL(file);
+  };
+
+  const applyBackgroundPreset = (preset: BackgroundPreset) => {
+    setActiveThemeId("");
+    setBgImage(preset.dataUrl);
+    toast.success(`تم تطبيق الخلفية: ${preset.name}`);
+  };
+
+  const applyDesignTheme = (themeId: string) => {
+    const theme = DESIGN_THEMES.find((t) => t.id === themeId);
+    if (!theme) return;
+
+    const preset = BG_PRESETS.find((p) => p.id === theme.presetId);
+    const nextFields = defaultFields().map((f) => ({ ...f }));
+    for (const override of theme.overrides) {
+      const target = nextFields.find((f) => f.type === override.type);
+      if (!target) continue;
+      Object.assign(target, override);
+    }
+
+    if (preset) {
+      setBgImage(preset.dataUrl);
+    }
+    setFields(nextFields);
+    setCardTitle(theme.cardTitle);
+    setCardSubtitle(theme.cardSubtitle);
+    setActiveThemeId(theme.id);
+    toast.success(`تم تطبيق ثيم: ${theme.name}`);
   };
 
   const handlePreviewMouseDown = (fieldId: string) => {
@@ -726,8 +1080,8 @@ export default function VouchersPage() {
       profileName: selectedProfile,
       bgImage: bgImage || undefined,
       fields,
-      printCols,
-      printRows,
+      printCols: resolvedPrintLayout.cols,
+      printRows: resolvedPrintLayout.rows,
       cardTitle,
       cardSubtitle,
     };
@@ -764,10 +1118,38 @@ export default function VouchersPage() {
 
   // ─── Print HTML Builder (professional quality with QR) ──────────────────────
   const buildPrintHtml = async (cardsToPrint: VoucherCard[]): Promise<string> => {
-    const cardsPerPage = printCols * printRows;
+    const safeCols = Math.max(1, Math.min(20, resolvedPrintLayout.cols));
+    const safeRows = Math.max(1, Math.min(20, resolvedPrintLayout.rows));
+    const cardsPerPage = safeCols * safeRows;
     const totalPages = Math.max(1, Math.ceil(cardsToPrint.length / cardsPerPage));
     const visibleFields = fields.filter(f => f.visible);
     const hasQr = visibleFields.some(f => f.type === "qr");
+    const density = Math.max(safeCols / 3, safeRows / 4, 1);
+    const cardGapMm = density >= 1.8 ? 1.2 : density >= 1.35 ? 1.6 : 2;
+    const pageMarginMm = density >= 1.8 ? 4 : density >= 1.35 ? 5 : 6;
+    const footerMm = 3.5;
+    const fontScale = Math.max(0.62, Math.min(1, 1 / density));
+    const overlayScale = Math.max(0.68, Math.min(1, fontScale + 0.08));
+    const pageInnerHeightMm = 297 - (pageMarginMm * 2) - footerMm;
+    const cardHeightMm = Math.max(6, (pageInnerHeightMm - (cardGapMm * (safeRows - 1))) / safeRows);
+    const gridHeightMm = (cardHeightMm * safeRows) + (cardGapMm * Math.max(0, safeRows - 1));
+    const defaultCardBg = "data:image/svg+xml;utf8," + encodeURIComponent(`
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 460'>
+        <defs>
+          <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
+            <stop offset='0%' stop-color='#ffffff'/>
+            <stop offset='100%' stop-color='#eef6ff'/>
+          </linearGradient>
+          <linearGradient id='band' x1='0' y1='0' x2='1' y2='0'>
+            <stop offset='0%' stop-color='#2563eb'/>
+            <stop offset='100%' stop-color='#0ea5e9'/>
+          </linearGradient>
+        </defs>
+        <rect width='800' height='460' fill='url(#bg)'/>
+        <rect x='0' y='0' width='800' height='70' fill='url(#band)' opacity='0.18'/>
+        <circle cx='700' cy='70' r='90' fill='rgba(37,99,235,0.13)'/>
+      </svg>
+    `);
 
     // Pre-generate QR codes if needed
     const qrMap = new Map<string, string>();
@@ -789,14 +1171,24 @@ export default function VouchersPage() {
       const pageCards = cardsToPrint.slice(p, p + cardsPerPage);
 
       const cardHtml = pageCards.map(c => {
+        const usernameEsc = escapeHtml(c.username || "");
+        const passwordEsc = escapeHtml(c.password || "");
+        const profileEsc = escapeHtml(c.profile || "");
+        const titleEsc = escapeHtml(cardTitle || "");
+        const subtitleEsc = escapeHtml(cardSubtitle || "");
+        const salesPointEsc = escapeHtml(selectedSalesPoint || "");
+        const unitPriceEsc = escapeHtml(unitPrice > 0 ? `${unitPrice} ر.س` : "");
+        const validityDaysEsc = escapeHtml(validityDays > 0 ? `${validityDays} يوم` : "");
+        const transferLimitEsc = escapeHtml(transferLimit > 0 ? `${transferLimit} تحويل` : "");
         const qrSrc = qrMap.get(c.username) || "";
 
         if (bgImage) {
           // Custom background image mode — overlay text at configured positions
           const fieldsHtml = visibleFields.map(f => {
             if (f.type === "qr") {
+              const qrSize = Math.max(16, Math.round(f.fontSize * 3 * overlayScale));
               return qrSrc
-                ? `<img src="${qrSrc}" class="overlay-qr" style="top:${f.y}%;left:${f.x}%;width:${f.fontSize * 3}px;height:${f.fontSize * 3}px" />`
+                ? `<img src="${qrSrc}" class="overlay-qr" style="top:${f.y}%;left:${f.x}%;width:${qrSize}px;height:${qrSize}px" />`
                 : "";
             }
             let text = "";
@@ -807,11 +1199,19 @@ export default function VouchersPage() {
             else if (f.type === "subtitle") text = cardSubtitle;
             else if (f.type === "price") text = unitPrice > 0 ? `${unitPrice} ر.س` : "";
             else if (f.type === "sales_point") text = selectedSalesPoint || "";
+            else if (f.type === "days") text = validityDays > 0 ? `${validityDays} يوم` : "";
+            else if (f.type === "transfer_limit") text = transferLimit > 0 ? `${transferLimit} تحويل` : "";
+            const safeText = escapeHtml(text || "");
+            const fontPx = Math.max(7, Math.round(f.fontSize * overlayScale));
             return text
-              ? `<div class="overlay-text" style="top:${f.y}%;left:${f.x}%;font-size:${f.fontSize}px;color:${f.color}">${text}</div>`
+              ? `<div class="overlay-text" style="top:${f.y}%;left:${f.x}%;font-size:${fontPx}px;color:${f.color}">${safeText}</div>`
               : "";
           }).join("");
-          return `<div class="card card-custom" style="background-image:url('${bgImage}')">${fieldsHtml}</div>`;
+          return `
+            <div class="card card-custom">
+              <img src="${bgImage}" class="card-bg-img" />
+              <div class="card-overlay">${fieldsHtml}</div>
+            </div>`;
         }
 
         // Default clean card design
@@ -819,25 +1219,30 @@ export default function VouchersPage() {
         const showProfile = visibleFields.some(f => f.type === "profile");
         const showPrice = visibleFields.some(f => f.type === "price") && unitPrice > 0;
         const showSalesPoint = visibleFields.some(f => f.type === "sales_point") && selectedSalesPoint;
+        const showDays = visibleFields.some(f => f.type === "days") && validityDays > 0;
+        const showTransferLimit = visibleFields.some(f => f.type === "transfer_limit") && transferLimit > 0;
         const showTitle = visibleFields.some(f => f.type === "title");
         const showSubtitle = visibleFields.some(f => f.type === "subtitle");
 
         return `
           <div class="card card-default">
-            <div class="card-body">
+            <img src="${defaultCardBg}" class="card-bg-img" />
+            <div class="card-body card-foreground">
               <div class="card-left">
-                ${showTitle ? `<div class="card-title">${cardTitle}</div>` : ""}
-                ${showSubtitle ? `<div class="card-sub">${cardSubtitle}</div>` : ""}
+                ${showTitle ? `<div class="card-title">${titleEsc}</div>` : ""}
+                ${showSubtitle ? `<div class="card-sub">${subtitleEsc}</div>` : ""}
                 ${showTitle || showSubtitle ? '<div class="divider"></div>' : ""}
                 <div class="field">
                   <div class="label">USERNAME</div>
-                  <div class="value">${c.username}</div>
+                  <div class="value">${usernameEsc}</div>
                 </div>
-                ${showPassword && c.password ? `<div class="field"><div class="label">PASSWORD</div><div class="value">${c.password}</div></div>` : ""}
+                ${showPassword && c.password ? `<div class="field"><div class="label">PASSWORD</div><div class="value">${passwordEsc}</div></div>` : ""}
                 <div class="card-footer-row">
-                  ${showProfile ? `<span class="profile-badge">${c.profile}</span>` : ""}
-                  ${showSalesPoint ? `<span class="sp-badge">${selectedSalesPoint}</span>` : ""}
-                  ${showPrice ? `<span class="price-badge">${unitPrice} ر.س</span>` : ""}
+                  ${showProfile ? `<span class="profile-badge">${profileEsc}</span>` : ""}
+                  ${showSalesPoint ? `<span class="sp-badge">${salesPointEsc}</span>` : ""}
+                  ${showDays ? `<span class="sp-badge">${validityDaysEsc}</span>` : ""}
+                  ${showTransferLimit ? `<span class="sp-badge">${transferLimitEsc}</span>` : ""}
+                  ${showPrice ? `<span class="price-badge">${unitPriceEsc}</span>` : ""}
                 </div>
               </div>
               ${hasQr && qrSrc ? `<div class="card-qr"><img src="${qrSrc}" /></div>` : ""}
@@ -847,27 +1252,63 @@ export default function VouchersPage() {
 
       pages.push(`
         <div class="page">
-          <div class="grid">${cardHtml}</div>
-          <div class="page-footer">${pageIndex} / ${totalPages}</div>
+          <div class="sheet">
+            <div class="grid">${cardHtml}</div>
+            <div class="page-footer">${pageIndex} / ${totalPages}</div>
+          </div>
         </div>`);
     }
 
     return `<!DOCTYPE html>
 <html dir="rtl"><head>
 <meta charset="utf-8">
-<title>${cardTitle || "كروت"}</title>
+<title>${escapeHtml(cardTitle || "كروت")}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+  :root {
+    --page-width: 210mm;
+    --page-height: 297mm;
+    --page-margin: ${pageMarginMm}mm;
+    --grid-gap: ${cardGapMm}mm;
+    --footer-height: ${footerMm}mm;
+    --font-scale: ${fontScale};
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: white; font-family: 'Cairo', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .page { padding: 6mm; page-break-after: always; position: relative; min-height: 297mm; display: flex; flex-direction: column; }
-  .page:last-child { page-break-after: auto; }
+  body {
+    background: white;
+    font-family: 'Cairo', sans-serif;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page {
+    width: var(--page-width);
+    height: var(--page-height);
+    page-break-after: always;
+    padding: var(--page-margin);
+    display: block;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .page:last-child {
+    page-break-after: auto;
+  }
+  .sheet {
+    width: calc(var(--page-width) - (var(--page-margin) * 2));
+    height: calc(var(--page-height) - (var(--page-margin) * 2));
+    display: block;
+    overflow: hidden;
+  }
   .grid {
     display: grid;
-    grid-template-columns: repeat(${printCols}, 1fr);
-    grid-template-rows: repeat(${printRows}, 1fr);
-    gap: 2mm;
-    flex: 1;
+    grid-template-columns: repeat(${safeCols}, minmax(0, 1fr));
+    grid-template-rows: repeat(${safeRows}, ${cardHeightMm}mm);
+    gap: var(--grid-gap);
+    align-content: start;
+    height: ${gridHeightMm}mm;
+    overflow: hidden;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
   /* ── Custom background card ── */
   .card {
@@ -875,11 +1316,30 @@ export default function VouchersPage() {
     page-break-inside: avoid;
     position: relative;
     overflow: hidden;
+    width: 100%;
+    height: ${cardHeightMm}mm;
+    min-height: 0;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .card-bg-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    user-select: none;
+    pointer-events: none;
+  }
+  .card-overlay,
+  .card-foreground {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
   }
   .card-custom {
-    background-size: 100% 100%;
-    background-position: center;
-    background-repeat: no-repeat;
     border: none;
   }
   .overlay-text {
@@ -909,50 +1369,70 @@ export default function VouchersPage() {
   .card-body {
     display: flex;
     width: 100%;
+    height: 100%;
     align-items: center;
+    overflow: hidden;
   }
   .card-left {
     flex: 1;
-    padding: 6px 10px;
+    padding: calc(6px * var(--font-scale)) calc(10px * var(--font-scale));
     display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 2px;
+    gap: calc(2px * var(--font-scale));
+    min-width: 0;
   }
   .card-qr {
-    width: 58px;
-    min-width: 58px;
+    width: calc(58px * var(--font-scale));
+    min-width: calc(58px * var(--font-scale));
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 4px;
+    padding: calc(4px * var(--font-scale));
     border-right: 1.5px dashed #e2e8f0;
   }
-  .card-qr img { width: 50px; height: 50px; border-radius: 2px; }
-  .card-title { font-weight: 800; font-size: 9px; color: #0f172a; line-height: 1.2; letter-spacing: -0.2px; }
-  .card-sub { font-size: 7px; color: #64748b; }
-  .divider { height: 1px; background: linear-gradient(90deg, #e2e8f0, transparent); margin: 3px 0; }
-  .field { margin-bottom: 1px; }
-  .label { font-size: 6px; color: #94a3b8; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
-  .value { font-size: 11px; font-weight: 700; color: #0f172a; font-family: 'JetBrains Mono', monospace; letter-spacing: 1.5px; line-height: 1.4; }
-  .card-footer-row { display: flex; align-items: center; gap: 4px; margin-top: 2px; flex-wrap: wrap; }
+  .card-qr img { width: calc(50px * var(--font-scale)); height: calc(50px * var(--font-scale)); border-radius: 2px; }
+  .card-title { font-weight: 800; font-size: calc(9px * var(--font-scale)); color: #0f172a; line-height: 1.2; letter-spacing: -0.2px; }
+  .card-sub { font-size: calc(7px * var(--font-scale)); color: #64748b; }
+  .divider { height: 1px; background: linear-gradient(90deg, #e2e8f0, transparent); margin: calc(3px * var(--font-scale)) 0; }
+  .field { margin-bottom: calc(1px * var(--font-scale)); }
+  .label { font-size: calc(6px * var(--font-scale)); color: #94a3b8; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
+  .value {
+    font-size: calc(11px * var(--font-scale));
+    font-weight: 700;
+    color: #0f172a;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: calc(1.5px * var(--font-scale));
+    line-height: 1.25;
+    word-break: break-all;
+  }
+  .card-footer-row { display: flex; align-items: center; gap: calc(4px * var(--font-scale)); margin-top: calc(2px * var(--font-scale)); flex-wrap: wrap; }
   .profile-badge {
-    display: inline-block; padding: 1px 5px;
+    display: inline-block; padding: calc(1px * var(--font-scale)) calc(5px * var(--font-scale));
     background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 3px;
-    font-size: 6px; color: #475569; font-weight: 600;
+    font-size: calc(6px * var(--font-scale)); color: #475569; font-weight: 600;
   }
   .sp-badge {
-    display: inline-block; padding: 1px 5px;
+    display: inline-block; padding: calc(1px * var(--font-scale)) calc(5px * var(--font-scale));
     background: #fef3c7; border: 1px solid #fde68a; border-radius: 3px;
-    font-size: 6px; color: #92400e; font-weight: 600;
+    font-size: calc(6px * var(--font-scale)); color: #92400e; font-weight: 600;
   }
-  .price-badge { font-size: 8px; font-weight: 800; color: #2563eb; white-space: nowrap; margin-right: auto; }
+  .price-badge { font-size: calc(8px * var(--font-scale)); font-weight: 800; color: #2563eb; white-space: nowrap; margin-right: auto; }
   .page-footer {
-    text-align: center; padding-top: 2mm;
-    font-size: 7px; color: #94a3b8; letter-spacing: 0.5px;
+    margin-top: calc(var(--page-height) - (var(--page-margin) * 2) - ${gridHeightMm}mm - var(--footer-height));
+    height: var(--footer-height);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 6px;
+    color: #94a3b8;
+    letter-spacing: 0.4px;
   }
   @media print {
-    .page { padding: 4mm; }
+    html, body {
+      width: var(--page-width);
+      height: auto;
+    }
     @page { margin: 0; size: A4 portrait; }
   }
 </style>
@@ -960,9 +1440,53 @@ export default function VouchersPage() {
   };
 
   const openPrintWindow = (html: string) => {
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+
+    const printFromIframe = () => {
+      const iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.right = "0";
+      iframe.style.bottom = "0";
+      iframe.style.width = "0";
+      iframe.style.height = "0";
+      iframe.style.border = "0";
+      document.body.appendChild(iframe);
+
+      iframe.srcdoc = html;
+      iframe.onload = () => {
+        const win = iframe.contentWindow;
+        if (!win) {
+          document.body.removeChild(iframe);
+          toast.error("تعذر فتح الطباعة على هذا المتصفح");
+          return;
+        }
+        const images = win.document.querySelectorAll("img");
+        const imagePromises = Array.from(images).map((img) =>
+          img.complete ? Promise.resolve() : new Promise<void>((resolve) => {
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          })
+        );
+        Promise.all(imagePromises).then(() => {
+          setTimeout(() => {
+            win.focus();
+            win.print();
+            setTimeout(() => {
+              if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+            }, 1200);
+          }, 500);
+        });
+      };
+    };
+
+    if (isMobile) {
+      printFromIframe();
+      return;
+    }
+
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
-      toast.error("تعذر فتح نافذة الطباعة — تأكد من السماح بالنوافذ المنبثقة");
+      printFromIframe();
       return;
     }
     printWindow.document.open();
@@ -985,7 +1509,14 @@ export default function VouchersPage() {
 
   const handlePrint = async (cardsToPrint?: VoucherCard[]) => {
     const toPrint = cardsToPrint || cards;
-    if (toPrint.length === 0) return;
+    if (toPrint.length === 0) {
+      toast.error("لا توجد كروت للطباعة");
+      return;
+    }
+    if (!cardsToPrint && !selectedProfile) {
+      toast.error("اختر الباقة أولاً قبل الطباعة");
+      return;
+    }
     toast.info("جاري تجهيز الطباعة...");
     const html = await buildPrintHtml(toPrint);
     openPrintWindow(html);
@@ -994,7 +1525,10 @@ export default function VouchersPage() {
   // PDF export: same flow as print but hints the user to choose "Save as PDF"
   const handleExportPdf = async (cardsToPrint?: VoucherCard[]) => {
     const toPrint = cardsToPrint || cards;
-    if (toPrint.length === 0) return;
+    if (toPrint.length === 0) {
+      toast.error("لا توجد كروت للتصدير");
+      return;
+    }
     toast.info("جاري تجهيز الـ PDF...");
     const html = (await buildPrintHtml(toPrint)).replace(
       "</title>",
@@ -1002,6 +1536,52 @@ export default function VouchersPage() {
     );
     openPrintWindow(html);
     toast.info("اختر «حفظ كـ PDF» من نافذة الطباعة");
+  };
+
+  const handleExportCsv = (cardsToExport?: VoucherCard[]) => {
+    const toExport = cardsToExport || cards;
+    if (toExport.length === 0) {
+      toast.error("لا توجد كروت للتصدير");
+      return;
+    }
+
+    const escapeCsv = (value: string) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const headers = [
+      "username",
+      "password",
+      "profile",
+      "status",
+      "error",
+      "unit_price",
+      "sales_point",
+      "validity_days",
+      "transfer_limit",
+    ];
+
+    const rows = toExport.map((card) => [
+      card.username,
+      card.password || "",
+      card.profile || "",
+      card.status || "",
+      card.error || "",
+      unitPrice > 0 ? String(unitPrice) : "",
+      selectedSalesPoint || "",
+      validityDays > 0 ? String(validityDays) : "",
+      transferLimit > 0 ? String(transferLimit) : "",
+    ]);
+
+    const csv = [headers, ...rows].map((line) => line.map((cell) => escapeCsv(cell)).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    link.href = url;
+    link.download = `vouchers-${type}-${stamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    toast.success("تم تصدير CSV بنجاح");
   };
 
   const handleDeleteBatch = (batchId: string) => {
@@ -1013,6 +1593,7 @@ export default function VouchersPage() {
   const loadBatchCards = (batch: VoucherBatch) => {
     setCards(batch.cards);
     setType(batch.type);
+    setActiveBatchId(batch.id);
     setActiveTab("generate");
     toast.success(`تم تحميل ${batch.cards.length} كرت`);
   };
@@ -1105,6 +1686,9 @@ export default function VouchersPage() {
                     <Button size="sm" variant="outline" className="text-xs h-8 text-primary border-primary/30" onClick={() => handleExportPdf(batch.cards)}>
                       <FileDown className="h-3 w-3 ml-1" /> PDF
                     </Button>
+                    <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => handleExportCsv(batch.cards)}>
+                      <Download className="h-3 w-3 ml-1" /> CSV
+                    </Button>
                     {batch.pushed && (
                       <Button
                         size="sm"
@@ -1160,7 +1744,7 @@ export default function VouchersPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">عدد الكروت</label>
-                  <Input type="number" min={1} max={5000} value={count} onChange={e => setCount(Number(e.target.value) || 1)} className="h-9" />
+                  <Input type="text" inputMode="numeric" value={count} onChange={e => setCount(parseLocalizedInt(e.target.value, 1, 1, 5000))} className="h-9" />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">البادئة</label>
@@ -1171,11 +1755,11 @@ export default function VouchersPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">طول الاسم</label>
-                  <Input type="number" min={3} max={16} value={nameLength} onChange={e => setNameLength(Number(e.target.value) || 6)} className="h-9" />
+                  <Input type="text" inputMode="numeric" value={nameLength} onChange={e => setNameLength(parseLocalizedInt(e.target.value, 6, 3, 16))} className="h-9" />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">طول كلمة المرور</label>
-                  <Input type="number" min={3} max={16} value={passLength} onChange={e => setPassLength(Number(e.target.value) || 6)} className="h-9" disabled={passwordMode !== "random"} />
+                  <Input type="text" inputMode="numeric" value={passLength} onChange={e => setPassLength(parseLocalizedInt(e.target.value, 6, 3, 16))} className="h-9" disabled={passwordMode !== "random"} />
                 </div>
               </div>
 
@@ -1222,7 +1806,7 @@ export default function VouchersPage() {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">سعر الكرت</label>
-                  <Input type="number" min={0} value={unitPrice} onChange={e => setUnitPrice(Number(e.target.value) || 0)} className="h-9" />
+                  <Input type="text" inputMode="decimal" value={unitPrice} onChange={e => setUnitPrice(parseLocalizedFloat(e.target.value, 0, 0, 1_000_000))} className="h-9" />
                 </div>
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">نقطة البيع</label>
@@ -1234,6 +1818,16 @@ export default function VouchersPage() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">الصلاحية بالأيام (اختياري)</label>
+                  <Input type="text" inputMode="numeric" value={validityDays} onChange={e => setValidityDays(parseLocalizedInt(e.target.value, 0, 0, 3650))} className="h-9" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">عدد التحويلات (اختياري)</label>
+                  <Input type="text" inputMode="numeric" value={transferLimit} onChange={e => setTransferLimit(parseLocalizedInt(e.target.value, 0, 0, 100000))} className="h-9" />
                 </div>
               </div>
               <div className="flex gap-1.5">
@@ -1267,6 +1861,26 @@ export default function VouchersPage() {
 
                 <div>
                   <label className="text-xs text-muted-foreground mb-1 block">صورة خلفية (اختياري)</label>
+                  <div className="mb-2">
+                    <p className="text-[10px] text-muted-foreground mb-1">ثيمات جاهزة (فنادق / واي فاي / شبكات)</p>
+                    <div className="grid grid-cols-1 gap-1.5">
+                      {DESIGN_THEMES.map((theme) => {
+                        const selected = activeThemeId === theme.id;
+                        return (
+                          <button
+                            key={theme.id}
+                            type="button"
+                            onClick={() => applyDesignTheme(theme.id)}
+                            className={`text-right rounded border px-2 py-1.5 transition ${selected ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "border-border hover:border-primary/40"}`}
+                          >
+                            <p className="text-[11px] font-semibold text-foreground">{theme.name}</p>
+                            <p className="text-[10px] text-muted-foreground">{theme.subtitle}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" className="flex-1 text-xs h-8" onClick={() => fileInputRef.current?.click()}>
@@ -1278,6 +1892,26 @@ export default function VouchersPage() {
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     )}
+                  </div>
+                  <div className="mt-2">
+                    <p className="text-[10px] text-muted-foreground mb-1">خلفيات جاهزة</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {BG_PRESETS.map((preset) => {
+                        const selected = bgImage === preset.dataUrl;
+                        return (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => applyBackgroundPreset(preset)}
+                            className={`rounded border overflow-hidden text-[10px] transition ${selected ? "border-primary ring-1 ring-primary/30" : "border-border hover:border-primary/40"}`}
+                            title={preset.name}
+                          >
+                            <div className="h-10 w-full" style={{ backgroundImage: `url(${preset.dataUrl})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+                            <div className="px-1 py-1 bg-background/90 text-foreground truncate">{preset.name}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
@@ -1325,10 +1959,27 @@ export default function VouchersPage() {
                           />
                           <span className="text-muted-foreground flex-1">{f.label}</span>
                           <Input
-                            type="number" min={6} max={24}
+                            type="text"
+                            inputMode="numeric"
                             value={f.fontSize}
-                            onChange={e => setFields(prev => prev.map(ff => ff.id === f.id ? { ...ff, fontSize: Number(e.target.value) || 13 } : ff))}
+                            onChange={e => setFields(prev => prev.map(ff => ff.id === f.id ? { ...ff, fontSize: parseLocalizedInt(e.target.value, 13, 6, 24) } : ff))}
                             className="h-6 w-14 text-[10px] px-1"
+                          />
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            value={f.x}
+                            onChange={e => setFields(prev => prev.map(ff => ff.id === f.id ? { ...ff, x: parseLocalizedInt(e.target.value, ff.x, 0, 100) } : ff))}
+                            className="h-6 w-14 text-[10px] px-1"
+                            title="X"
+                          />
+                          <Input
+                            type="text"
+                            inputMode="numeric"
+                            value={f.y}
+                            onChange={e => setFields(prev => prev.map(ff => ff.id === f.id ? { ...ff, y: parseLocalizedInt(e.target.value, ff.y, 0, 100) } : ff))}
+                            className="h-6 w-14 text-[10px] px-1"
+                            title="Y"
                           />
                           <input
                             type="color"
@@ -1339,6 +1990,7 @@ export default function VouchersPage() {
                         </div>
                       ))}
                     </div>
+                    <p className="text-[10px] text-muted-foreground">الأرقام بعد حجم الخط هي: X ثم Y (من 0 إلى 100) لضبط مكان الحقل بدقة.</p>
                   </>
                 )}
 
@@ -1357,14 +2009,48 @@ export default function VouchersPage() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">أعمدة</label>
-                    <Input type="number" min={1} max={5} value={printCols} onChange={e => setPrintCols(Number(e.target.value) || 3)} className="h-9" />
+                    <label className="text-xs text-muted-foreground mb-1 block">طريقة التقسيم</label>
+                    <Select value={printLayoutMode} onValueChange={(v) => setPrintLayoutMode(v as PrintLayoutMode)}>
+                      <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="grid">يدوي (صفوف/أعمدة)</SelectItem>
+                        <SelectItem value="auto">تلقائي (عدد كروت/صفحة)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">صفوف</label>
-                    <Input type="number" min={1} max={8} value={printRows} onChange={e => setPrintRows(Number(e.target.value) || 4)} className="h-9" />
+                    <label className="text-xs text-muted-foreground mb-1 block">حجم الورق</label>
+                    <Input value="A4" disabled className="h-9" />
                   </div>
                 </div>
+
+                {printLayoutMode === "auto" ? (
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">عدد الكروت في الصفحة</label>
+                    <Input
+                      type="text"
+                      inputMode="numeric"
+                      value={cardsPerPageTarget}
+                      onChange={e => setCardsPerPageTarget(parseLocalizedInt(e.target.value, 0, 0, 400))}
+                      placeholder="مثال: 60"
+                      className="h-9"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      التقسيم الحالي: {resolvedPrintLayout.cols} عمود × {resolvedPrintLayout.rows} صف = {resolvedPrintLayout.cardsPerPage} كرت/صفحة
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">أعمدة</label>
+                      <Input type="text" inputMode="numeric" value={printCols} onChange={e => setPrintCols(parseLocalizedInt(e.target.value, 3, 1, 20))} className="h-9" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">صفوف</label>
+                      <Input type="text" inputMode="numeric" value={printRows} onChange={e => setPrintRows(parseLocalizedInt(e.target.value, 4, 1, 20))} className="h-9" />
+                    </div>
+                  </div>
+                )}
 
                 {/* Real-time page layout mini-preview */}
                 <div className="rounded border border-border bg-muted/30 p-2">
@@ -1373,24 +2059,24 @@ export default function VouchersPage() {
                       <LayoutGrid className="h-3 w-3" /> تخطيط الصفحة
                     </span>
                     <span className="text-[10px] font-medium text-foreground">
-                      {printCols * printRows} كرت / صفحة
+                      {resolvedPrintLayout.cardsPerPage} كرت / صفحة
                     </span>
                   </div>
                   <div
                     className="grid gap-0.5"
-                    style={{ gridTemplateColumns: `repeat(${printCols}, 1fr)` }}
+                    style={{ gridTemplateColumns: `repeat(${resolvedPrintLayout.cols}, 1fr)` }}
                   >
-                    {Array.from({ length: printCols * printRows }).map((_, i) => (
+                    {Array.from({ length: resolvedPrintLayout.cardsPerPage }).map((_, i) => (
                       <div
                         key={i}
                         className="rounded-sm border border-border bg-background"
-                        style={{ aspectRatio: printCols > 3 ? CARD_ASPECT_WIDE : CARD_ASPECT_STANDARD }}
+                        style={{ aspectRatio: resolvedPrintLayout.cols > 3 ? CARD_ASPECT_WIDE : CARD_ASPECT_STANDARD }}
                       />
                     ))}
                   </div>
                   {cards.length > 0 && (
                     <p className="text-[10px] text-muted-foreground mt-1.5 text-center font-medium">
-                      {Math.ceil(cards.length / (printCols * printRows))} صفحة لـ {cards.length} كرت
+                      {Math.ceil(cards.length / Math.max(1, resolvedPrintLayout.cardsPerPage))} صفحة لـ {cards.length} كرت
                     </p>
                   )}
                 </div>
@@ -1436,6 +2122,9 @@ export default function VouchersPage() {
                 <Button onClick={() => handleExportPdf()} size="sm" variant="outline" className="w-full text-primary border-primary/30 hover:bg-primary/5">
                   <FileDown className="h-3.5 w-3.5 ml-1" /> تصدير PDF
                 </Button>
+                <Button onClick={() => handleExportCsv()} size="sm" variant="outline" className="w-full">
+                  <Download className="h-3.5 w-3.5 ml-1" /> تصدير CSV
+                </Button>
               </div>
             )}
           </div>
@@ -1452,13 +2141,16 @@ export default function VouchersPage() {
                   <div className="flex items-center gap-2">
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">
                       <LayoutGrid className="h-3 w-3" />
-                      {Math.ceil(cards.length / (printCols * printRows))} صفحة
+                      {Math.ceil(cards.length / Math.max(1, resolvedPrintLayout.cardsPerPage))} صفحة
                     </span>
                     <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handlePrint()}>
                       <Printer className="h-3 w-3 ml-1" /> طباعة
                     </Button>
                     <Button size="sm" variant="ghost" className="h-7 text-xs text-primary" onClick={() => handleExportPdf()}>
                       <FileDown className="h-3 w-3 ml-1" /> PDF
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => handleExportCsv()}>
+                      <Download className="h-3 w-3 ml-1" /> CSV
                     </Button>
                   </div>
                 )}
@@ -1477,6 +2169,8 @@ export default function VouchersPage() {
                     const showProfile = visibleF.some(f => f.type === "profile");
                     const showPrice = visibleF.some(f => f.type === "price") && unitPrice > 0;
                     const showSP = visibleF.some(f => f.type === "sales_point") && selectedSalesPoint;
+                    const showDays = visibleF.some(f => f.type === "days") && validityDays > 0;
+                    const showTransferLimit = visibleF.some(f => f.type === "transfer_limit") && transferLimit > 0;
                     const showQr = visibleF.some(f => f.type === "qr");
                     const showTitle = visibleF.some(f => f.type === "title");
                     const showSubtitle = visibleF.some(f => f.type === "subtitle");
@@ -1502,6 +2196,8 @@ export default function VouchersPage() {
                             else if (f.type === "subtitle") text = cardSubtitle;
                             else if (f.type === "price") text = unitPrice > 0 ? `${unitPrice} ر.س` : "";
                             else if (f.type === "sales_point") text = selectedSalesPoint || "";
+                            else if (f.type === "days") text = validityDays > 0 ? `${validityDays} يوم` : "";
+                            else if (f.type === "transfer_limit") text = transferLimit > 0 ? `${transferLimit} تحويل` : "";
                             return text ? (
                               <div key={f.id} className="absolute font-mono font-bold"
                                 style={{
@@ -1534,6 +2230,8 @@ export default function VouchersPage() {
                               <div className="flex items-center gap-1 mt-1 flex-wrap">
                                 {showProfile && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-muted text-muted-foreground border border-border">{card.profile}</span>}
                                 {showSP && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-accent text-accent-foreground">{selectedSalesPoint}</span>}
+                                {showDays && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-accent/60 text-accent-foreground">{validityDays} يوم</span>}
+                                {showTransferLimit && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-accent/60 text-accent-foreground">{transferLimit} تحويل</span>}
                                 {showPrice && <span className="text-[8px] font-bold text-primary mr-auto">{unitPrice} ر.س</span>}
                               </div>
                             </div>

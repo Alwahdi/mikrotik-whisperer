@@ -1,0 +1,15 @@
+{
+  "latestVersion": "0.1.0",
+  "minSupportedVersion": "0.1.0",
+  "downloads": {
+    "macosPkg": "/downloads/build-coreroute-agent-macos-pkg.sh",
+    "macosScript": "/downloads/install-coreroute-agent-macos.command",
+    "windowsExe": "/downloads/build-coreroute-agent-windows-installer.ps1",
+    "windowsScript": "/downloads/install-coreroute-agent-windows.bat",
+    "macosServiceInstall": "/downloads/install-coreroute-agent-service-macos.sh",
+    "macosServiceUninstall": "/downloads/uninstall-coreroute-agent-service-macos.sh",
+    "windowsServiceInstall": "/downloads/install-coreroute-agent-service-windows.bat",
+    "windowsServiceUninstall": "/downloads/uninstall-coreroute-agent-service-windows.bat"
+  },
+  "notes": "Install scripts are production-safe bootstrap installers. PKG/EXE build helpers are included for native packaging pipelines."
+}

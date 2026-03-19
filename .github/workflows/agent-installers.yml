@@ -1,0 +1,115 @@
+name: Build Agent Installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "agent-v*"
+
+jobs:
+  build-macos-installer:
+    runs-on: macos-latest
+    env:
+      COREROUTE_AGENT_VERSION: ${{ github.ref_name }}
+      APPLE_INSTALLER_SIGN_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGN_IDENTITY }}
+      APPLE_NOTARIZE: ${{ secrets.APPLE_NOTARIZE }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_NOTARY_PROFILE: ${{ secrets.APPLE_NOTARY_PROFILE }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install agent dependencies
+        run: npm --prefix agent ci
+
+      - name: Import Apple Installer Certificate (optional)
+        if: ${{ secrets.APPLE_INSTALLER_CERT_BASE64 != '' && secrets.APPLE_INSTALLER_CERT_PASSWORD != '' }}
+        env:
+          APPLE_INSTALLER_CERT_BASE64: ${{ secrets.APPLE_INSTALLER_CERT_BASE64 }}
+          APPLE_INSTALLER_CERT_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERT_PASSWORD }}
+        run: |
+          echo "$APPLE_INSTALLER_CERT_BASE64" | base64 --decode > installer.p12
+          security create-keychain -p temp-pass build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p temp-pass build.keychain
+          security import installer.p12 -k build.keychain -P "$APPLE_INSTALLER_CERT_PASSWORD" -T /usr/bin/productsign -T /usr/bin/pkgbuild
+          security set-key-partition-list -S apple-tool:,apple: -s -k temp-pass build.keychain
+
+      - name: Build macOS PKG
+        run: |
+          chmod +x public/downloads/build-coreroute-agent-macos-pkg.sh
+          ./public/downloads/build-coreroute-agent-macos-pkg.sh
+
+      - name: Generate checksum
+        run: shasum -a 256 CoreRoute-Agent-Setup.pkg > CoreRoute-Agent-Setup.pkg.sha256
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coreroute-agent-macos
+          path: |
+            CoreRoute-Agent-Setup.pkg
+            CoreRoute-Agent-Setup.pkg.sha256
+
+  build-windows-installer:
+    runs-on: windows-latest
+    env:
+      COREROUTE_AGENT_VERSION: ${{ github.ref_name }}
+      WINDOWS_SIGN_PFX_PASSWORD: ${{ secrets.WINDOWS_SIGN_PFX_PASSWORD }}
+      WINDOWS_SIGN_TIMESTAMP_URL: ${{ secrets.WINDOWS_SIGN_TIMESTAMP_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install agent dependencies
+        run: npm --prefix agent ci
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Materialize Windows code-sign certificate (optional)
+        if: ${{ secrets.WINDOWS_SIGN_PFX_BASE64 != '' }}
+        shell: powershell
+        env:
+          WINDOWS_SIGN_PFX_BASE64: ${{ secrets.WINDOWS_SIGN_PFX_BASE64 }}
+        run: |
+          $pfxPath = Join-Path $PWD "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:WINDOWS_SIGN_PFX_BASE64))
+          Add-Content -Path $env:GITHUB_ENV -Value "WINDOWS_SIGN_PFX_PATH=$pfxPath"
+
+      - name: Build Windows setup ZIP
+        shell: powershell
+        run: |
+          powershell -ExecutionPolicy Bypass -File public/downloads/build-coreroute-agent-windows-installer.ps1
+
+      - name: Generate checksum
+        shell: powershell
+        run: |
+          certutil -hashfile CoreRoute-Agent-Setup.zip SHA256 > CoreRoute-Agent-Setup.zip.sha256
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coreroute-agent-windows
+          path: |
+            CoreRoute-Agent-Setup.exe
+            CoreRoute-Agent-Setup.zip
+            CoreRoute-Agent-Setup.zip.sha256

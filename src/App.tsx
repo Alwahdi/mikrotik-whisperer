@@ -18,9 +18,12 @@ import SettingsPage from "./pages/SettingsPage";
 import VouchersPage from "./pages/VouchersPage";
 import BackupsPage from "./pages/BackupsPage";
 import SalesPage from "./pages/SalesPage";
+import HealthPage from "./pages/HealthPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import NotFound from "./pages/NotFound";
 import { Analytics } from "@vercel/analytics/react";
+import AgentRuntimeBanner from "@/components/AgentRuntimeBanner";
+import ConnectionDebugDrawer from "@/components/ConnectionDebugDrawer";
 
 const queryClient = new QueryClient();
 
@@ -44,8 +47,10 @@ const App = () => (
       <Toaster />
       <Sonner />
       <LiveQueuePanel />
+      <ConnectionDebugDrawer />
       <BrowserRouter>
         <AuthProvider>
+          <AgentRuntimeBanner />
           <Routes>
             <Route path="/" element={<PublicRedirect><LandingPage /></PublicRedirect>} />
             <Route path="/auth" element={<AuthRedirect><AuthPage /></AuthRedirect>} />
@@ -58,6 +63,7 @@ const App = () => (
             <Route path="/vouchers" element={<ProtectedRoute><VouchersPage /></ProtectedRoute>} />
             <Route path="/backups" element={<ProtectedRoute><BackupsPage /></ProtectedRoute>} />
             <Route path="/sales" element={<ProtectedRoute><SalesPage /></ProtectedRoute>} />
+            <Route path="/health" element={<ProtectedRoute><HealthPage /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="/admin/users" element={<ProtectedRoute requireAdmin><AdminUsersPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />

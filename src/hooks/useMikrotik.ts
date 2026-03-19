@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
-import { shouldUseLocalRest, localRestCall, localRestBatch } from "@/lib/localRest";
+import { invokeMikrotik } from "@/lib/mikrotikInvoke";
 import { toast } from "sonner";
 
 // Router-scoped cache key prefix to prevent cross-router data leaks
@@ -10,20 +9,26 @@ function getRouterKey(): string {
   return config ? `${config.host}:${config.port}` : "none";
 }
 
+function isLikelyLocalHost(host?: string): boolean {
+  if (!host) return false;
+  const normalized = host.trim().toLowerCase();
+  return (
+    /^10\.\d+\.\d+\.\d+$/.test(normalized) ||
+    /^192\.168\.\d+\.\d+$/.test(normalized) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(normalized) ||
+    /^(127\.0\.0\.1|localhost)$/i.test(normalized) ||
+    (!normalized.includes(".") && normalized.length > 0)
+  );
+}
+
 async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>) {
   const config = getMikrotikConfig();
   if (!config) throw new Error("لم يتم إعداد بيانات الاتصال بالمايكروتيك");
 
-  // ── Fast path: direct local REST when on same LAN ──
-  if (shouldUseLocalRest(config)) {
-    return localRestCall(config, endpoint, extraBody?.args);
-  }
-
   const timeoutMs = extraBody?.timeoutMs ?? (endpoint.endsWith("/print") ? 30000 : 15000);
   const { timeoutMs: _timeoutMs, ...safeExtraBody } = extraBody || {};
 
-  const request = supabase.functions.invoke("mikrotik-api", {
-    body: {
+  const request = invokeMikrotik({
       endpoint,
       host: config.host,
       user: config.user,
@@ -31,8 +36,8 @@ async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>
       port: config.port,
       protocol: config.protocol,
       mode: config.mode,
+      timeoutMs,
       ...safeExtraBody,
-    },
   });
 
   const response = await Promise.race([
@@ -42,27 +47,17 @@ async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>
     }),
   ]) as any;
 
-  const { data, error } = response;
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
-  return data;
+  return response;
 }
 
 async function callMikrotikAction(action: string, extraBody?: Record<string, any>) {
   const config = getMikrotikConfig();
   if (!config) throw new Error("لم يتم إعداد بيانات الاتصال بالمايكروتيك");
 
-  // ── Fast path: batch via local REST ──
-  if (shouldUseLocalRest(config) && action === "batch" && extraBody?.commands) {
-    const { results, errors } = await localRestBatch(config, extraBody.commands, 2);
-    return { results, errors };
-  }
-
   const timeoutMs = extraBody?.timeoutMs ?? (action === "batch" ? 70000 : 20000);
   const { timeoutMs: _timeoutMs, ...safeExtraBody } = extraBody || {};
 
-  const request = supabase.functions.invoke("mikrotik-api", {
-    body: {
+  const request = invokeMikrotik({
       action,
       host: config.host,
       user: config.user,
@@ -70,8 +65,8 @@ async function callMikrotikAction(action: string, extraBody?: Record<string, any
       port: config.port,
       protocol: config.protocol,
       mode: config.mode,
+      timeoutMs,
       ...safeExtraBody,
-    },
   });
 
   const response = await Promise.race([
@@ -81,10 +76,7 @@ async function callMikrotikAction(action: string, extraBody?: Record<string, any
     }),
   ]) as any;
 
-  const { data, error } = response;
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
-  return data;
+  return response;
 }
 
 function useEnabled() {
@@ -218,15 +210,20 @@ export function useHotspotUserAction() {
 // ─── User Manager ──────────────────────────
 export function useUserManagerUsers(options?: { enabled?: boolean }) {
   const routerKey = getRouterKey();
+  const config = getMikrotikConfig();
+  const local = isLikelyLocalHost(config?.host);
   return useQuery({
     queryKey: ["mikrotik", routerKey, "usermanager", "users"],
     queryFn: () => callMikrotikApi("/user-manager/user/print", {
       args: ["=.proplist=.id,username,name,group,actual-profile,disabled"],
+      timeoutMs: 45000,
     }),
     enabled: (options?.enabled ?? true) && useEnabled(),
-    retry: 1,
+    retry: local ? 0 : 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
     refetchInterval: false,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
@@ -235,13 +232,62 @@ export function useUserManagerUsers(options?: { enabled?: boolean }) {
 // Count-only query for dashboard stats (fast, minimal payload)
 export function useUserManagerCount(options?: { enabled?: boolean }) {
   const routerKey = getRouterKey();
+  const config = getMikrotikConfig();
+  const local = isLikelyLocalHost(config?.host);
   return useQuery({
     queryKey: ["mikrotik", routerKey, "usermanager", "count"],
     queryFn: async () => {
-      const data = await callMikrotikApi("/user-manager/user/print", {
-        args: ["=.proplist=.id,disabled"],
-      });
-      const list = Array.isArray(data) ? data : [];
+      const parseCount = (payload: unknown) => {
+        const list = Array.isArray(payload) ? payload : [];
+        const row = (list[0] as any) || {};
+        const retRaw = row.ret ?? row["=ret"];
+        const count = Number(retRaw ?? 0);
+        return Number.isFinite(count) && count >= 0 ? count : null;
+      };
+
+      let totalData: unknown = [];
+      try {
+        totalData = await callMikrotikApi("/user-manager/user/print", {
+          args: ["=count-only="],
+          timeoutMs: local ? 70000 : 15000,
+        });
+      } catch (error) {
+        if (!local) throw error;
+        return { total: 0, active: 0, disabled: 0 };
+      }
+      if (local) {
+        const total = parseCount(totalData);
+        if (total !== null) {
+          return { total, active: total, disabled: 0 };
+        }
+      }
+
+      let disabledData: unknown = [];
+      try {
+        disabledData = await callMikrotikApi("/user-manager/user/print", {
+          args: ["=count-only=", "?disabled=true"],
+          timeoutMs: 15000,
+        });
+      } catch {
+        const total = parseCount(totalData);
+        if (total !== null) {
+          return { total, active: total, disabled: 0 };
+        }
+        return { total: 0, active: 0, disabled: 0 };
+      }
+
+      const total = parseCount(totalData);
+      const disabled = parseCount(disabledData);
+      if (total !== null && disabled !== null) {
+        return {
+          total,
+          disabled,
+          active: Math.max(0, total - disabled),
+        };
+      }
+
+      // Fallback for older/atypical responses.
+      const list = Array.isArray(totalData) ? totalData : [];
       return {
         total: list.length,
         active: list.filter((u: any) => u.disabled !== "true" && u.disabled !== true).length,
@@ -249,10 +295,12 @@ export function useUserManagerCount(options?: { enabled?: boolean }) {
       };
     },
     enabled: (options?.enabled ?? true) && useEnabled(),
-    retry: 1,
+    retry: local ? 0 : 1,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
     refetchInterval: false,
     refetchOnWindowFocus: false,
-    staleTime: 3 * 60 * 1000,
+    refetchOnReconnect: false,
+    staleTime: 10 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
 }
@@ -261,6 +309,8 @@ export function useUserManagerCount(options?: { enabled?: boolean }) {
 export function useUserManagerSearchUsers(search: string, options?: { enabled?: boolean }) {
   const routerKey = getRouterKey();
   const hasSearch = search.trim().length >= 2;
+  const config = getMikrotikConfig();
+  const local = isLikelyLocalHost(config?.host);
   return useQuery({
     queryKey: ["mikrotik", routerKey, "usermanager", "search", search],
     queryFn: () => {
@@ -271,12 +321,13 @@ export function useUserManagerSearchUsers(search: string, options?: { enabled?: 
         args.push(`?name=${search.trim()}`);
         args.push("?#|");
       }
-      return callMikrotikApi("/user-manager/user/print", { args });
+      return callMikrotikApi("/user-manager/user/print", { args, timeoutMs: 45000 });
     },
     enabled: (options?.enabled ?? true) && hasSearch && useEnabled(),
-    retry: 1,
+    retry: local ? 0 : 1,
     refetchInterval: false,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     staleTime: 30000,
     gcTime: 2 * 60 * 1000,
   });
@@ -289,22 +340,28 @@ export function useUserManagerProfiles(options?: { enabled?: boolean }) {
       args: ["=.proplist=.id,name,name-for-users,validity,price,rate-limit,shared-users,override-shared-users,transfer-limit,uptime-limit"],
     }),
     enabled: (options?.enabled ?? true) && useEnabled(),
-    retry: 1,
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
+    refetchOnReconnect: true,
     staleTime: 60000,
     gcTime: 10 * 60 * 1000,
   });
 }
 export function useUserManagerSessions(options?: { enabled?: boolean }) {
   const routerKey = getRouterKey();
+  const config = getMikrotikConfig();
+  const local = isLikelyLocalHost(config?.host);
   return useQuery({
     queryKey: ["mikrotik", routerKey, "usermanager", "sessions"],
     queryFn: () => callMikrotikApi("/user-manager/session/print", {
       args: ["=.proplist=.id,user,customer,from-time,till-time,active"],
+      timeoutMs: 45000,
     }),
     enabled: (options?.enabled ?? true) && useEnabled(),
-    retry: 1,
+    retry: local ? 0 : 1,
     refetchInterval: false,
     refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     staleTime: 120000,
     gcTime: 10 * 60 * 1000,
   });
@@ -413,9 +470,14 @@ export function useUserManagerAction() {
     },
     onSuccess: (_data, { action }) => {
       const routerKey = getRouterKey();
-      // Only invalidate changed queries — avoid full cache bust
-      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager", "users"] });
+      // Keep optimistic list state for snappy UX; refresh count immediately.
       qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager", "count"] });
+
+      // Schedule a delayed background refresh to reconcile any server-side drift.
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager", "users"] });
+      }, 1200);
+
       const actionLabels: Record<string, string> = {
         add: "تمت الإضافة بنجاح",
         remove: "تم الحذف بنجاح",

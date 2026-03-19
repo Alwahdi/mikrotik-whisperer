@@ -3,11 +3,11 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Wifi, Users, Settings, Menu, X,
   Router, Moon, Sun, LogOut, Activity, CreditCard,
-  Database, Shield,
+  Database, Shield, HeartPulse,
 } from "lucide-react";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import { useAuth } from "@/contexts/AuthContext";
-import { useHotspotUsers, useUserManagerUsers } from "@/hooks/useMikrotik";
+import { useHotspotUsers, useUserManagerCount } from "@/hooks/useMikrotik";
 
 const navItems = [
   { path: "/dashboard", icon: LayoutDashboard, label: "لوحة التحكم", roles: ["admin", "cashier"] },
@@ -15,6 +15,7 @@ const navItems = [
   { path: "/usermanager", icon: Users, label: "يوزر مانجر", roles: ["admin", "cashier"] },
   { path: "/vouchers", icon: CreditCard, label: "الكروت", roles: ["admin", "cashier"] },
   { path: "/sales", icon: Activity, label: "المبيعات", roles: ["admin", "cashier"] },
+  { path: "/health", icon: HeartPulse, label: "الصحة", roles: ["admin", "cashier"] },
   { path: "/backups", icon: Database, label: "النسخ الاحتياطي", roles: ["admin"] },
   { path: "/admin/users", icon: Shield, label: "إدارة المستخدمين", roles: ["admin"] },
   { path: "/settings", icon: Settings, label: "الإعدادات", roles: ["admin"] },
@@ -30,9 +31,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   // Live badge counts
   const { data: hotspotUsers } = useHotspotUsers();
-  const { data: umUsers } = useUserManagerUsers();
+  const { data: umCountData } = useUserManagerCount({ enabled: location.pathname.startsWith("/usermanager") });
   const hotspotCount = Array.isArray(hotspotUsers) ? hotspotUsers.length : 0;
-  const umCount = Array.isArray(umUsers) ? umUsers.length : 0;
+  const umCount = umCountData?.total ?? 0;
 
   useEffect(() => {
     if (isDark) document.documentElement.classList.add("dark");

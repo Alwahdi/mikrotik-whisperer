@@ -1,5 +1,66 @@
 # Welcome to your Lovable project
 
+## CoreRoute Runtime Modes
+
+This project now supports two MikroTik runtime paths automatically:
+
+- Local LAN target (192.168.x.x / 10.x.x.x / 172.16-31.x.x / localhost): uses CoreRoute Local Agent
+- Public IP or DNS target: uses cloud bridge via Supabase Edge Function
+
+At app startup, when the selected router is local LAN, the UI checks if the agent is running:
+
+- If running: shows Local Agent running
+- If down: shows install/start instructions in-app with one-click installer download
+- Shows current agent version and update availability (from release manifest)
+
+## Quick start (best experience)
+
+```sh
+# install web deps
+npm install
+
+# install agent deps
+npm run agent:install
+
+# run web + agent together
+npm run dev:all
+```
+
+Agent default URL: http://127.0.0.1:3001
+
+You can override it with:
+
+- VITE_MIKROTIK_AGENT_URL
+- Or from Settings page (CoreRoute Local Agent section)
+
+One-click installer file (download from browser):
+
+- /downloads/install-coreroute-agent-macos.command
+- /downloads/install-coreroute-agent-windows.bat
+
+Native packaging helper scripts:
+
+- /downloads/build-coreroute-agent-macos-pkg.sh
+- /downloads/build-coreroute-agent-windows-installer.ps1
+
+Auto-start service installers:
+
+- /downloads/install-coreroute-agent-service-macos.sh
+- /downloads/install-coreroute-agent-service-windows.bat
+
+CI pipeline for installers:
+
+- .github/workflows/agent-installers.yml
+- Trigger manually with workflow_dispatch or by pushing tags like agent-v1.0.0
+
+Certificate/signing setup:
+
+- docs/agent-signing.md
+
+Advanced operations page:
+
+- /health (service readiness, per-service latency, agent runtime diagnostics)
+
 ## Project info
 
 **URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID

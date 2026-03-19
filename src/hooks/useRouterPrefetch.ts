@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
+import { invokeMikrotik } from "@/lib/mikrotikInvoke";
 
 interface PrefetchStep {
   label: string;
@@ -51,8 +51,7 @@ function processResult(key: string, data: any): any {
 
 async function invokeStep(config: RouterConfig, step: PrefetchStep) {
   const args = step.proplist ? [`=.proplist=${step.proplist}`] : [];
-  const request = supabase.functions.invoke("mikrotik-api", {
-    body: {
+  const request = invokeMikrotik({
       endpoint: step.command,
       host: config.host,
       user: config.user,
@@ -61,7 +60,6 @@ async function invokeStep(config: RouterConfig, step: PrefetchStep) {
       protocol: config.protocol,
       mode: config.mode,
       args,
-    },
   });
 
   const timeoutMs = step.timeoutMs ?? 15000;
@@ -69,10 +67,7 @@ async function invokeStep(config: RouterConfig, step: PrefetchStep) {
     setTimeout(() => reject(new Error(`انتهت مهلة ${step.label}`)), timeoutMs);
   });
 
-  const { data, error } = await Promise.race([request, timeoutPromise]);
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
-  return data;
+  return Promise.race([request, timeoutPromise]);
 }
 
 async function warmDataInBackground(

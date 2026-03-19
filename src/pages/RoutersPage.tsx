@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { invokeMikrotik } from "@/lib/mikrotikInvoke";
 import {
   Router, Plus, Trash2, Wifi, WifiOff, Loader2, LogOut,
   Server, Search, Moon, Sun, Signal,
@@ -71,11 +72,36 @@ export default function RoutersPage() {
     setScanning(true);
     setScanResults([]);
     try {
-      const { data, error } = await supabase.functions.invoke("mikrotik-api", {
-        body: { action: "scan-ports", host: form.host },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      const portsToProbe = [80, 443, 8080, 8728, 8729];
+      const checks = await Promise.all(
+        portsToProbe.map(async (port) => {
+          let open = false;
+          try {
+            await invokeMikrotik({
+              endpoint: "/system/identity/print",
+              host: form.host,
+              user: form.username,
+              pass: form.password,
+              port: String(port),
+              protocol: port === 8728 ? "api-plain" : port === 8729 ? "api-ssl" : port === 443 ? "https" : "http",
+              mode: port === 8728 || port === 8729 ? "api" : "rest",
+              timeoutMs: 1800,
+            });
+            open = true;
+          } catch {
+            open = false;
+          }
+
+          const service =
+            port === 8728 ? "API" :
+            port === 8729 ? "API-SSL" :
+            port === 443 ? "HTTPS REST" :
+            port === 8080 ? "HTTP REST (8080)" : "HTTP REST";
+          return { port, open, service };
+        }),
+      );
+
+      const data = checks;
       if (Array.isArray(data)) {
         setScanResults(data);
         const openPorts = data.filter((p: any) => p.open);
@@ -106,25 +132,29 @@ export default function RoutersPage() {
     }
     setSaving(true);
     try {
-      const { data, error } = await supabase.functions.invoke("mikrotik-api", {
-        body: {
-          endpoint: "/system/identity/print",
-          host: form.host, user: form.username, pass: form.password,
-          port: form.port, protocol: form.protocol, mode: form.mode,
-        },
+      const data = await invokeMikrotik({
+        endpoint: "/system/identity/print",
+        host: form.host,
+        user: form.username,
+        pass: form.password,
+        port: form.port,
+        protocol: form.protocol,
+        mode: form.mode,
+        timeoutMs: 7000,
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
       const name = Array.isArray(data) ? data[0]?.name : data?.name;
 
       let version = null;
       try {
-        const { data: resData } = await supabase.functions.invoke("mikrotik-api", {
-          body: {
-            endpoint: "/system/resource/print",
-            host: form.host, user: form.username, pass: form.password,
-            port: form.port, protocol: form.protocol, mode: form.mode,
-          },
+        const resData = await invokeMikrotik({
+          endpoint: "/system/resource/print",
+          host: form.host,
+          user: form.username,
+          pass: form.password,
+          port: form.port,
+          protocol: form.protocol,
+          mode: form.mode,
+          timeoutMs: 8000,
         });
         const res = Array.isArray(resData) ? resData[0] : resData;
         version = res?.version || null;
@@ -153,15 +183,16 @@ export default function RoutersPage() {
   const connectToRouter = async (router: RouterRow) => {
     setConnecting(router.id);
     try {
-      const { data, error } = await supabase.functions.invoke("mikrotik-api", {
-        body: {
-          endpoint: "/system/identity/print",
-          host: router.host, user: router.username, pass: router.password,
-          port: router.port, protocol: router.protocol, mode: router.mode,
-        },
+      await invokeMikrotik({
+        endpoint: "/system/identity/print",
+        host: router.host,
+        user: router.username,
+        pass: router.password,
+        port: router.port,
+        protocol: router.protocol,
+        mode: router.mode,
+        timeoutMs: 7000,
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
 
       saveMikrotikConfig({
         host: router.host, user: router.username, pass: router.password,
