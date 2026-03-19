@@ -983,18 +983,20 @@ export default function VouchersPage() {
     });
   };
 
-  const handlePrint = (cardsToPrint?: VoucherCard[]) => {
+  const handlePrint = async (cardsToPrint?: VoucherCard[]) => {
     const toPrint = cardsToPrint || cards;
     if (toPrint.length === 0) return;
-    openPrintWindow(buildPrintHtml(toPrint));
+    toast.info("جاري تجهيز الطباعة...");
+    const html = await buildPrintHtml(toPrint);
+    openPrintWindow(html);
   };
 
   // PDF export: same flow as print but hints the user to choose "Save as PDF"
-  const handleExportPdf = (cardsToPrint?: VoucherCard[]) => {
+  const handleExportPdf = async (cardsToPrint?: VoucherCard[]) => {
     const toPrint = cardsToPrint || cards;
     if (toPrint.length === 0) return;
-    // Build HTML with PDF-optimised meta hint
-    const html = buildPrintHtml(toPrint).replace(
+    toast.info("جاري تجهيز الـ PDF...");
+    const html = (await buildPrintHtml(toPrint)).replace(
       "</title>",
       '</title><meta name="description" content="PDF export">'
     );
