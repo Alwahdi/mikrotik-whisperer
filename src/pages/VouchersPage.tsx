@@ -753,45 +753,98 @@ export default function VouchersPage() {
     toast.success("تم حذف القالب");
   };
 
-  // ─── Print HTML Builder (professional quality) ──────────────────────
-  const buildPrintHtml = (cardsToPrint: VoucherCard[]): string => {
+  // ─── QR Code generation helper ──────────────────────
+  const generateQrDataUrl = async (text: string, size = 120): Promise<string> => {
+    try {
+      return await QRCode.toDataURL(text, { width: size, margin: 1, color: { dark: "#000000", light: "#ffffff" } });
+    } catch {
+      return "";
+    }
+  };
+
+  // ─── Print HTML Builder (professional quality with QR) ──────────────────────
+  const buildPrintHtml = async (cardsToPrint: VoucherCard[]): Promise<string> => {
     const cardsPerPage = printCols * printRows;
     const totalPages = Math.max(1, Math.ceil(cardsToPrint.length / cardsPerPage));
-    const pages: string[] = [];
     const visibleFields = fields.filter(f => f.visible);
+    const hasQr = visibleFields.some(f => f.type === "qr");
+
+    // Pre-generate QR codes if needed
+    const qrMap = new Map<string, string>();
+    if (hasQr) {
+      const batchSize = 50;
+      for (let i = 0; i < cardsToPrint.length; i += batchSize) {
+        const batch = cardsToPrint.slice(i, i + batchSize);
+        const results = await Promise.all(
+          batch.map(c => generateQrDataUrl(c.password ? `${c.username}\n${c.password}` : c.username))
+        );
+        batch.forEach((c, j) => qrMap.set(c.username, results[j]));
+      }
+    }
+
+    const pages: string[] = [];
 
     for (let p = 0; p < cardsToPrint.length; p += cardsPerPage) {
       const pageIndex = Math.floor(p / cardsPerPage) + 1;
       const pageCards = cardsToPrint.slice(p, p + cardsPerPage);
+
       const cardHtml = pageCards.map(c => {
+        const qrSrc = qrMap.get(c.username) || "";
+
         if (bgImage) {
+          // Custom background image mode — overlay text at configured positions
           const fieldsHtml = visibleFields.map(f => {
+            if (f.type === "qr") {
+              return qrSrc
+                ? `<img src="${qrSrc}" class="overlay-qr" style="top:${f.y}%;left:${f.x}%;width:${f.fontSize * 3}px;height:${f.fontSize * 3}px" />`
+                : "";
+            }
             let text = "";
             if (f.type === "username") text = c.username;
-            else if (f.type === "password") text = c.password || "—";
+            else if (f.type === "password") text = c.password || "";
             else if (f.type === "profile") text = c.profile;
             else if (f.type === "title") text = cardTitle;
             else if (f.type === "subtitle") text = cardSubtitle;
-            else if (f.type === "price") text = unitPrice > 0 ? `${unitPrice}` : "";
+            else if (f.type === "price") text = unitPrice > 0 ? `${unitPrice} ر.س` : "";
+            else if (f.type === "sales_point") text = selectedSalesPoint || "";
             return text
               ? `<div class="overlay-text" style="top:${f.y}%;left:${f.x}%;font-size:${f.fontSize}px;color:${f.color}">${text}</div>`
               : "";
           }).join("");
           return `<div class="card card-custom" style="background-image:url('${bgImage}')">${fieldsHtml}</div>`;
         }
+
+        // Default clean card design
+        const showPassword = visibleFields.some(f => f.type === "password");
+        const showProfile = visibleFields.some(f => f.type === "profile");
+        const showPrice = visibleFields.some(f => f.type === "price") && unitPrice > 0;
+        const showSalesPoint = visibleFields.some(f => f.type === "sales_point") && selectedSalesPoint;
+        const showTitle = visibleFields.some(f => f.type === "title");
+        const showSubtitle = visibleFields.some(f => f.type === "subtitle");
+
         return `
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">${cardTitle}</div>
-              ${unitPrice > 0 ? `<div class="price-badge">${unitPrice}</div>` : ""}
+          <div class="card card-default">
+            <div class="card-body">
+              <div class="card-left">
+                ${showTitle ? `<div class="card-title">${cardTitle}</div>` : ""}
+                ${showSubtitle ? `<div class="card-sub">${cardSubtitle}</div>` : ""}
+                ${showTitle || showSubtitle ? '<div class="divider"></div>' : ""}
+                <div class="field">
+                  <div class="label">USERNAME</div>
+                  <div class="value">${c.username}</div>
+                </div>
+                ${showPassword && c.password ? `<div class="field"><div class="label">PASSWORD</div><div class="value">${c.password}</div></div>` : ""}
+                <div class="card-footer-row">
+                  ${showProfile ? `<span class="profile-badge">${c.profile}</span>` : ""}
+                  ${showSalesPoint ? `<span class="sp-badge">${selectedSalesPoint}</span>` : ""}
+                  ${showPrice ? `<span class="price-badge">${unitPrice} ر.س</span>` : ""}
+                </div>
+              </div>
+              ${hasQr && qrSrc ? `<div class="card-qr"><img src="${qrSrc}" /></div>` : ""}
             </div>
-            ${cardSubtitle ? `<div class="card-sub">${cardSubtitle}</div>` : ""}
-            <div class="divider"></div>
-            <div class="field"><div class="label">اسم المستخدم</div><div class="value">${c.username}</div></div>
-            ${c.password ? `<div class="field"><div class="label">كلمة المرور</div><div class="value">${c.password}</div></div>` : ""}
-            <div class="profile-badge">${c.profile}</div>
           </div>`;
       }).join("");
+
       pages.push(`
         <div class="page">
           <div class="grid">${cardHtml}</div>
@@ -804,67 +857,102 @@ export default function VouchersPage() {
 <meta charset="utf-8">
 <title>${cardTitle || "كروت"}</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: white; font-family: 'Cairo', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .page { padding: 8mm; page-break-after: always; position: relative; min-height: 297mm; display: flex; flex-direction: column; }
+  .page { padding: 6mm; page-break-after: always; position: relative; min-height: 297mm; display: flex; flex-direction: column; }
   .page:last-child { page-break-after: auto; }
   .grid {
     display: grid;
     grid-template-columns: repeat(${printCols}, 1fr);
     grid-template-rows: repeat(${printRows}, 1fr);
-    gap: 2.5mm;
+    gap: 2mm;
     flex: 1;
   }
+  /* ── Custom background card ── */
   .card {
-    border: 1px solid #D1D5DB;
-    border-radius: 5px;
-    padding: 6px 8px;
+    border-radius: 4px;
     page-break-inside: avoid;
-    background: #FFFFFF;
     position: relative;
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
   }
   .card-custom {
     background-size: 100% 100%;
     background-position: center;
     background-repeat: no-repeat;
-    position: relative;
     border: none;
-    padding: 0;
-    overflow: hidden;
   }
   .overlay-text {
     position: absolute;
     transform: translate(-50%, -50%);
     font-weight: 700;
     white-space: nowrap;
-    text-shadow: 0 0 3px rgba(255,255,255,0.85), 0 0 6px rgba(255,255,255,0.6);
+    text-shadow: 0 0 4px rgba(255,255,255,0.9), 0 1px 2px rgba(0,0,0,0.15);
     font-family: 'JetBrains Mono', monospace;
-    letter-spacing: 1px;
+    letter-spacing: 1.2px;
   }
-  .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2px; }
-  .card-title { font-weight: 700; font-size: 9px; color: #111827; line-height: 1.2; }
-  .card-sub { font-size: 7px; color: #6B7280; margin-bottom: 4px; }
-  .divider { height: 1px; background: #F3F4F6; margin: 3px 0; }
-  .field { margin-bottom: 2px; }
-  .label { font-size: 6.5px; color: #9CA3AF; letter-spacing: 0.3px; text-transform: uppercase; }
-  .value { font-size: 10px; font-weight: 600; color: #111827; font-family: 'JetBrains Mono', monospace; letter-spacing: 0.8px; line-height: 1.3; }
+  .overlay-qr {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    border-radius: 3px;
+    background: white;
+    padding: 2px;
+  }
+  /* ── Default clean card ── */
+  .card-default {
+    border: 1.5px solid #e2e8f0;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    padding: 0;
+    display: flex;
+    align-items: stretch;
+  }
+  .card-body {
+    display: flex;
+    width: 100%;
+    align-items: center;
+  }
+  .card-left {
+    flex: 1;
+    padding: 6px 10px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+  }
+  .card-qr {
+    width: 58px;
+    min-width: 58px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-right: 1.5px dashed #e2e8f0;
+  }
+  .card-qr img { width: 50px; height: 50px; border-radius: 2px; }
+  .card-title { font-weight: 800; font-size: 9px; color: #0f172a; line-height: 1.2; letter-spacing: -0.2px; }
+  .card-sub { font-size: 7px; color: #64748b; }
+  .divider { height: 1px; background: linear-gradient(90deg, #e2e8f0, transparent); margin: 3px 0; }
+  .field { margin-bottom: 1px; }
+  .label { font-size: 6px; color: #94a3b8; letter-spacing: 1px; text-transform: uppercase; font-weight: 600; }
+  .value { font-size: 11px; font-weight: 700; color: #0f172a; font-family: 'JetBrains Mono', monospace; letter-spacing: 1.5px; line-height: 1.4; }
+  .card-footer-row { display: flex; align-items: center; gap: 4px; margin-top: 2px; flex-wrap: wrap; }
   .profile-badge {
-    display: inline-block; margin-top: 3px; padding: 1px 5px;
-    background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 3px;
-    font-size: 6.5px; color: #6B7280; letter-spacing: 0.2px;
+    display: inline-block; padding: 1px 5px;
+    background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 3px;
+    font-size: 6px; color: #475569; font-weight: 600;
   }
-  .price-badge { font-size: 9px; font-weight: 700; color: #2563EB; white-space: nowrap; }
+  .sp-badge {
+    display: inline-block; padding: 1px 5px;
+    background: #fef3c7; border: 1px solid #fde68a; border-radius: 3px;
+    font-size: 6px; color: #92400e; font-weight: 600;
+  }
+  .price-badge { font-size: 8px; font-weight: 800; color: #2563eb; white-space: nowrap; margin-right: auto; }
   .page-footer {
     text-align: center; padding-top: 2mm;
-    font-size: 7px; color: #9CA3AF; letter-spacing: 0.5px;
+    font-size: 7px; color: #94a3b8; letter-spacing: 0.5px;
   }
   @media print {
-    .page { padding: 5mm; }
+    .page { padding: 4mm; }
     @page { margin: 0; size: A4 portrait; }
   }
 </style>
@@ -895,18 +983,20 @@ export default function VouchersPage() {
     });
   };
 
-  const handlePrint = (cardsToPrint?: VoucherCard[]) => {
+  const handlePrint = async (cardsToPrint?: VoucherCard[]) => {
     const toPrint = cardsToPrint || cards;
     if (toPrint.length === 0) return;
-    openPrintWindow(buildPrintHtml(toPrint));
+    toast.info("جاري تجهيز الطباعة...");
+    const html = await buildPrintHtml(toPrint);
+    openPrintWindow(html);
   };
 
   // PDF export: same flow as print but hints the user to choose "Save as PDF"
-  const handleExportPdf = (cardsToPrint?: VoucherCard[]) => {
+  const handleExportPdf = async (cardsToPrint?: VoucherCard[]) => {
     const toPrint = cardsToPrint || cards;
     if (toPrint.length === 0) return;
-    // Build HTML with PDF-optimised meta hint
-    const html = buildPrintHtml(toPrint).replace(
+    toast.info("جاري تجهيز الـ PDF...");
+    const html = (await buildPrintHtml(toPrint)).replace(
       "</title>",
       '</title><meta name="description" content="PDF export">'
     );
@@ -1381,19 +1471,37 @@ export default function VouchersPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[60dvh] overflow-y-auto pr-1">
-                  {cards.slice(0, 100).map((card, i) => (
+                  {cards.slice(0, 100).map((card, i) => {
+                    const visibleF = fields.filter(f => f.visible);
+                    const showPass = visibleF.some(f => f.type === "password");
+                    const showProfile = visibleF.some(f => f.type === "profile");
+                    const showPrice = visibleF.some(f => f.type === "price") && unitPrice > 0;
+                    const showSP = visibleF.some(f => f.type === "sales_point") && selectedSalesPoint;
+                    const showQr = visibleF.some(f => f.type === "qr");
+                    const showTitle = visibleF.some(f => f.type === "title");
+                    const showSubtitle = visibleF.some(f => f.type === "subtitle");
+
+                    return (
                     <div key={i} className="relative">
                       {bgImage ? (
                         <div className="rounded-md border border-border overflow-hidden relative" style={{ aspectRatio: CARD_ASPECT_STANDARD }}>
                           <img src={bgImage} alt="" className="w-full h-full object-fill" />
-                          {fields.filter(f => f.visible).map(f => {
+                          {visibleF.map(f => {
+                            if (f.type === "qr") {
+                              return (
+                                <div key={f.id} className="absolute bg-white p-0.5 rounded-sm" style={{ top: `${f.y}%`, left: `${f.x}%`, transform: "translate(-50%,-50%)" }}>
+                                  <QrCode className="h-5 w-5 text-foreground" />
+                                </div>
+                              );
+                            }
                             let text = "";
                             if (f.type === "username") text = card.username;
-                            else if (f.type === "password") text = card.password || "—";
+                            else if (f.type === "password") text = card.password || "";
                             else if (f.type === "profile") text = card.profile;
                             else if (f.type === "title") text = cardTitle;
                             else if (f.type === "subtitle") text = cardSubtitle;
-                            else if (f.type === "price") text = unitPrice > 0 ? `${unitPrice}` : "";
+                            else if (f.type === "price") text = unitPrice > 0 ? `${unitPrice} ر.س` : "";
+                            else if (f.type === "sales_point") text = selectedSalesPoint || "";
                             return text ? (
                               <div key={f.id} className="absolute font-mono font-bold"
                                 style={{
@@ -1407,22 +1515,33 @@ export default function VouchersPage() {
                           })}
                         </div>
                       ) : (
-                        <div className="rounded-md border border-border bg-card p-2.5 text-right">
-                          <p className="font-semibold text-foreground text-[10px] mb-0.5">{cardTitle}</p>
-                          <p className="text-[9px] text-muted-foreground mb-1.5">{cardSubtitle}</p>
-                          <div className="mb-1">
-                            <span className="text-[8px] text-muted-foreground">اسم المستخدم</span>
-                            <p className="font-mono text-[10px] font-semibold text-foreground tracking-wider">{card.username}</p>
-                          </div>
-                          {card.password && (
-                            <div className="mb-1">
-                              <span className="text-[8px] text-muted-foreground">كلمة المرور</span>
-                              <p className="font-mono text-[10px] font-semibold text-foreground tracking-wider">{card.password}</p>
+                        <div className="rounded-md border border-border bg-gradient-to-br from-card to-muted/30 overflow-hidden">
+                          <div className="flex items-center">
+                            <div className="flex-1 p-2.5 text-right">
+                              {showTitle && <p className="font-bold text-foreground text-[10px] mb-0.5">{cardTitle}</p>}
+                              {showSubtitle && <p className="text-[8px] text-muted-foreground mb-1">{cardSubtitle}</p>}
+                              {(showTitle || showSubtitle) && <div className="h-px bg-gradient-to-l from-border to-transparent mb-1" />}
+                              <div className="mb-1">
+                                <span className="text-[7px] text-muted-foreground uppercase tracking-wider">USERNAME</span>
+                                <p className="font-mono text-[10px] font-bold text-foreground tracking-widest">{card.username}</p>
+                              </div>
+                              {showPass && card.password && (
+                                <div className="mb-1">
+                                  <span className="text-[7px] text-muted-foreground uppercase tracking-wider">PASSWORD</span>
+                                  <p className="font-mono text-[10px] font-bold text-foreground tracking-widest">{card.password}</p>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1 mt-1 flex-wrap">
+                                {showProfile && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-muted text-muted-foreground border border-border">{card.profile}</span>}
+                                {showSP && <span className="inline-block px-1.5 py-0.5 rounded text-[7px] bg-accent text-accent-foreground">{selectedSalesPoint}</span>}
+                                {showPrice && <span className="text-[8px] font-bold text-primary mr-auto">{unitPrice} ر.س</span>}
+                              </div>
                             </div>
-                          )}
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="inline-block px-1.5 py-0.5 rounded text-[8px] bg-muted text-muted-foreground">{card.profile}</span>
-                            {unitPrice > 0 && <span className="text-[9px] font-bold text-primary">{unitPrice}</span>}
+                            {showQr && (
+                              <div className="w-12 min-w-12 flex items-center justify-center border-r border-dashed border-border p-1.5">
+                                <QrCode className="h-8 w-8 text-muted-foreground/40" />
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1437,7 +1556,8 @@ export default function VouchersPage() {
                         </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                   {cards.length > 100 && (
                     <div className="col-span-full text-center py-3 text-xs text-muted-foreground">
                       عرض أول 100 كرت من {cards.length}

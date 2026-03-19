@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Settings, CheckCircle, Loader2, WifiOff, Server, Wifi } from "lucide-react";
+import { Settings, CheckCircle, Loader2, WifiOff, Server, Wifi, Zap } from "lucide-react";
 import {
   getMikrotikConfig, saveMikrotikConfig, clearMikrotikConfig,
   getDefaultPort, getProtocolOptions,
   type MikrotikConfig, type ConnectionMode, type ConnectionProtocol,
 } from "@/lib/mikrotikConfig";
+import { shouldUseLocalRest, localRestCall } from "@/lib/localRest";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -39,21 +40,31 @@ export default function SettingsPage() {
     setConnected(false);
   };
 
+  const isLocal = shouldUseLocalRest(form);
+
   const testConnection = async () => {
     if (!form.host || !form.user || !form.pass) { toast.error("يرجى تعبئة جميع الحقول"); return; }
     setTesting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("mikrotik-api", {
-        body: { endpoint: "/system/identity/print", host: form.host, user: form.user, pass: form.pass, port: form.port, protocol: form.protocol, mode: form.mode },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+      let data: any;
+      if (shouldUseLocalRest(form)) {
+        // Direct local REST — no edge function needed
+        data = await localRestCall(form, "/system/identity/print");
+      } else {
+        const res = await supabase.functions.invoke("mikrotik-api", {
+          body: { endpoint: "/system/identity/print", host: form.host, user: form.user, pass: form.pass, port: form.port, protocol: form.protocol, mode: form.mode },
+        });
+        if (res.error) throw res.error;
+        if (res.data?.error) throw new Error(res.data.error);
+        data = res.data;
+      }
       const name = Array.isArray(data) ? data[0]?.name : data?.name;
       saveMikrotikConfig({ ...form, label: name || "MikroTik" });
       setConnected(true);
       setRouterInfo(name || "MikroTik");
       queryClient.invalidateQueries({ queryKey: ["mikrotik"] });
-      toast.success(`تم الاتصال! ${name || ""}`);
+      const modeLabel = shouldUseLocalRest(form) ? "⚡ اتصال محلي مباشر" : "☁️ اتصال سحابي";
+      toast.success(`تم الاتصال! ${name || ""} — ${modeLabel}`);
     } catch (err: any) {
       setConnected(false);
       toast.error("فشل: " + (err.message || "خطأ"));
@@ -85,6 +96,11 @@ export default function SettingsPage() {
               <p className="text-sm font-medium text-foreground">متصل: {routerInfo}</p>
               <p className="text-[10px] text-muted-foreground font-mono">{form.mode === "rest" ? "REST" : "API"} • {form.host}:{form.port}</p>
             </div>
+            {isLocal && (
+              <span className="mr-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-semibold">
+                <Zap className="h-3 w-3" /> محلي مباشر
+              </span>
+            )}
           </div>
         )}
 
