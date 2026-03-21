@@ -74,6 +74,19 @@ interface PrintTemplate {
   cardSubtitle: string;
   routerHost?: string;
   cloudId?: string; // Supabase row id for updates/deletes
+  // Generation settings
+  voucherType?: "hotspot" | "usermanager";
+  prefix?: string;
+  nameLength?: number;
+  passLength?: number;
+  charType?: CharType;
+  passwordMode?: PasswordMode;
+  unitPrice?: number;
+  validityDays?: number;
+  transferLimit?: number;
+  packageDisplayName?: string;
+  hoursLabel?: string;
+  dataQuotaLabel?: string;
 }
 
 interface FieldPosition {
@@ -800,6 +813,19 @@ export default function VouchersPage() {
             cardTitle: row.card_title,
             cardSubtitle: row.card_subtitle,
             routerHost: row.router_host,
+            // Generation settings
+            voucherType: (row.voucher_type as "hotspot" | "usermanager") || "hotspot",
+            prefix: row.prefix || "v",
+            nameLength: row.name_length ?? 6,
+            passLength: row.pass_length ?? 6,
+            charType: (row.char_type as CharType) || "alphanumeric",
+            passwordMode: (row.password_mode as PasswordMode) || "random",
+            unitPrice: row.unit_price ?? 0,
+            validityDays: row.validity_days ?? 0,
+            transferLimit: row.transfer_limit ?? 0,
+            packageDisplayName: row.package_display_name || "",
+            hoursLabel: row.hours_label || "",
+            dataQuotaLabel: row.data_quota_label || "",
           }));
           setTemplates(cloudTemplates);
           saveTemplates(cloudTemplates);
@@ -1034,19 +1060,12 @@ export default function VouchersPage() {
       const m = message.toLowerCase();
       if (!m) return true;
       if (isDuplicateError(m)) return false;
-      if (m.includes("unknown parameter") || m.includes("input does not match") || m.includes("invalid")) return false;
+      // Known permanent errors — do not retry
+      if (m.includes("unknown parameter") || m.includes("input does not match") || m.includes("invalid value")) return false;
       if (m.includes("not enough permissions") || m.includes("authentication") || m.includes("unauthorized")) return false;
-      return (
-        m.includes("timeout") ||
-        m.includes("session closed") ||
-        m.includes("connection") ||
-        m.includes("reset") ||
-        m.includes("tempor") ||
-        m.includes("busy") ||
-        m.includes("too many") ||
-        m.includes("bad gateway") ||
-        m.includes("internal")
-      );
+      if (m.includes("bad format") || m.includes("wrong type")) return false;
+      // Everything else is potentially transient — retry it
+      return true;
     };
 
     const commandForIndex = (idx: number) => {
@@ -1139,7 +1158,8 @@ export default function VouchersPage() {
         } catch (err: any) {
           const message = err?.message || "فشل التنفيذ";
           for (const cardIdx of chunk) {
-            if (!finalPass && isRetryableError(message)) {
+            if (!finalPass) {
+              // On non-final passes, always retry if the whole chunk request failed
               retrySet.add(cardIdx);
               markPending(cardIdx, message);
             } else {
@@ -1180,14 +1200,15 @@ export default function VouchersPage() {
     }, 200);
 
     try {
-      const isLargeBatch = cards.length >= 600;
+      const isLargeBatch = cards.length >= 300;
+      const isXLBatch = cards.length >= 1000;
       // Optimized for v6 RouterOS: smaller chunks to avoid router CPU overload
       const firstChunk = isRestMode
-        ? (type === "usermanager" ? (isLargeBatch ? 4 : 6) : (isLargeBatch ? 6 : 10))
-        : (type === "usermanager" ? (isLargeBatch ? 20 : 30) : (isLargeBatch ? 30 : 50));
+        ? (type === "usermanager" ? (isXLBatch ? 3 : isLargeBatch ? 4 : 6) : (isXLBatch ? 4 : isLargeBatch ? 6 : 10))
+        : (type === "usermanager" ? (isXLBatch ? 15 : isLargeBatch ? 20 : 30) : (isXLBatch ? 20 : isLargeBatch ? 30 : 50));
       const firstConcurrency = isRestMode
         ? 1
-        : (type === "usermanager" ? (isLargeBatch ? 2 : 3) : (isLargeBatch ? 3 : 4));
+        : (type === "usermanager" ? (isXLBatch ? 2 : isLargeBatch ? 2 : 3) : (isXLBatch ? 2 : isLargeBatch ? 3 : 4));
 
       let pending = await runPass(
         cards.map((_, idx) => idx),
@@ -1198,6 +1219,8 @@ export default function VouchersPage() {
       );
 
       if (pending.length > 0) {
+        // Short delay before retry to let the router recover
+        await new Promise(r => setTimeout(r, 800));
         pending = await runPass(
           pending,
           Math.max(1, Math.floor(firstChunk / 2)),
@@ -1208,6 +1231,8 @@ export default function VouchersPage() {
       }
 
       if (pending.length > 0) {
+        // Longer delay before final retry
+        await new Promise(r => setTimeout(r, 1500));
         await runPass(pending, 1, 1, "المحاولة النهائية", true);
       }
 
@@ -1480,6 +1505,19 @@ export default function VouchersPage() {
       cardTitle,
       cardSubtitle,
       routerHost: currentRouterHost,
+      // Generation settings
+      voucherType: type,
+      prefix,
+      nameLength,
+      passLength,
+      charType,
+      passwordMode,
+      unitPrice,
+      validityDays,
+      transferLimit,
+      packageDisplayName,
+      hoursLabel,
+      dataQuotaLabel,
     };
 
     setTemplates(prev => {
@@ -1502,6 +1540,19 @@ export default function VouchersPage() {
       print_rows: template.printRows,
       card_title: template.cardTitle,
       card_subtitle: template.cardSubtitle,
+      // Generation settings
+      voucher_type: template.voucherType || "hotspot",
+      prefix: template.prefix || "v",
+      name_length: template.nameLength ?? 6,
+      pass_length: template.passLength ?? 6,
+      char_type: template.charType || "alphanumeric",
+      password_mode: template.passwordMode || "random",
+      unit_price: template.unitPrice ?? 0,
+      validity_days: template.validityDays ?? 0,
+      transfer_limit: template.transferLimit ?? 0,
+      package_display_name: template.packageDisplayName || "",
+      hours_label: template.hoursLabel || "",
+      data_quota_label: template.dataQuotaLabel || "",
     }).select("id").single();
 
     if (!error && data) {
@@ -1512,7 +1563,7 @@ export default function VouchersPage() {
       });
       toast.success("تم حفظ القالب في السحابة ☁️");
     } else {
-      toast.success("تم حفظ القالب محلياً");
+      toast.error(`فشل حفظ القالب في السحابة: ${error?.message || "خطأ غير معروف"}`);
     }
   };
 
@@ -1523,6 +1574,20 @@ export default function VouchersPage() {
     setPrintRows(template.printRows);
     setCardTitle(template.cardTitle);
     setCardSubtitle(template.cardSubtitle);
+    // Restore generation settings
+    if (template.voucherType) setType(template.voucherType);
+    if (template.prefix !== undefined) setPrefix(template.prefix);
+    if (template.nameLength !== undefined) setNameLength(template.nameLength);
+    if (template.passLength !== undefined) setPassLength(template.passLength);
+    if (template.charType) setCharType(template.charType);
+    if (template.passwordMode) setPasswordMode(template.passwordMode);
+    if (template.unitPrice !== undefined) setUnitPrice(template.unitPrice);
+    if (template.validityDays !== undefined) setValidityDays(template.validityDays);
+    if (template.transferLimit !== undefined) setTransferLimit(template.transferLimit);
+    if (template.packageDisplayName !== undefined) setPackageDisplayName(template.packageDisplayName);
+    if (template.hoursLabel !== undefined) setHoursLabel(template.hoursLabel);
+    if (template.dataQuotaLabel !== undefined) setDataQuotaLabel(template.dataQuotaLabel);
+    if (template.profileName) setSelectedProfile(template.profileName);
     setLoadTemplateDialogOpen(false);
     toast.success(`تم تحميل القالب: ${template.name}`);
   };
@@ -2225,7 +2290,12 @@ export default function VouchersPage() {
             </div>
           ) : (
             <>
-              {paginatedBatches.map(batch => (
+              {paginatedBatches.map(batch => {
+                const batchSuccess = batch.cards.filter(c => c.status === "success").length;
+                const batchFailed = batch.cards.filter(c => c.status === "error").length;
+                const batchSuccessCards = batch.cards.filter(c => c.status === "success");
+                const batchFailedCards = batch.cards.filter(c => c.status === "error");
+                return (
                 <div key={batch.id} className="rounded-md border border-border bg-card p-3 sm:p-4">
                   <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -2254,6 +2324,19 @@ export default function VouchersPage() {
                     الباقة: <span className="text-foreground font-medium">{batch.profile}</span>
                     {batch.unitPrice ? <span className="mr-2">• السعر: {batch.unitPrice}</span> : null}
                   </div>
+                  {/* Card stats row */}
+                  {batch.pushed && (batchSuccess > 0 || batchFailed > 0) && (
+                    <div className="flex items-center gap-3 text-xs mb-2 flex-wrap">
+                      <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                        <Check className="h-3 w-3" /> {batchSuccess} أُضيف للراوتر
+                      </span>
+                      {batchFailed > 0 && (
+                        <span className="text-destructive flex items-center gap-1">
+                          <X className="h-3 w-3" /> {batchFailed} لم يُضف
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {deletingFromRouter === batch.id && (
                     <div className="mb-2">
                       <Progress value={deleteProgress} className="h-1.5" />
@@ -2263,8 +2346,18 @@ export default function VouchersPage() {
                   <div className="flex gap-2 flex-wrap">
                     <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => loadBatchCards(batch)}>تحميل</Button>
                     <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => handlePrint(batch.cards)}>
-                      <Printer className="h-3 w-3 ml-1" /> طباعة
+                      <Printer className="h-3 w-3 ml-1" /> طباعة الكل
                     </Button>
+                    {batch.pushed && batchSuccessCards.length > 0 && (
+                      <Button size="sm" variant="outline" className="text-xs h-8 text-green-700 border-green-300 dark:text-green-400 dark:border-green-700" onClick={() => handlePrint(batchSuccessCards)}>
+                        <Printer className="h-3 w-3 ml-1" /> طباعة المُضافة ({batchSuccessCards.length})
+                      </Button>
+                    )}
+                    {batch.pushed && batchFailedCards.length > 0 && (
+                      <Button size="sm" variant="outline" className="text-xs h-8 text-destructive border-destructive/30" onClick={() => handlePrint(batchFailedCards)}>
+                        <Printer className="h-3 w-3 ml-1" /> طباعة الفاشلة ({batchFailedCards.length})
+                      </Button>
+                    )}
                     <Button size="sm" variant="outline" className="text-xs h-8 text-primary border-primary/30" onClick={() => handleExportPdf(batch.cards)}>
                       <FileDown className="h-3 w-3 ml-1" /> PDF
                     </Button>
@@ -2288,7 +2381,8 @@ export default function VouchersPage() {
                     </Button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
               {routerBatches.length > HISTORY_PAGE_SIZE && (
                 <div className="flex items-center justify-between px-2 py-2">
                   <span className="text-xs text-muted-foreground">{routerBatches.length} دفعة</span>
@@ -2905,12 +2999,14 @@ export default function VouchersPage() {
         <DialogContent className="sm:max-w-sm" dir="rtl">
           <DialogHeader>
             <DialogTitle>حفظ قالب الطباعة</DialogTitle>
-            <DialogDescription>أدخل اسمًا للقالب لاستخدامه لاحقًا</DialogDescription>
+            <DialogDescription>
+              سيتم حفظ القالب في السحابة ☁️ مع جميع الإعدادات: تصميم الكروت، إعدادات التوليد (طول الاسم، كلمة المرور، النوع، الباقة، إلخ)
+            </DialogDescription>
           </DialogHeader>
           <Input value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="مثال: باقة 100" className="my-2" />
           <DialogFooter>
             <Button variant="outline" onClick={() => setTemplateDialogOpen(false)}>إلغاء</Button>
-            <Button onClick={saveTemplate}>حفظ</Button>
+            <Button onClick={saveTemplate}>حفظ في السحابة</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
