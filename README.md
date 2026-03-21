@@ -79,6 +79,16 @@ Changes made via Lovable will be committed automatically to this repo.
 
 If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
 
+## Mobile (Expo) app
+
+A new Expo Router mobile client ships with the same feature set as the web platform: router selection, live stats, hotspot management, and an embedded full web experience.
+
+1) Install deps: `cd mobile && npm install`
+2) Copy envs: `cp .env.example .env` and set `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, and optional `EXPO_PUBLIC_WEB_APP_URL`
+3) Run: `npm run start` then open with Expo Go (or `npm run android` / `npm run ios` / `npm run web`)
+
+The app uses Supabase auth/storage, reads routers from the `routers` table, calls the `mikrotik-api` edge function for live device actions, and falls back to the full web UI inside the "منصة الويب" tab for 100% parity.
+
 The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
 Follow these steps:

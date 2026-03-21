@@ -1,68 +1,75 @@
-import React from 'react';
-import { SymbolView } from 'expo-symbols';
-import { Link, Tabs } from 'expo-router';
-import { Platform, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Redirect, Tabs } from 'expo-router';
+import { useMemo } from 'react';
 
-import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
-import { useClientOnlyValue } from '@/components/useClientOnlyValue';
+import { useAuth } from '@/providers/AuthProvider';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { user, sessionChecked } = useAuth();
+
+  const iconColor = useMemo(
+    () => (colorScheme === 'dark' ? '#7dd3fc' : '#0ea5e9'),
+    [colorScheme],
+  );
+
+  if (!sessionChecked) return null;
+  if (!user) return <Redirect href="/sign-in" />;
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
-        headerShown: useClientOnlyValue(false, true),
-      }}>
+        headerShown: false,
+        tabBarActiveTintColor: iconColor,
+        tabBarStyle: {
+          backgroundColor: '#fff',
+          borderTopColor: '#e2e8f0',
+        },
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Tab One',
-          tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'chevron.left.forwardslash.chevron.right',
-                android: 'code',
-                web: 'code',
-              }}
-              tintColor={color}
-              size={28}
-            />
-          ),
-          headerRight: () => (
-            <Link href="/modal" asChild>
-              <Pressable style={{ marginRight: 15 }}>
-                {({ pressed }) => (
-                  <SymbolView
-                    name={{ ios: 'info.circle', android: 'info', web: 'info' }}
-                    size={25}
-                    tintColor={Colors[colorScheme].text}
-                    style={{ opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            </Link>
+          title: 'الرئيسية',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'speedometer' : 'speedometer-outline'} size={22} color={color} />
           ),
         }}
       />
       <Tabs.Screen
-        name="two"
+        name="routers"
         options={{
-          title: 'Tab Two',
-          tabBarIcon: ({ color }) => (
-            <SymbolView
-              name={{
-                ios: 'chevron.left.forwardslash.chevron.right',
-                android: 'code',
-                web: 'code',
-              }}
-              tintColor={color}
-              size={28}
-            />
+          title: 'الراوترات',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'server' : 'server-outline'} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="hotspot"
+        options={{
+          title: 'الهوتسبوت',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'wifi' : 'wifi-outline'} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="web"
+        options={{
+          title: 'منصة الويب',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'globe' : 'globe-outline'} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'الإعدادات',
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'settings' : 'settings-outline'} size={22} color={color} />
           ),
         }}
       />
