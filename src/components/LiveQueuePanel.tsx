@@ -65,6 +65,12 @@ function JobRow({ job }: { job: BackgroundJob }) {
         </div>
       </div>
 
+      {job.routerHost && (
+        <div className="text-[10px] text-muted-foreground truncate">
+          📡 {job.routerHost}
+        </div>
+      )}
+
       <Progress value={pct} className="h-1.5" />
 
       <div className="flex items-center justify-between text-[10px] text-muted-foreground">

@@ -58,6 +58,54 @@ export type Database = {
           },
         ]
       }
+      print_templates: {
+        Row: {
+          id: string
+          user_id: string
+          router_host: string
+          name: string
+          profile_name: string | null
+          bg_image: string | null
+          fields: Json
+          print_cols: number
+          print_rows: number
+          card_title: string
+          card_subtitle: string
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          router_host?: string
+          name: string
+          profile_name?: string | null
+          bg_image?: string | null
+          fields?: Json
+          print_cols?: number
+          print_rows?: number
+          card_title?: string
+          card_subtitle?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          router_host?: string
+          name?: string
+          profile_name?: string | null
+          bg_image?: string | null
+          fields?: Json
+          print_cols?: number
+          print_rows?: number
+          card_title?: string
+          card_subtitle?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null

@@ -72,6 +72,8 @@ interface PrintTemplate {
   printRows: number;
   cardTitle: string;
   cardSubtitle: string;
+  routerHost?: string;
+  cloudId?: string; // Supabase row id for updates/deletes
 }
 
 interface FieldPosition {
@@ -395,6 +397,116 @@ const BG_PRESETS: BackgroundPreset[] = [
       </svg>
     `),
   },
+  {
+    id: "cafe-warm",
+    name: "Café Warm",
+    dataUrl: "data:image/svg+xml;utf8," + encodeURIComponent(`
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 700'>
+        <defs>
+          <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
+            <stop offset='0%' stop-color='#fdf6ec'/>
+            <stop offset='50%' stop-color='#fef3c7'/>
+            <stop offset='100%' stop-color='#fde8c8'/>
+          </linearGradient>
+          <linearGradient id='accent' x1='0' y1='0' x2='1' y2='0'>
+            <stop offset='0%' stop-color='#92400e'/>
+            <stop offset='100%' stop-color='#b45309'/>
+          </linearGradient>
+        </defs>
+        <rect width='1200' height='700' fill='url(#bg)'/>
+        <rect x='0' y='0' width='1200' height='12' fill='url(#accent)'/>
+        <rect x='0' y='688' width='1200' height='12' fill='url(#accent)'/>
+        <circle cx='1060' cy='130' r='90' fill='rgba(180,83,9,0.08)'/>
+        <circle cx='1100' cy='200' r='50' fill='rgba(180,83,9,0.06)'/>
+        <path d='M0 600 C200 540 450 680 700 600 C850 550 980 520 1200 580 L1200 700 L0 700 Z' fill='rgba(180,83,9,0.07)'/>
+        <rect x='40' y='40' width='400' height='6' rx='3' fill='url(#accent)' opacity='0.6'/>
+        <rect x='40' y='58' width='260' height='4' rx='2' fill='rgba(180,83,9,0.3)'/>
+      </svg>
+    `),
+  },
+  {
+    id: "corporate-clean",
+    name: "Corporate",
+    dataUrl: "data:image/svg+xml;utf8," + encodeURIComponent(`
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 700'>
+        <defs>
+          <linearGradient id='bg' x1='0' y1='0' x2='0' y2='1'>
+            <stop offset='0%' stop-color='#f8fafc'/>
+            <stop offset='100%' stop-color='#e2e8f0'/>
+          </linearGradient>
+          <linearGradient id='bar' x1='0' y1='0' x2='1' y2='0'>
+            <stop offset='0%' stop-color='#1e40af'/>
+            <stop offset='100%' stop-color='#3b82f6'/>
+          </linearGradient>
+        </defs>
+        <rect width='1200' height='700' fill='url(#bg)'/>
+        <rect x='0' y='0' width='1200' height='18' fill='url(#bar)'/>
+        <rect x='0' y='0' width='10' height='700' fill='url(#bar)'/>
+        <rect x='0' y='680' width='1200' height='6' fill='url(#bar)' opacity='0.3'/>
+        <rect x='40' y='50' width='380' height='8' rx='4' fill='rgba(30,64,175,0.15)'/>
+        <rect x='40' y='72' width='240' height='5' rx='2.5' fill='rgba(30,64,175,0.1)'/>
+        <circle cx='1080' cy='380' r='160' fill='rgba(59,130,246,0.05)'/>
+        <rect x='1050' y='30' width='120' height='120' rx='12' fill='rgba(30,64,175,0.06)'/>
+      </svg>
+    `),
+  },
+  {
+    id: "neon-dark",
+    name: "Neon Dark",
+    dataUrl: "data:image/svg+xml;utf8," + encodeURIComponent(`
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 700'>
+        <defs>
+          <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
+            <stop offset='0%' stop-color='#030712'/>
+            <stop offset='50%' stop-color='#0c0f1d'/>
+            <stop offset='100%' stop-color='#050816'/>
+          </linearGradient>
+          <linearGradient id='neon1' x1='0' y1='0' x2='1' y2='0'>
+            <stop offset='0%' stop-color='#a855f7'/>
+            <stop offset='100%' stop-color='#06b6d4'/>
+          </linearGradient>
+        </defs>
+        <rect width='1200' height='700' fill='url(#bg)'/>
+        <rect x='0' y='0' width='1200' height='4' fill='url(#neon1)'/>
+        <rect x='0' y='696' width='1200' height='4' fill='url(#neon1)'/>
+        <path d='M0 500 C250 420 500 580 750 480 C900 420 1060 450 1200 400 L1200 700 L0 700 Z' fill='rgba(168,85,247,0.08)'/>
+        <circle cx='160' cy='120' r='70' fill='none' stroke='rgba(6,182,212,0.25)' stroke-width='2'/>
+        <circle cx='160' cy='120' r='40' fill='none' stroke='rgba(168,85,247,0.2)' stroke-width='1.5'/>
+        <path d='M1000 80 L1160 80 L1160 200 L1000 200 Z' fill='none' stroke='rgba(6,182,212,0.18)' stroke-width='1.5'/>
+        <path d='M40 560 H500' stroke='rgba(168,85,247,0.15)' stroke-width='1' stroke-dasharray='6,4'/>
+      </svg>
+    `),
+  },
+  {
+    id: "hotel-elegant",
+    name: "Hotel Elegant",
+    dataUrl: "data:image/svg+xml;utf8," + encodeURIComponent(`
+      <svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 700'>
+        <defs>
+          <linearGradient id='bg' x1='0' y1='0' x2='1' y2='1'>
+            <stop offset='0%' stop-color='#f0f4f8'/>
+            <stop offset='60%' stop-color='#e8edf3'/>
+            <stop offset='100%' stop-color='#dce5ef'/>
+          </linearGradient>
+          <linearGradient id='blue' x1='0' y1='0' x2='1' y2='0'>
+            <stop offset='0%' stop-color='#64748b'/>
+            <stop offset='100%' stop-color='#94a3b8'/>
+          </linearGradient>
+        </defs>
+        <rect width='1200' height='700' fill='url(#bg)'/>
+        <rect x='740' y='0' width='460' height='700' fill='rgba(100,116,139,0.06)'/>
+        <rect x='0' y='0' width='1200' height='10' fill='url(#blue)'/>
+        <rect x='0' y='690' width='1200' height='10' fill='url(#blue)'/>
+        <circle cx='820' cy='120' r='60' fill='rgba(148,163,184,0.25)' />
+        <rect x='860' y='90' width='200' height='200' rx='18' fill='rgba(148,163,184,0.15)' />
+        <rect x='40' y='40' width='320' height='50' rx='10' fill='rgba(100,116,139,0.12)'/>
+        <rect x='40' y='105' width='200' height='8' rx='4' fill='rgba(100,116,139,0.2)'/>
+        <path d='M40 630 H600' stroke='rgba(100,116,139,0.25)' stroke-width='1.5'/>
+        <circle cx='30' cy='640' r='10' fill='rgba(100,116,139,0.3)'/>
+        <rect x='50' y='633' width='100' height='8' rx='3' fill='rgba(100,116,139,0.2)'/>
+      </svg>
+    `),
+  },
 ];
 
 const DESIGN_THEMES: Array<{
@@ -475,6 +587,98 @@ const DESIGN_THEMES: Array<{
       { type: "qr", visible: true, x: 88, y: 72, fontSize: 10, color: "#ffffff" },
     ],
   },
+  {
+    id: "cafe-arabic",
+    name: "مقهى عربي",
+    subtitle: "تصميم دافئ للمقاهي",
+    presetId: "cafe-warm",
+    cardTitle: "مقهى الإبداع",
+    cardSubtitle: "واي فاي مجاني للضيوف",
+    overrides: [
+      { type: "title", visible: true, x: 50, y: 18, fontSize: 14, color: "#92400e" },
+      { type: "subtitle", visible: true, x: 50, y: 30, fontSize: 9, color: "#b45309" },
+      { type: "package_name", visible: true, x: 50, y: 42, fontSize: 9, color: "#92400e" },
+      { type: "username", visible: true, x: 44, y: 57, fontSize: 14, color: "#1c1917" },
+      { type: "password", visible: true, x: 44, y: 73, fontSize: 14, color: "#1c1917" },
+      { type: "price", visible: true, x: 85, y: 17, fontSize: 10, color: "#92400e" },
+      { type: "days", visible: true, x: 16, y: 88, fontSize: 9, color: "#78350f" },
+      { type: "hours", visible: true, x: 50, y: 88, fontSize: 9, color: "#78350f" },
+      { type: "data_quota", visible: true, x: 17, y: 78, fontSize: 8, color: "#92400e" },
+      { type: "transfer_limit", visible: true, x: 82, y: 88, fontSize: 9, color: "#78350f" },
+      { type: "sales_point", visible: true, x: 17, y: 17, fontSize: 9, color: "#78350f" },
+      { type: "profile", visible: false },
+      { type: "qr", visible: true, x: 88, y: 73, fontSize: 10, color: "#92400e" },
+    ],
+  },
+  {
+    id: "corporate-blue",
+    name: "شركات احترافي",
+    subtitle: "تصميم نظيف للشركات",
+    presetId: "corporate-clean",
+    cardTitle: "Corporate WiFi",
+    cardSubtitle: "Secure Guest Network",
+    overrides: [
+      { type: "title", visible: true, x: 50, y: 17, fontSize: 13, color: "#1e3a8a" },
+      { type: "subtitle", visible: true, x: 50, y: 29, fontSize: 9, color: "#1e40af" },
+      { type: "package_name", visible: true, x: 50, y: 41, fontSize: 9, color: "#2563eb" },
+      { type: "username", visible: true, x: 44, y: 57, fontSize: 14, color: "#0f172a" },
+      { type: "password", visible: true, x: 44, y: 73, fontSize: 14, color: "#0f172a" },
+      { type: "price", visible: true, x: 85, y: 17, fontSize: 10, color: "#1e40af" },
+      { type: "days", visible: true, x: 16, y: 88, fontSize: 9, color: "#1e3a8a" },
+      { type: "hours", visible: true, x: 50, y: 88, fontSize: 9, color: "#1e3a8a" },
+      { type: "data_quota", visible: true, x: 17, y: 78, fontSize: 8, color: "#2563eb" },
+      { type: "transfer_limit", visible: true, x: 82, y: 88, fontSize: 9, color: "#1e3a8a" },
+      { type: "sales_point", visible: true, x: 17, y: 17, fontSize: 8, color: "#475569" },
+      { type: "profile", visible: false },
+      { type: "qr", visible: true, x: 88, y: 73, fontSize: 10, color: "#1e40af" },
+    ],
+  },
+  {
+    id: "neon-gaming",
+    name: "جيمنج نيون",
+    subtitle: "تصميم مضيء وعصري",
+    presetId: "neon-dark",
+    cardTitle: "Gaming Zone Access",
+    cardSubtitle: "Ultra Fast Internet",
+    overrides: [
+      { type: "title", visible: true, x: 50, y: 17, fontSize: 13, color: "#e879f9" },
+      { type: "subtitle", visible: true, x: 50, y: 29, fontSize: 9, color: "#22d3ee" },
+      { type: "package_name", visible: true, x: 50, y: 41, fontSize: 9, color: "#a78bfa" },
+      { type: "username", visible: true, x: 44, y: 57, fontSize: 14, color: "#f8fafc" },
+      { type: "password", visible: true, x: 44, y: 73, fontSize: 14, color: "#f8fafc" },
+      { type: "price", visible: true, x: 85, y: 17, fontSize: 10, color: "#22d3ee" },
+      { type: "days", visible: true, x: 16, y: 88, fontSize: 9, color: "#e879f9" },
+      { type: "hours", visible: true, x: 50, y: 88, fontSize: 9, color: "#e879f9" },
+      { type: "data_quota", visible: true, x: 17, y: 78, fontSize: 8, color: "#22d3ee" },
+      { type: "transfer_limit", visible: true, x: 82, y: 88, fontSize: 9, color: "#e879f9" },
+      { type: "sales_point", visible: true, x: 17, y: 17, fontSize: 8, color: "#94a3b8" },
+      { type: "profile", visible: false },
+      { type: "qr", visible: true, x: 88, y: 73, fontSize: 10, color: "#22d3ee" },
+    ],
+  },
+  {
+    id: "hotel-light",
+    name: "فندق ناصع",
+    subtitle: "تصميم أنيق وفاتح",
+    presetId: "hotel-elegant",
+    cardTitle: "فندق النمر السياحي",
+    cardSubtitle: "الاستعلامات: اتصل على ☎",
+    overrides: [
+      { type: "title", visible: true, x: 35, y: 18, fontSize: 13, color: "#334155" },
+      { type: "subtitle", visible: true, x: 35, y: 30, fontSize: 8, color: "#64748b" },
+      { type: "package_name", visible: true, x: 35, y: 42, fontSize: 9, color: "#475569" },
+      { type: "username", visible: true, x: 34, y: 58, fontSize: 14, color: "#0f172a" },
+      { type: "password", visible: true, x: 34, y: 74, fontSize: 14, color: "#0f172a" },
+      { type: "price", visible: true, x: 85, y: 18, fontSize: 10, color: "#64748b" },
+      { type: "days", visible: true, x: 16, y: 88, fontSize: 9, color: "#475569" },
+      { type: "hours", visible: true, x: 50, y: 88, fontSize: 9, color: "#475569" },
+      { type: "data_quota", visible: true, x: 17, y: 78, fontSize: 8, color: "#64748b" },
+      { type: "transfer_limit", visible: true, x: 82, y: 88, fontSize: 9, color: "#475569" },
+      { type: "sales_point", visible: true, x: 17, y: 17, fontSize: 8, color: "#94a3b8" },
+      { type: "profile", visible: false },
+      { type: "qr", visible: true, x: 88, y: 73, fontSize: 10, color: "#64748b" },
+    ],
+  },
 ];
 
 // ─── Component ────────────────────────────────
@@ -529,6 +733,7 @@ export default function VouchersPage() {
 
   // Templates
   const [templates, setTemplates] = useState<PrintTemplate[]>(loadTemplates);
+  const [templatesSyncing, setTemplatesSyncing] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [loadTemplateDialogOpen, setLoadTemplateDialogOpen] = useState(false);
@@ -550,7 +755,6 @@ export default function VouchersPage() {
 
   // Persist
   useEffect(() => { saveBatches(batches); }, [batches]);
-  useEffect(() => { saveTemplates(templates); }, [templates]);
   useEffect(() => { saveSalesPoints(salesPoints); }, [salesPoints]);
 
   // Load saved gen settings
@@ -571,6 +775,38 @@ export default function VouchersPage() {
     if (saved.cardsPerPageTarget !== undefined) setCardsPerPageTarget(saved.cardsPerPageTarget);
     if (saved.salesPoint) setSelectedSalesPoint(saved.salesPoint);
   }, []);
+
+  // Load templates from cloud (filtered by current router)
+  useEffect(() => {
+    if (!user?.id) return;
+    setTemplatesSyncing(true);
+    supabase
+      .from("print_templates")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("router_host", currentRouterHost)
+      .order("created_at", { ascending: false })
+      .then(({ data, error }) => {
+        if (!error && data) {
+          const cloudTemplates: PrintTemplate[] = data.map((row) => ({
+            id: row.id,
+            cloudId: row.id,
+            name: row.name,
+            profileName: row.profile_name || "",
+            bgImage: row.bg_image || undefined,
+            fields: Array.isArray(row.fields) ? (row.fields as FieldPosition[]) : [],
+            printCols: row.print_cols,
+            printRows: row.print_rows,
+            cardTitle: row.card_title,
+            cardSubtitle: row.card_subtitle,
+            routerHost: row.router_host,
+          }));
+          setTemplates(cloudTemplates);
+          saveTemplates(cloudTemplates);
+        }
+        setTemplatesSyncing(false);
+      });
+  }, [user?.id, currentRouterHost]);
 
   useEffect(() => {
     saveGenSettings({
@@ -786,6 +1022,7 @@ export default function VouchersPage() {
       failed: 0,
       rate: 0,
       startedAt,
+      routerHost: currentRouterHost,
     });
 
     const isDuplicateError = (message: string) => {
@@ -853,7 +1090,7 @@ export default function VouchersPage() {
       const pct = Math.max(1, Math.min(99, Math.round((done / cards.length) * 100)));
       const elapsedNow = Math.max(1, (performance.now() - startedAt) / 1000);
       const liveRate = Math.round(done / elapsedNow);
-      setPushProgress(pct);
+      setPushProgress((prev) => Math.max(prev, pct));
       setPushMessage(`${label}: ${done}/${cards.length} • ${liveRate} كرت/ث`);
       updateJob(jobId, {
         completed: done,
@@ -931,10 +1168,16 @@ export default function VouchersPage() {
     progressPulse = setInterval(() => {
       if (!pushingRef.current) return;
       setPushProgress((prev) => {
-        if (resolved.size === 0 && prev < 15) return prev + 1;
+        const actualResolved = resolved.size;
+        const actualPct = actualResolved > 0
+          ? Math.max(1, Math.min(99, Math.round((actualResolved / cards.length) * 100)))
+          : 0;
+        if (actualPct > prev) return actualPct;
+        // Slow crawl to show continuous activity (max 90%)
+        if (prev < 90) return Math.min(90, prev + 0.3);
         return prev;
       });
-    }, 450);
+    }, 200);
 
     try {
       const isLargeBatch = cards.length >= 600;
@@ -1221,10 +1464,13 @@ export default function VouchersPage() {
     setFields(prev => prev.map(f => f.id === draggingField ? { ...f, x: Math.round(x), y: Math.round(y) } : f));
   }, [draggingField]);
 
-  const saveTemplate = () => {
+  const saveTemplate = async () => {
     if (!templateName.trim()) { toast.error("أدخل اسم القالب"); return; }
+    if (!user?.id) { toast.error("يجب تسجيل الدخول لحفظ القوالب"); return; }
+
+    const localId = crypto.randomUUID();
     const template: PrintTemplate = {
-      id: crypto.randomUUID(),
+      id: localId,
       name: templateName.trim(),
       profileName: selectedProfile,
       bgImage: bgImage || undefined,
@@ -1233,11 +1479,41 @@ export default function VouchersPage() {
       printRows: resolvedPrintLayout.rows,
       cardTitle,
       cardSubtitle,
+      routerHost: currentRouterHost,
     };
-    setTemplates(prev => [...prev, template]);
+
+    setTemplates(prev => {
+      const updated = [...prev, template];
+      saveTemplates(updated);
+      return updated;
+    });
     setTemplateDialogOpen(false);
     setTemplateName("");
-    toast.success("تم حفظ القالب");
+
+    // Save to cloud
+    const { data, error } = await supabase.from("print_templates").insert({
+      user_id: user.id,
+      router_host: currentRouterHost,
+      name: template.name,
+      profile_name: template.profileName || null,
+      bg_image: template.bgImage || null,
+      fields: template.fields as any,
+      print_cols: template.printCols,
+      print_rows: template.printRows,
+      card_title: template.cardTitle,
+      card_subtitle: template.cardSubtitle,
+    }).select("id").single();
+
+    if (!error && data) {
+      setTemplates(prev => {
+        const updated = prev.map(t => t.id === localId ? { ...t, cloudId: data.id, id: data.id } : t);
+        saveTemplates(updated);
+        return updated;
+      });
+      toast.success("تم حفظ القالب في السحابة ☁️");
+    } else {
+      toast.success("تم حفظ القالب محلياً");
+    }
   };
 
   const loadTemplate = (template: PrintTemplate) => {
@@ -1251,8 +1527,18 @@ export default function VouchersPage() {
     toast.success(`تم تحميل القالب: ${template.name}`);
   };
 
-  const deleteTemplate = (id: string) => {
-    setTemplates(prev => prev.filter(t => t.id !== id));
+  const deleteTemplate = async (id: string) => {
+    const tpl = templates.find(t => t.id === id);
+    setTemplates(prev => {
+      const updated = prev.filter(t => t.id !== id);
+      saveTemplates(updated);
+      return updated;
+    });
+    // Delete from cloud
+    const cloudId = tpl?.cloudId || id;
+    if (user?.id && cloudId) {
+      await supabase.from("print_templates").delete().eq("id", cloudId).eq("user_id", user.id);
+    }
     toast.success("تم حذف القالب");
   };
 
@@ -2633,15 +2919,28 @@ export default function VouchersPage() {
       <Dialog open={loadTemplateDialogOpen} onOpenChange={setLoadTemplateDialogOpen}>
         <DialogContent className="sm:max-w-md" dir="rtl">
           <DialogHeader>
-            <DialogTitle>القوالب المحفوظة</DialogTitle>
-            <DialogDescription>اختر قالبًا لتحميله</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              القوالب المحفوظة
+              {templatesSyncing && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+            </DialogTitle>
+            <DialogDescription>
+              {currentRouterHost
+                ? `قوالب خاصة بـ ${currentRouterHost}`
+                : "اختر قالبًا لتحميله"}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-2 max-h-60 overflow-y-auto py-2">
+            {templates.length === 0 && !templatesSyncing && (
+              <p className="text-sm text-muted-foreground text-center py-4">لا توجد قوالب محفوظة لهذا الراوتر</p>
+            )}
             {templates.map(t => (
               <div key={t.id} className="flex items-center justify-between p-2 rounded border border-border hover:bg-muted/50">
                 <div>
                   <p className="text-sm font-medium text-foreground">{t.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{t.printCols}×{t.printRows} • {t.bgImage ? "صورة خلفية" : "بدون خلفية"}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {t.printCols}×{t.printRows} • {t.bgImage ? "صورة خلفية" : "بدون خلفية"}
+                    {t.cloudId && " • ☁️"}
+                  </p>
                 </div>
                 <div className="flex gap-1">
                   <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => loadTemplate(t)}>تحميل</Button>

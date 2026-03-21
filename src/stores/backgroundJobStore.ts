@@ -15,6 +15,7 @@ export interface BackgroundJob {
   rate: number; // items/sec
   startedAt: number;
   finishedAt?: number;
+  routerHost?: string;
   failedItems?: { index: number; error: string }[];
   retryFn?: () => Promise<void>;
 }
