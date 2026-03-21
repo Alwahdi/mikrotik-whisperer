@@ -40,36 +40,48 @@ export default function SettingsScreen() {
   const { signOut } = useAuth();
   const qc = useQueryClient();
 
-  const [host, setHost] = useState('');
-  const [port, setPort] = useState('80');
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('');
-  const [mode, setMode] = useState<ConnectionMode>('rest');
-  const [protocol, setProtocol] = useState<ConnectionProtocol>('http');
+  interface FormState {
+    host: string;
+    port: string;
+    username: string;
+    password: string;
+    mode: ConnectionMode;
+    protocol: ConnectionProtocol;
+  }
+
+  const [form, setForm] = useState<FormState>({
+    host: '',
+    port: '80',
+    username: 'admin',
+    password: '',
+    mode: 'rest',
+    protocol: 'http',
+  });
   const [agentUrl, setAgentUrl] = useState('');
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'ok' | 'error' | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const { host, port, username, password, mode, protocol } = form;
+  const setHost = (v: string) => setForm((f) => ({ ...f, host: v }));
+  const setPort = (v: string) => setForm((f) => ({ ...f, port: v }));
+  const setUsername = (v: string) => setForm((f) => ({ ...f, username: v }));
+  const setPassword = (v: string) => setForm((f) => ({ ...f, password: v }));
+  const setProtocol = (v: ConnectionProtocol) =>
+    setForm((f) => ({ ...f, protocol: v, port: getDefaultPort(f.mode, v) }));
+
   useEffect(() => {
     getMikrotikConfig().then((cfg) => {
       if (cfg) {
-        setHost(cfg.host);
-        setPort(cfg.port);
-        setUsername(cfg.user);
-        setPassword(cfg.pass);
-        setMode(cfg.mode);
-        setProtocol(cfg.protocol);
+        setForm({ host: cfg.host, port: cfg.port, username: cfg.user, password: cfg.pass, mode: cfg.mode, protocol: cfg.protocol });
       }
     });
     getMikrotikAgentUrl().then(setAgentUrl);
   }, []);
 
-  const handleModeChange = (m: ConnectionMode) => {
-    setMode(m);
-    const defaultProtocol: ConnectionProtocol = m === 'rest' ? 'http' : 'api-plain';
-    setProtocol(defaultProtocol);
-    setPort(getDefaultPort(m, defaultProtocol));
+  const handleModeChange = (mode: ConnectionMode) => {
+    const protocol: ConnectionProtocol = mode === 'rest' ? 'http' : 'api-plain';
+    setForm((f) => ({ ...f, mode, protocol, port: getDefaultPort(mode, protocol) }));
   };
 
   const handleTest = async () => {
@@ -134,11 +146,7 @@ export default function SettingsScreen() {
         onPress: async () => {
           await clearMikrotikConfig();
           await qc.invalidateQueries({ queryKey: ['mikrotik'] });
-          // Batch state resets (React 18 batches these automatically)
-          setHost('');
-          setPort('80');
-          setUsername('admin');
-          setPassword('');
+          setForm({ host: '', port: '80', username: 'admin', password: '', mode: 'rest', protocol: 'http' });
         },
       },
     ]);
@@ -202,10 +210,7 @@ export default function SettingsScreen() {
                     <TouchableOpacity
                       key={opt.value}
                       style={[styles.optBtn, protocol === opt.value && styles.optBtnActive]}
-                      onPress={() => {
-                        setProtocol(opt.value);
-                        setPort(getDefaultPort(mode, opt.value));
-                      }}
+                      onPress={() => setProtocol(opt.value)}
                     >
                       <Text style={[styles.optText, protocol === opt.value && styles.optTextActive]}>
                         {opt.label}
