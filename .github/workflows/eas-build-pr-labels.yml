@@ -30,7 +30,8 @@ jobs:
     if: |
       github.event.label.name == 'eas-build-android' ||
       github.event.label.name == 'eas-build-ios' ||
-      github.event.label.name == 'eas-build-all'
+      github.event.label.name == 'eas-build-all' ||
+      github.event.label.name == 'eas-build-development'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -63,5 +64,11 @@ jobs:
       - name: Build all platforms on EAS
         if: github.event.label.name == 'eas-build-all'
         run: npx eas-cli@latest build --platform all --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build development client on EAS
+        if: github.event.label.name == 'eas-build-development'
+        run: npx eas-cli@latest build --platform all --profile development --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
