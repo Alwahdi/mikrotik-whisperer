@@ -1,0 +1,74 @@
+name: EAS Build (PR Labels)
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  run-production-workflow:
+    if: github.event.label.name == 'eas-workflow-production'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      - name: Run EAS production workflow
+        run: npx eas-cli@latest workflow:run create-production-builds.yml
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+  build:
+    if: |
+      github.event.label.name == 'eas-build-android' ||
+      github.event.label.name == 'eas-build-ios' ||
+      github.event.label.name == 'eas-build-all' ||
+      github.event.label.name == 'eas-build-development'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Android on EAS
+        if: github.event.label.name == 'eas-build-android'
+        run: npx eas-cli@latest build --platform android --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build iOS on EAS
+        if: github.event.label.name == 'eas-build-ios'
+        run: npx eas-cli@latest build --platform ios --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build all platforms on EAS
+        if: github.event.label.name == 'eas-build-all'
+        run: npx eas-cli@latest build --platform all --profile preview --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build development client on EAS
+        if: github.event.label.name == 'eas-build-development'
+        run: npx eas-cli@latest build --platform all --profile development --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
