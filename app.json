@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "ff85c0e5-2000-41bb-ae24-4e538612d016"
+      }
+    },
+    "android": {
+      "package": "com.alwahdi.mikroman"
+    }
+  }
+}

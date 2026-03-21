@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.4"
   }
   public: {
     Tables: {
@@ -60,49 +60,85 @@ export type Database = {
       }
       print_templates: {
         Row: {
-          id: string
-          user_id: string
-          router_host: string
-          name: string
-          profile_name: string | null
           bg_image: string | null
+          card_subtitle: string
+          card_title: string
+          char_type: string
+          created_at: string | null
+          data_quota_label: string
           fields: Json
+          hours_label: string
+          id: string
+          name: string
+          name_length: number
+          package_display_name: string
+          pass_length: number
+          password_mode: string
+          prefix: string
           print_cols: number
           print_rows: number
-          card_title: string
-          card_subtitle: string
-          created_at: string | null
+          profile_name: string | null
+          router_host: string
+          transfer_limit: number
+          unit_price: number
           updated_at: string | null
+          user_id: string
+          validity_days: number
+          voucher_type: string
         }
         Insert: {
-          id?: string
-          user_id: string
-          router_host?: string
-          name: string
-          profile_name?: string | null
           bg_image?: string | null
+          card_subtitle?: string
+          card_title?: string
+          char_type?: string
+          created_at?: string | null
+          data_quota_label?: string
           fields?: Json
+          hours_label?: string
+          id?: string
+          name: string
+          name_length?: number
+          package_display_name?: string
+          pass_length?: number
+          password_mode?: string
+          prefix?: string
           print_cols?: number
           print_rows?: number
-          card_title?: string
-          card_subtitle?: string
-          created_at?: string | null
+          profile_name?: string | null
+          router_host?: string
+          transfer_limit?: number
+          unit_price?: number
           updated_at?: string | null
+          user_id: string
+          validity_days?: number
+          voucher_type?: string
         }
         Update: {
-          id?: string
-          user_id?: string
-          router_host?: string
-          name?: string
-          profile_name?: string | null
           bg_image?: string | null
+          card_subtitle?: string
+          card_title?: string
+          char_type?: string
+          created_at?: string | null
+          data_quota_label?: string
           fields?: Json
+          hours_label?: string
+          id?: string
+          name?: string
+          name_length?: number
+          package_display_name?: string
+          pass_length?: number
+          password_mode?: string
+          prefix?: string
           print_cols?: number
           print_rows?: number
-          card_title?: string
-          card_subtitle?: string
-          created_at?: string | null
+          profile_name?: string | null
+          router_host?: string
+          transfer_limit?: number
+          unit_price?: number
           updated_at?: string | null
+          user_id?: string
+          validity_days?: number
+          voucher_type?: string
         }
         Relationships: []
       }
