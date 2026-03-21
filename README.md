@@ -1,4 +1,53 @@
-# Welcome to your Lovable project
+# MikroTik Whisperer
+
+Professional MikroTik router management platform with both **Web** and **Mobile** applications.
+
+## 🚀 Features
+
+- **Multi-Platform**: Web application + Native mobile apps (iOS & Android)
+- **Real-time Monitoring**: Dashboard with live statistics, CPU/memory usage, active users
+- **Hotspot Management**: Active user monitoring, kick users, session tracking
+- **User Manager**: Full CRUD operations, profiles, bulk operations
+- **Voucher Generation**: Create vouchers with QR codes and PDF export
+- **Sales Tracking**: Analytics and reporting with charts
+- **Backup & Restore**: Full data backup and selective restore
+- **Health Monitoring**: System health checks and diagnostics
+- **Multi-Router Support**: Manage multiple MikroTik routers
+- **Role-Based Access**: Admin and Cashier roles with different permissions
+- **Dark Mode**: Full dark mode support on both platforms
+- **Responsive Design**: Mobile-optimized web interface
+
+## 📱 Mobile Application
+
+The mobile app is built with **Expo** and **React Native**, providing a native experience on iOS and Android.
+
+### Key Mobile Features
+- ✅ Native iOS and Android apps
+- ✅ Biometric authentication (Face ID/Fingerprint)
+- ✅ Haptic feedback
+- ✅ Pull-to-refresh
+- ✅ Smooth animations with Reanimated
+- ✅ Offline support (coming soon)
+- ✅ Push notifications (coming soon)
+
+### Mobile Quick Start
+
+```sh
+cd mobile
+npm install --legacy-peer-deps
+npm start
+```
+
+Then scan the QR code with Expo Go app, or:
+- Press `i` for iOS Simulator (Mac only)
+- Press `a` for Android Emulator
+- Press `w` for Web browser
+
+See [mobile/README.md](mobile/README.md) for detailed instructions.
+
+## 🌐 Web Application
+
+The web application is built with **React**, **TypeScript**, and **Vite**.
 
 ## CoreRoute Runtime Modes
 
@@ -13,7 +62,7 @@ At app startup, when the selected router is local LAN, the UI checks if the agen
 - If down: shows install/start instructions in-app with one-click installer download
 - Shows current agent version and update availability (from release manifest)
 
-## Quick start (best experience)
+### Web Quick Start
 
 ```sh
 # install web deps
@@ -33,102 +82,164 @@ You can override it with:
 - VITE_MIKROTIK_AGENT_URL
 - Or from Settings page (CoreRoute Local Agent section)
 
-One-click installer file (download from browser):
-
-- /downloads/install-coreroute-agent-macos.command
-- /downloads/install-coreroute-agent-windows.bat
-
-Native packaging helper scripts:
-
-- /downloads/build-coreroute-agent-macos-pkg.sh
-- /downloads/build-coreroute-agent-windows-installer.ps1
-
-Auto-start service installers:
-
-- /downloads/install-coreroute-agent-service-macos.sh
-- /downloads/install-coreroute-agent-service-windows.bat
-
-CI pipeline for installers:
-
-- .github/workflows/agent-installers.yml
-- Trigger manually with workflow_dispatch or by pushing tags like agent-v1.0.0
-
-Certificate/signing setup:
-
-- docs/agent-signing.md
-
 Advanced operations page:
 
 - /health (service readiness, per-service latency, agent runtime diagnostics)
 
-## Project info
+## 🏗️ Project Structure
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+```
+mikrotik-whisperer/
+├── mobile/              # Expo/React Native mobile app
+│   ├── app/            # Expo Router screens
+│   ├── components/     # Reusable components
+│   ├── contexts/       # React contexts
+│   └── lib/           # Utilities and config
+├── src/                # Web application
+│   ├── components/     # React components
+│   ├── pages/         # Page components
+│   ├── hooks/         # Custom hooks
+│   └── integrations/  # Supabase integration
+├── agent/             # Local agent for LAN routers
+└── supabase/          # Supabase backend
+```
 
-## How can I edit this code?
+## 🛠️ Technology Stack
 
-There are several ways of editing your application.
+### Web
+- React 18 + TypeScript
+- Vite
+- Shadcn/ui + Radix UI
+- Tailwind CSS
+- React Query (TanStack Query)
+- React Router v6
+- Supabase (Auth + Database)
 
-**Use Lovable**
+### Mobile
+- Expo SDK 55
+- React Native
+- TypeScript
+- Expo Router (file-based routing)
+- React Query
+- React Native Reanimated
+- React Native Gesture Handler
+- Supabase
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+### Backend
+- Supabase (PostgreSQL + Auth + Edge Functions)
+- Local Node.js agent for LAN connectivity
 
-Changes made via Lovable will be committed automatically to this repo.
+## 📦 Installation
 
-**Use your preferred IDE**
+### Prerequisites
+- Node.js 18+ and npm
+- Expo CLI (for mobile): `npm install -g expo-cli`
+- iOS Simulator (Mac only) or Android Emulator (for mobile testing)
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
+### Web Setup
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
+# Clone the repository
 git clone <YOUR_GIT_URL>
+cd mikrotik-whisperer
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+# Install dependencies
+npm install
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your Supabase credentials
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Run the development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Mobile Setup
+```sh
+cd mobile
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+# Install dependencies
+npm install --legacy-peer-deps
 
-**Use GitHub Codespaces**
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your Supabase credentials
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+# Start the development server
+npm start
+```
 
-## What technologies are used for this project?
+## 🔐 Environment Variables
 
-This project is built with:
+Create `.env` files in both root and mobile directories:
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
-## How can I deploy this project?
+For mobile (`mobile/.env`):
+```env
+EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
+## 🚢 Deployment
+
+### Web Deployment
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
 
-## Can I connect a custom domain to my Lovable project?
+Or deploy manually to Vercel, Netlify, or any static hosting service:
+```sh
+npm run build
+# Upload dist/ directory to your hosting service
+```
 
-Yes, you can!
+### Mobile Deployment
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+#### iOS (requires Mac)
+```sh
+cd mobile
+eas build --platform ios
+```
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+#### Android
+```sh
+cd mobile
+eas build --platform android
+```
+
+## 📖 Documentation
+
+- [Mobile App Documentation](mobile/README.md)
+- [Agent Signing Setup](docs/agent-signing.md)
+- [Supabase Setup](supabase/README.md)
+
+## 🎨 Design System
+
+Both platforms share a consistent design language:
+- **Colors**: Primary (Sky Blue), Secondary (Purple), Success (Green), Destructive (Red)
+- **Spacing**: 4px base unit (xs: 4, sm: 8, md: 16, lg: 24, xl: 32)
+- **Typography**: Responsive font sizes with clear hierarchy
+- **Dark Mode**: Full support with automatic system detection
+- **Animations**: Smooth transitions with haptic feedback on mobile
+
+## 🤝 Contributing
+
+1. Create a feature branch
+2. Make your changes
+3. Test on both web and mobile
+4. Submit a pull request
+
+## 📄 License
+
+MIT License - see LICENSE file for details
+
+## 💬 Support
+
+For issues or questions:
+- Open an issue on GitHub
+- Contact support@mikrotikwhisperer.com
+
+---
+
+Built with ❤️ using React, Expo, and Supabase
