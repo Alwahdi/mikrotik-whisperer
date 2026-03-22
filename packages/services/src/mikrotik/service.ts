@@ -40,8 +40,8 @@ export class MikrotikService {
    * Execute a single command on MikroTik router
    */
   static async executeCommand(
-    connection: MikrotikConnection,
-    endpoint: string,
+    _connection: MikrotikConnection,
+    _endpoint: string,
     options: MikrotikOptions = {}
   ): Promise<ServiceResult<unknown>> {
     try {
@@ -78,7 +78,7 @@ export class MikrotikService {
    * Execute multiple commands in batch
    */
   static async executeBatch(
-    connection: MikrotikConnection,
+    _connection: MikrotikConnection,
     commands: MikrotikCommand[],
     options: MikrotikOptions = {}
   ): Promise<ServiceResult<unknown[]>> {
@@ -115,7 +115,7 @@ export class MikrotikService {
    * Test connection to MikroTik router
    */
   static async testConnection(
-    connection: MikrotikConnection
+    _connection: MikrotikConnection
   ): Promise<ServiceResult<boolean>> {
     try {
       const result = await withTimeout(
