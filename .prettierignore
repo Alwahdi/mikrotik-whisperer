@@ -1,0 +1,9 @@
+node_modules
+dist
+.next
+mobile/.expo
+mobile/dist
+bun.lock
+bun.lockb
+package-lock.json
+*.generated.*
