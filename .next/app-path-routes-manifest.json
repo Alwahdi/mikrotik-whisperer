@@ -1,0 +1,18 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/access/page": "/access",
+  "/admin/users/page": "/admin/users",
+  "/auth/page": "/auth",
+  "/backups/page": "/backups",
+  "/dashboard/page": "/dashboard",
+  "/health/page": "/health",
+  "/hotspot/page": "/hotspot",
+  "/loading/page": "/loading",
+  "/page": "/",
+  "/routers/page": "/routers",
+  "/sales/page": "/sales",
+  "/settings/page": "/settings",
+  "/usermanager/page": "/usermanager",
+  "/vouchers/page": "/vouchers"
+}

@@ -1,6 +1,7 @@
+'use client'
 import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Download, PlayCircle, RefreshCcw, TerminalSquare } from "lucide-react";
-import { Link } from "react-router-dom";
+import Link from "next/link";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import {
   getAgentHealth,
@@ -184,7 +185,7 @@ export default function AgentRuntimeBanner() {
             </button>
 
             <Link
-              to="/settings"
+              href="/settings"
               className="inline-flex items-center gap-1.5 rounded-md border border-red-500/40 bg-white/70 px-2.5 py-1.5 font-medium hover:bg-white"
             >
               <PlayCircle className="h-3.5 w-3.5" />

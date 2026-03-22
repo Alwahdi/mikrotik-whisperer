@@ -1,0 +1,15 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/vouchers/layout,_N_T_/vouchers/page,_N_T_/vouchers"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/vouchers/__PAGE__",
+    "/vouchers",
+    "/_index",
+    "/_head"
+  ]
+}

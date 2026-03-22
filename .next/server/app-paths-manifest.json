@@ -1,0 +1,18 @@
+{
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/access/page": "app/access/page.js",
+  "/admin/users/page": "app/admin/users/page.js",
+  "/auth/page": "app/auth/page.js",
+  "/backups/page": "app/backups/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/health/page": "app/health/page.js",
+  "/hotspot/page": "app/hotspot/page.js",
+  "/loading/page": "app/loading/page.js",
+  "/page": "app/page.js",
+  "/routers/page": "app/routers/page.js",
+  "/sales/page": "app/sales/page.js",
+  "/settings/page": "app/settings/page.js",
+  "/usermanager/page": "app/usermanager/page.js",
+  "/vouchers/page": "app/vouchers/page.js"
+}
