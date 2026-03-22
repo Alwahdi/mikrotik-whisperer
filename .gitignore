@@ -15,6 +15,9 @@ dist-ssr
 # Turborepo
 .turbo/
 
+# Vercel
+.vercel
+
 # Build outputs
 .next/
 *.tsbuildinfo

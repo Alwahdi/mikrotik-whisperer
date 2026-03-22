@@ -5,6 +5,28 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"],
+      "env": [
+        "SUPABASE_URL",
+        "SUPABASE_ANON_KEY",
+        "SUPABASE_PUBLISHABLE_KEY",
+        "SUPABASE_JWT_SECRET",
+        "SUPABASE_SECRET_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "POSTGRES_URL",
+        "POSTGRES_URL_NON_POOLING",
+        "POSTGRES_PRISMA_URL",
+        "POSTGRES_HOST",
+        "POSTGRES_USER",
+        "POSTGRES_PASSWORD",
+        "POSTGRES_DATABASE",
+        "REDIS_URL",
+        "SENTRY_PROJECT",
+        "SENTRY_ORG",
+        "SENTRY_AUTH_TOKEN",
+        "SENTRY_PUBLIC_KEY",
+        "SENTRY_OTLP_TRACES_URL",
+        "SENTRY_VERCEL_LOG_DRAIN_URL"
+      ],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "dev": {
