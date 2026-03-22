@@ -7,6 +7,12 @@
     },
     "android": {
       "package": "com.alwahdi.mikroman"
+    },
+    "ios": {
+      "bundleIdentifier": "com.alwahdi.mikroman",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     }
   }
 }
