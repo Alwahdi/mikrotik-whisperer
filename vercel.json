@@ -1,6 +1,0 @@
-{
-  "framework": "nextjs",
-  "buildCommand": "next build",
-  "devCommand": "next dev --port 8080",
-  "installCommand": "npm ci"
-}

@@ -1,134 +1,53 @@
-# Welcome to your Lovable project
+# Mikrotik Whisperer Monorepo
 
-## CoreRoute Runtime Modes
+Nextforge-aligned monorepo for managing Mikrotik networks with a web control plane, local agent, Expo mobile client, and docs site. Tooling is opinionated for speed, safety, and low friction.
 
-This project now supports two MikroTik runtime paths automatically:
+## Structure
+- `apps/web` — Next.js 16 app router UI (shadcn/ui, Tailwind, Vitest).
+- `apps/agent` — Express-based local agent for LAN-first router access.
+- `apps/mobile` — Expo Router client aligned to the web design system.
+- `apps/docs` — Next.js docs site describing workflows and policies.
+- `docs` — Markdown knowledge base surfaced in the docs app.
+- `tsconfig.base.json` / `turbo.json` — shared compiler + pipeline configs.
 
-- Local LAN target (192.168.x.x / 10.x.x.x / 172.16-31.x.x / localhost): uses CoreRoute Local Agent
-- Public IP or DNS target: uses cloud bridge via Supabase Edge Function
-
-At app startup, when the selected router is local LAN, the UI checks if the agent is running:
-
-- If running: shows Local Agent running
-- If down: shows install/start instructions in-app with one-click installer download
-- Shows current agent version and update availability (from release manifest)
-
-## Quick start (best experience)
-
-```sh
-# install web deps
+## Quick start
+```bash
 npm install
 
-# install agent deps
-npm run agent:install
+# web (8080)
+npm run dev -- --filter=@mikrotik-whisperer/web
 
-# run web + agent together
-npm run dev:all
+# local agent
+npm run dev -- --filter=@mikrotik-whisperer/agent
+
+# docs site
+npm run dev -- --filter=@mikrotik-whisperer/docs
+
+# mobile (Expo)
+cd apps/mobile && npm run start
 ```
 
-Agent default URL: http://127.0.0.1:3001
+## Environment
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_MIKROTIK_AGENT_URL` (defaults to `http://127.0.0.1:3001` when absent)
 
-You can override it with:
+## Quality gates
+- Lint: `npm run lint`
+- Tests: `npm run test`
+- Build: `npm run build`
+- Pre-commit: Husky runs lint-staged + targeted tests; commitlint enforces conventional commits.
 
-- VITE_MIKROTIK_AGENT_URL
-- Or from Settings page (CoreRoute Local Agent section)
+## Branching
+- `main` (prod), `develop` (integration), `feature/*`, `bugfix/*`, `release/*`.
+- Protected branches require PR + green CI. Conventional commits are mandatory.
+- See `docs/branching-strategy.md` and `CONTRIBUTING.md` for rules.
 
-One-click installer file (download from browser):
+## Tooling & UX
+- Shadcn/ui + CVA variants, Tailwind tokens, skeletons, and premium hover/motion utilities.
+- Turborepo orchestrates workspace tasks; skills.sh recommended to bootstrap dev tools quickly.
+- VS Code recommendations live in `.vscode/extensions.json`.
 
-- /downloads/install-coreroute-agent-macos.command
-- /downloads/install-coreroute-agent-windows.bat
-
-Native packaging helper scripts:
-
-- /downloads/build-coreroute-agent-macos-pkg.sh
-- /downloads/build-coreroute-agent-windows-installer.ps1
-
-Auto-start service installers:
-
-- /downloads/install-coreroute-agent-service-macos.sh
-- /downloads/install-coreroute-agent-service-windows.bat
-
-CI pipeline for installers:
-
-- .github/workflows/agent-installers.yml
-- Trigger manually with workflow_dispatch or by pushing tags like agent-v1.0.0
-
-Certificate/signing setup:
-
-- docs/agent-signing.md
-
-Advanced operations page:
-
-- /health (service readiness, per-service latency, agent runtime diagnostics)
-
-## Project info
-
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
-
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## Docs
+- Markdown in `/docs` (Getting Started, Architecture, Usage, Extending, Testing, API).
+- Live docs app in `apps/docs` with summaries and links back to source Markdown.
