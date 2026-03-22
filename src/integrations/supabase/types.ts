@@ -14,6 +14,71 @@ export type Database = {
   }
   public: {
     Tables: {
+      background_jobs: {
+        Row: {
+          completed: number
+          created_at: string
+          failed: number
+          finished_at: string | null
+          id: string
+          job_key: string
+          label: string
+          logs: Json
+          rate: number
+          router_host: string | null
+          started_at: string
+          status: string
+          succeeded: number
+          total: number
+          type: string
+          user_id: string
+        }
+        Insert: {
+          completed?: number
+          created_at?: string
+          failed?: number
+          finished_at?: string | null
+          id?: string
+          job_key: string
+          label: string
+          logs?: Json
+          rate?: number
+          router_host?: string | null
+          started_at?: string
+          status?: string
+          succeeded?: number
+          total?: number
+          type?: string
+          user_id: string
+        }
+        Update: {
+          completed?: number
+          created_at?: string
+          failed?: number
+          finished_at?: string | null
+          id?: string
+          job_key?: string
+          label?: string
+          logs?: Json
+          rate?: number
+          router_host?: string | null
+          started_at?: string
+          status?: string
+          succeeded?: number
+          total?: number
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "background_jobs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       backups: {
         Row: {
           backup_type: string

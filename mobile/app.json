@@ -50,6 +50,12 @@
         "projectId": "aa6fc9da-762d-4bdb-a9c4-f5b145d4fe3d"
       }
     },
-    "owner": "alwahdi"
+    "owner": "alwahdi",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/aa6fc9da-762d-4bdb-a9c4-f5b145d4fe3d"
+    }
   }
 }

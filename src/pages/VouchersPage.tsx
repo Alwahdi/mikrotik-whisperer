@@ -34,7 +34,7 @@ import { jsPDF } from "jspdf";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { addJob, updateJob, type BackgroundJob } from "@/stores/backgroundJobStore";
+import { addJob, updateJob, addJobLog, type BackgroundJob } from "@/stores/backgroundJobStore";
 
 // ─── Types ────────────────────────────────────
 interface VoucherCard {
@@ -1049,6 +1049,7 @@ export default function VouchersPage() {
       rate: 0,
       startedAt,
       routerHost: currentRouterHost,
+      logs: [{ ts: Date.now(), msg: `بدأت إضافة ${cards.length} كرت (${type}) إلى ${currentRouterHost}` }],
     });
 
     const isDuplicateError = (message: string) => {
@@ -1106,7 +1107,7 @@ export default function VouchersPage() {
 
     const renderLiveProgress = (label: string) => {
       const done = resolved.size;
-      const pct = Math.max(1, Math.min(99, Math.round((done / cards.length) * 100)));
+      const pct = Math.max(1, Math.min(98, Math.round((done / cards.length) * 100)));
       const elapsedNow = Math.max(1, (performance.now() - startedAt) / 1000);
       const liveRate = Math.round(done / elapsedNow);
       setPushProgress((prev) => Math.max(prev, pct));
@@ -1173,7 +1174,7 @@ export default function VouchersPage() {
       };
 
       const worker = async () => {
-        while (pushingRef.current) {
+        while (true) {
           const current = nextChunkIndex;
           nextChunkIndex += 1;
           if (current >= chunks.length) break;
@@ -1186,15 +1187,14 @@ export default function VouchersPage() {
     };
 
     progressPulse = setInterval(() => {
-      if (!pushingRef.current) return;
       setPushProgress((prev) => {
         const actualResolved = resolved.size;
         const actualPct = actualResolved > 0
-          ? Math.max(1, Math.min(99, Math.round((actualResolved / cards.length) * 100)))
+          ? Math.max(1, Math.min(98, Math.round((actualResolved / cards.length) * 100)))
           : 0;
         if (actualPct > prev) return actualPct;
-        // Slow crawl to show continuous activity (max 90%)
-        if (prev < 90) return Math.min(90, prev + 0.3);
+        // Slow crawl to show continuous activity (max 95%)
+        if (prev < 95) return Math.min(95, prev + 0.2);
         return prev;
       });
     }, 200);
@@ -1202,7 +1202,7 @@ export default function VouchersPage() {
     try {
       const isLargeBatch = cards.length >= 300;
       const isXLBatch = cards.length >= 1000;
-      // Optimized for v6 RouterOS: smaller chunks to avoid router CPU overload
+      // Optimized for RouterOS: smaller chunks give more frequent progress updates
       const firstChunk = isRestMode
         ? (type === "usermanager" ? (isXLBatch ? 3 : isLargeBatch ? 4 : 6) : (isXLBatch ? 4 : isLargeBatch ? 6 : 10))
         : (type === "usermanager" ? (isXLBatch ? 15 : isLargeBatch ? 20 : 30) : (isXLBatch ? 20 : isLargeBatch ? 30 : 50));
@@ -1218,6 +1218,8 @@ export default function VouchersPage() {
         false,
       );
 
+      addJobLog(jobId, `المحاولة الأولى: نجح ${totalSuccess} / فشل ${pending.length} يحتاج إعادة محاولة`);
+
       if (pending.length > 0) {
         // Short delay before retry to let the router recover
         await new Promise(r => setTimeout(r, 800));
@@ -1228,6 +1230,7 @@ export default function VouchersPage() {
           "المحاولة 2",
           false,
         );
+        addJobLog(jobId, `المحاولة الثانية: متبقي ${pending.length} للمحاولة النهائية`);
       }
 
       if (pending.length > 0) {
@@ -1248,6 +1251,11 @@ export default function VouchersPage() {
 
       const elapsedSec = Math.max(1, (performance.now() - startedAt) / 1000);
       const rate = Math.round(resolved.size / elapsedSec);
+
+      const finishedLog = totalFailed === 0
+        ? `✅ اكتملت: نجح ${totalSuccess}/${cards.length} كرت — ${Math.round(rate)} كرت/ث — الوقت: ${Math.round(elapsedSec)}ث`
+        : `⚠️ اكتملت بأخطاء: نجح ${totalSuccess} / فشل ${totalFailed} — ${Math.round(rate)} كرت/ث`;
+      addJobLog(jobId, finishedLog);
 
       // Collect failed items for retry
       const failedItemsList = updatedCards

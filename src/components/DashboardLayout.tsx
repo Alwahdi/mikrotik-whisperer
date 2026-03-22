@@ -8,6 +8,7 @@ import {
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHotspotUsers, useUserManagerCount } from "@/hooks/useMikrotik";
+import { useJobHistory } from "@/hooks/useJobHistory";
 
 const navItems = [
   { path: "/dashboard", icon: LayoutDashboard, label: "لوحة التحكم", roles: ["admin", "cashier"] },
@@ -28,6 +29,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
   const config = getMikrotikConfig();
+
+  // Loads job history from Supabase and registers sync callbacks
+  useJobHistory();
 
   // Live badge counts
   const { data: hotspotUsers } = useHotspotUsers();

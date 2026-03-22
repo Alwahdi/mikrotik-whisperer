@@ -4,7 +4,8 @@ import { clearFinished, removeJob, type BackgroundJob } from "@/stores/backgroun
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import {
-  Loader2, CheckCircle, XCircle, RefreshCw, X, ChevronUp, ChevronDown, Activity, Trash2,
+  Loader2, CheckCircle, XCircle, RefreshCw, X, ChevronUp, ChevronDown,
+  Activity, Trash2, ChevronRight, Clock, WifiOff, ScrollText,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -13,23 +14,30 @@ function statusIcon(status: BackgroundJob["status"]) {
     case "running":
       return <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />;
     case "retrying":
-      return <RefreshCw className="h-3.5 w-3.5 animate-spin text-warning" />;
+      return <RefreshCw className="h-3.5 w-3.5 animate-spin text-yellow-400" />;
     case "success":
-      return <CheckCircle className="h-3.5 w-3.5 text-accent" />;
+      return <CheckCircle className="h-3.5 w-3.5 text-green-500" />;
     case "error":
       return <XCircle className="h-3.5 w-3.5 text-destructive" />;
+    case "interrupted":
+      return <WifiOff className="h-3.5 w-3.5 text-orange-400" />;
   }
 }
 
 function statusBadge(status: BackgroundJob["status"]) {
-  const map: Record<string, { label: string; variant: "default" | "outline" | "secondary" | "destructive" }> = {
-    running: { label: "قيد التنفيذ", variant: "default" },
-    retrying: { label: "إعادة محاولة", variant: "secondary" },
-    success: { label: "نجح", variant: "outline" },
-    error: { label: "فشل جزئي", variant: "destructive" },
+  const map: Record<string, { label: string; cls: string }> = {
+    running:     { label: "قيد التنفيذ",      cls: "bg-primary/20 text-primary border-primary/30" },
+    retrying:    { label: "إعادة محاولة",     cls: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" },
+    success:     { label: "نجح",              cls: "bg-green-500/20 text-green-400 border-green-500/30" },
+    error:       { label: "فشل جزئي",         cls: "bg-destructive/20 text-destructive border-destructive/30" },
+    interrupted: { label: "توقفت — أغلق المتصفح", cls: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
   };
-  const { label, variant } = map[status] || map.running;
-  return <Badge variant={variant} className="text-[9px] px-1.5 py-0">{label}</Badge>;
+  const { label, cls } = map[status] || map.running;
+  return (
+    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-medium ${cls}`}>
+      {label}
+    </span>
+  );
 }
 
 function formatDuration(ms: number): string {
@@ -40,20 +48,40 @@ function formatDuration(ms: number): string {
   return `${min}د ${remainSec}ث`;
 }
 
+function formatTs(ts: number): string {
+  const d = new Date(ts);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const time = d.toLocaleTimeString("ar-SA", { hour: "2-digit", minute: "2-digit" });
+  if (isToday) return time;
+  return `${d.toLocaleDateString("ar-SA", { month: "short", day: "numeric" })} ${time}`;
+}
+
 function JobRow({ job }: { job: BackgroundJob }) {
-  const pct = job.total > 0 ? Math.round((job.completed / job.total) * 100) : 0;
+  const [showLogs, setShowLogs] = useState(false);
+  const pct = job.total > 0 ? Math.min(100, Math.round((job.completed / job.total) * 100)) : 0;
   const elapsed = (job.finishedAt || Date.now()) - job.startedAt;
   const isActive = job.status === "running" || job.status === "retrying";
+  const hasLogs = Array.isArray(job.logs) && job.logs.length > 0;
 
   return (
     <div className="p-2.5 border border-border rounded-lg space-y-1.5 bg-card/50">
+      {/* Header row */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           {statusIcon(job.status)}
           <span className="text-xs font-medium truncate">{job.label}</span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
-          {statusBadge(job.status)}
+          {!isActive && hasLogs && (
+            <button
+              onClick={() => setShowLogs((v) => !v)}
+              className="text-muted-foreground hover:text-primary transition-colors"
+              title="عرض السجل"
+            >
+              <ScrollText className="h-3 w-3" />
+            </button>
+          )}
           {!isActive && (
             <button
               onClick={() => removeJob(job.id)}
@@ -65,35 +93,64 @@ function JobRow({ job }: { job: BackgroundJob }) {
         </div>
       </div>
 
-      {job.routerHost && (
-        <div className="text-[10px] text-muted-foreground truncate">
-          📡 {job.routerHost}
-        </div>
-      )}
+      {/* Badge + host row */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {statusBadge(job.status)}
+        {job.routerHost && (
+          <span className="text-[10px] text-muted-foreground truncate">📡 {job.routerHost}</span>
+        )}
+      </div>
 
+      {/* Progress bar */}
       <Progress value={pct} className="h-1.5" />
 
+      {/* Stats row */}
       <div className="flex items-center justify-between text-[10px] text-muted-foreground">
         <span>{job.completed}/{job.total} ({pct}%)</span>
         <div className="flex items-center gap-2">
           {isActive && job.rate > 0 && (
             <span className="text-primary font-medium">{job.rate} عنصر/ث</span>
           )}
-          <span>{formatDuration(elapsed)}</span>
+          <span className="flex items-center gap-0.5">
+            <Clock className="h-2.5 w-2.5" />
+            {formatDuration(elapsed)}
+          </span>
         </div>
       </div>
 
+      {/* Success/fail counts */}
       {(job.succeeded > 0 || job.failed > 0) && (
-        <div className="flex items-center gap-2 text-[10px]">
+        <div className="flex items-center gap-3 text-[10px]">
           {job.succeeded > 0 && (
-            <span className="text-accent">✓ {job.succeeded}</span>
+            <span className="text-green-400 font-medium">✓ نجح {job.succeeded}</span>
           )}
           {job.failed > 0 && (
-            <span className="text-destructive">✗ {job.failed}</span>
+            <span className="text-destructive font-medium">✗ فشل {job.failed}</span>
           )}
         </div>
       )}
 
+      {/* Started at */}
+      <div className="text-[10px] text-muted-foreground/70">
+        بدأت: {formatTs(job.startedAt)}
+        {job.finishedAt && (
+          <span> • انتهت: {formatTs(job.finishedAt)}</span>
+        )}
+      </div>
+
+      {/* Log entries */}
+      {showLogs && hasLogs && (
+        <div className="mt-1 rounded bg-muted/30 border border-border/50 p-1.5 space-y-0.5 max-h-28 overflow-y-auto">
+          {job.logs!.map((entry, i) => (
+            <div key={i} className="text-[9px] text-muted-foreground leading-relaxed">
+              <span className="text-muted-foreground/50 ml-1">{formatTs(entry.ts)}</span>
+              {entry.msg}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Retry button */}
       {!isActive && job.failed > 0 && job.retryFn && (
         <Button
           size="sm"
@@ -112,15 +169,17 @@ function JobRow({ job }: { job: BackgroundJob }) {
 export default function LiveQueuePanel() {
   const jobs = useBackgroundJobs();
   const [collapsed, setCollapsed] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   if (jobs.length === 0) return null;
 
-  const activeCount = jobs.filter((j) => j.status === "running" || j.status === "retrying").length;
-  const finishedCount = jobs.filter((j) => j.status === "success" || j.status === "error").length;
+  const activeJobs = jobs.filter((j) => j.status === "running" || j.status === "retrying");
+  const finishedJobs = jobs.filter((j) => j.status !== "running" && j.status !== "retrying");
+  const visibleJobs = showAll ? jobs : jobs.slice(0, 5);
 
   return (
     <div
-      className="fixed bottom-4 left-4 z-50 w-80 max-h-[70vh] flex flex-col bg-popover border border-border rounded-xl shadow-lg overflow-hidden"
+      className="fixed bottom-4 left-4 z-50 w-80 max-h-[80vh] flex flex-col bg-popover border border-border rounded-xl shadow-lg overflow-hidden"
       dir="rtl"
     >
       {/* Header */}
@@ -130,15 +189,15 @@ export default function LiveQueuePanel() {
       >
         <div className="flex items-center gap-1.5">
           <Activity className="h-3.5 w-3.5 text-primary" />
-          <span className="text-xs font-semibold">العمليات الخلفية</span>
-          {activeCount > 0 && (
-            <Badge variant="default" className="text-[9px] px-1.5 py-0 animate-pulse">
-              {activeCount} نشط
-            </Badge>
+          <span className="text-xs font-semibold">العمليات والسجل</span>
+          {activeJobs.length > 0 && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/20 text-primary border border-primary/30 font-medium animate-pulse">
+              {activeJobs.length} نشط
+            </span>
           )}
         </div>
         <div className="flex items-center gap-1">
-          {finishedCount > 0 && (
+          {finishedJobs.length > 0 && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -160,10 +219,19 @@ export default function LiveQueuePanel() {
 
       {/* Jobs list */}
       {!collapsed && (
-        <div className="overflow-y-auto p-2 space-y-2 max-h-[55vh]">
-          {jobs.map((job) => (
+        <div className="overflow-y-auto p-2 space-y-2">
+          {visibleJobs.map((job) => (
             <JobRow key={job.id} job={job} />
           ))}
+          {jobs.length > 5 && (
+            <button
+              onClick={() => setShowAll((v) => !v)}
+              className="w-full text-[10px] text-muted-foreground hover:text-primary flex items-center justify-center gap-1 py-1 transition-colors"
+            >
+              <ChevronRight className={`h-3 w-3 transition-transform ${showAll ? "rotate-90" : ""}`} />
+              {showAll ? "عرض أقل" : `عرض ${jobs.length - 5} أخرى`}
+            </button>
+          )}
         </div>
       )}
     </div>
