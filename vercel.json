@@ -1,6 +1,5 @@
 {
   "framework": "nextjs",
-  "buildCommand": "next build",
-  "devCommand": "next dev --port 8080",
-  "installCommand": "npm ci"
+  "installCommand": "pnpm install",
+  "buildCommand": "pnpm turbo run build --filter=@repo/app"
 }

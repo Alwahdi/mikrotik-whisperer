@@ -12,15 +12,18 @@ dist
 dist-ssr
 *.local
 
+# Turborepo
+.turbo/
+
+# Build outputs
+.next/
+*.tsbuildinfo
+
 # Environment variables
 .env
 .env.local
 .env.production
 .env.development
-
-# Mobile (Expo)
-mobile/.expo/
-mobile/dist/
 
 # Editor directories and files
 .vscode/*
@@ -32,4 +35,3 @@ mobile/dist/
 *.njsproj
 *.sln
 *.sw?
-.next/

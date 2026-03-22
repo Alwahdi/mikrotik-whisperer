@@ -1,0 +1,15 @@
+{
+  "extends": "@repo/typescript-config/nextjs.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"],
+      "@repo/design-system/*": ["../../packages/design-system/src/*"],
+      "@repo/database": ["../../packages/database/src/index.ts"],
+      "@repo/auth": ["../../packages/auth/src/index.ts"],
+      "@repo/auth/middleware": ["../../packages/auth/src/middleware.ts"],
+      "@repo/mikrotik": ["../../packages/mikrotik/src/index.ts"]
+    }
+  },
+  "include": ["next-env.d.ts", "src", "**/*.ts", "**/*.tsx"],
+  "exclude": ["node_modules"]
+}
