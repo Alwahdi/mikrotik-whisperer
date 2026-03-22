@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "skills": {
+    "agent-browser": {
+      "source": "vercel-labs/agent-browser",
+      "sourceType": "github",
+      "computedHash": "35478d4b0a33b3f98e22b7b4f3fe2d2919ebe72a6ca24b3a7175a9b17cc2788d"
+    },
+    "deploy-to-vercel": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "d2b5bcc7c09fdb649129ffc7dd7b647ec1b155736974b974292675afd588cb39"
+    },
+    "dogfood": {
+      "source": "vercel-labs/agent-browser",
+      "sourceType": "github",
+      "computedHash": "055e73cddeec68e7eb75eab0c3f8490415384f72e98ac05405821427ed0e74b1"
+    },
+    "electron": {
+      "source": "vercel-labs/agent-browser",
+      "sourceType": "github",
+      "computedHash": "587f7d9187c237d909b9f446cf3ac357184342d54ceb7c430dec56fdbac6816c"
+    },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "computedHash": "d31e234f0c90694a670222cdd1dafa853e051d7066beda389f1097c22dadd461"
+    },
+    "mikrotik-routeros-rsc": {
+      "source": "alexandre-machado/ai-stuffs",
+      "sourceType": "github",
+      "computedHash": "fb619a2a091d250231adca8eafe10429d7fc8ae5629710e467aac003df16e734"
+    },
+    "next-best-practices": {
+      "source": "vercel-labs/next-skills",
+      "sourceType": "github",
+      "computedHash": "515ba75178bd44875812d9a560bdf14651f86709f89cf1d4f209638e879807f3"
+    },
+    "next-cache-components": {
+      "source": "vercel-labs/next-skills",
+      "sourceType": "github",
+      "computedHash": "a94b83ddcd2ff1c30722577f693b1bfe32f2e1a83abdd6c08c2d6cc6753b53c8"
+    },
+    "next-forge": {
+      "source": "vercel/next-forge",
+      "sourceType": "github",
+      "computedHash": "a86e2c471ca234580f78364d0ce9cabd68c6049caaa35b60c8d4933d06424fcb"
+    },
+    "next-upgrade": {
+      "source": "vercel-labs/next-skills",
+      "sourceType": "github",
+      "computedHash": "be6bbf6ab1dc2cc6f2505cea52d497920c04f5b532c0846ee201f6029b803fb0"
+    },
+    "nextjs": {
+      "source": "vercel-labs/vercel-plugin",
+      "sourceType": "github",
+      "computedHash": "c50aa77f7aa7196a0b1e6a436d064319b20316fbad8d9f18769b470bfae0340b"
+    },
+    "slack": {
+      "source": "vercel-labs/agent-browser",
+      "sourceType": "github",
+      "computedHash": "2b88c3cb2e5debf7a4f14a4759e6338b3e88fe127cabaac3fa649af6ca0bdbbd"
+    },
+    "turborepo": {
+      "source": "vercel/turbo",
+      "sourceType": "github",
+      "computedHash": "ba8750c8b17b431b42fd9178cc753fa56049fbed9e0d1871cb2410f1da07a54d"
+    },
+    "vercel-cli-with-tokens": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "1e1ef4ae4ad838d0ad5f93a659bf065475705cd552bd3c9a2a4faade6098b030"
+    },
+    "vercel-composition-patterns": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "f98931159fa9c7fed043bcd18a891a46dcf89ababa38df13a4c5b7b30dc0ce07"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "c858d2d9023e73edb4e5504868cb0e36313e58fd56af12ef888b43c5634a3c17"
+    },
+    "vercel-react-native-skills": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "2e9088a7333666d8c2833b8ff58bd51b955501c42b4c7244f72b4cbf22dafcc4"
+    },
+    "vercel-sandbox": {
+      "source": "vercel-labs/agent-browser",
+      "sourceType": "github",
+      "computedHash": "18664220dc6dc14b824b0b2de59fd43c1ae745cd0d0dbd663db27c741da1577b"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
+    },
+    "workflow": {
+      "source": "vercel/workflow",
+      "sourceType": "github",
+      "computedHash": "dfb59009ebfb21747e6dc89fd4c683c052c459ae2592b3b966c120e2a7fb7601"
+    },
+    "workflow-init": {
+      "source": "vercel/workflow",
+      "sourceType": "github",
+      "computedHash": "6daea9d2b91c25b924a868435da7b3ae0ad10691cd08ad39cff0060524cfaf2b"
+    }
+  }
+}
