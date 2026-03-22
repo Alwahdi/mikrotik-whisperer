@@ -17,6 +17,10 @@ type MikrotikInvokeBody = {
   jobKey?: string;
   userId?: string;
   label?: string;
+  profileName?: string;
+  salesPoint?: string;
+  voucherType?: string;
+  unitPrice?: number;
 };
 
 export type AgentHealthInfo = {

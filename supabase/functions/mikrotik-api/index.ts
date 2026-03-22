@@ -1115,28 +1115,41 @@ type BackgroundBatchContext = {
   port: string;
   protocol: string;
   commands: { command: string; args?: string[] }[];
+  startedAtIso: string;
+  completed: number;
+  succeeded: number;
+  failed: number;
+  logs: { ts: number; msg: string }[];
+  profileName?: string;
+  salesPoint?: string;
+  voucherType?: string;
+  unitPrice?: number;
 };
 
-async function patchBackgroundJob(
+async function upsertBackgroundJob(
   ctx: BackgroundBatchContext,
   patch: Record<string, unknown>,
 ): Promise<void> {
   if (!ctx.supabaseUrl || !ctx.supabaseAnonKey || !ctx.authHeader) return;
 
-  const params = new URLSearchParams({
-    user_id: `eq.${ctx.userId}`,
-    job_key: `eq.${ctx.jobKey}`,
-  });
+  const payload = {
+    user_id: ctx.userId,
+    job_key: ctx.jobKey,
+    label: ctx.label,
+    type: "add",
+    router_host: ctx.host,
+    ...patch,
+  };
 
-  await fetch(`${ctx.supabaseUrl}/rest/v1/background_jobs?${params.toString()}`, {
-    method: "PATCH",
+  await fetch(`${ctx.supabaseUrl}/rest/v1/background_jobs?on_conflict=user_id,job_key`, {
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
       apikey: ctx.supabaseAnonKey,
       Authorization: ctx.authHeader,
-      Prefer: "return=minimal",
+      Prefer: "resolution=merge-duplicates,return=minimal",
     },
-    body: JSON.stringify(patch),
+    body: JSON.stringify(payload),
   }).catch(() => undefined);
 }
 
@@ -1145,33 +1158,35 @@ function appendLog(logs: { ts: number; msg: string }[], msg: string) {
 }
 
 async function runBackgroundBatch(ctx: BackgroundBatchContext): Promise<void> {
-  const startedAtMs = Date.now();
-  const logs: { ts: number; msg: string }[] = [];
-  const total = ctx.commands.length;
-  let completed = 0;
-  let succeeded = 0;
-  let failed = 0;
+  const startedAtMs = new Date(ctx.startedAtIso).getTime() || Date.now();
+  const logs: { ts: number; msg: string }[] = Array.isArray(ctx.logs) ? [...ctx.logs] : [];
+  const total = ctx.commands.length + ctx.completed;
+  let completed = ctx.completed;
+  let succeeded = ctx.succeeded;
+  let failed = ctx.failed;
 
-  appendLog(logs, `Started on edge server: ${total} commands`);
+  if (completed === 0 && logs.length === 0) {
+    appendLog(logs, `Started on edge server: ${total} commands`);
+  }
 
-  await patchBackgroundJob(ctx, {
-    label: ctx.label,
-    type: "add",
+  await upsertBackgroundJob(ctx, {
     status: "running",
     total,
-    completed: 0,
-    succeeded: 0,
-    failed: 0,
+    completed,
+    succeeded,
+    failed,
     rate: 0,
-    router_host: ctx.host,
-    started_at: new Date(startedAtMs).toISOString(),
-    logs,
+    started_at: ctx.startedAtIso,
+    logs: logs.slice(-200),
   });
 
+  const maxCommandsPerInvocation = ctx.mode === "rest" ? 80 : 220;
+  const invocationCommands = ctx.commands.slice(0, maxCommandsPerInvocation);
+  const remainingCommands = ctx.commands.slice(maxCommandsPerInvocation);
   const chunkSize = ctx.mode === "rest" ? 4 : 20;
 
-  for (let i = 0; i < ctx.commands.length; i += chunkSize) {
-    const chunk = ctx.commands.slice(i, i + chunkSize);
+  for (let i = 0; i < invocationCommands.length; i += chunkSize) {
+    const chunk = invocationCommands.slice(i, i + chunkSize);
 
     try {
       const result = ctx.mode === "api"
@@ -1200,14 +1215,66 @@ async function runBackgroundBatch(ctx: BackgroundBatchContext): Promise<void> {
     const rate = Math.round(completed / elapsedSec);
     appendLog(logs, `Progress ${completed}/${total} (ok ${succeeded}, fail ${failed})`);
 
-    await patchBackgroundJob(ctx, {
+    await upsertBackgroundJob(ctx, {
       status: "running",
+      total,
       completed,
       succeeded,
       failed,
       rate,
-      logs,
+      started_at: ctx.startedAtIso,
+      logs: logs.slice(-200),
     });
+  }
+
+  if (remainingCommands.length > 0) {
+    appendLog(logs, `Dispatch next slice: ${remainingCommands.length} remaining`);
+
+    await upsertBackgroundJob(ctx, {
+      status: "running",
+      total,
+      completed,
+      succeeded,
+      failed,
+      rate: Math.round(completed / Math.max(1, Math.round((Date.now() - startedAtMs) / 1000))),
+      started_at: ctx.startedAtIso,
+      logs: logs.slice(-200),
+    });
+
+    await fetch(`${ctx.supabaseUrl}/functions/v1/mikrotik-api`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: ctx.supabaseAnonKey,
+        Authorization: ctx.authHeader,
+      },
+      body: JSON.stringify({
+        action: "batch-background",
+        host: ctx.host,
+        user: ctx.user,
+        pass: ctx.pass,
+        mode: ctx.mode,
+        port: ctx.port,
+        protocol: ctx.protocol,
+        commands: remainingCommands,
+        userId: ctx.userId,
+        jobKey: ctx.jobKey,
+        label: ctx.label,
+        startedAtIso: ctx.startedAtIso,
+        completed,
+        succeeded,
+        failed,
+        logs: logs.slice(-200),
+        profileName: ctx.profileName || "",
+        salesPoint: ctx.salesPoint || "",
+        voucherType: ctx.voucherType || "usermanager",
+        unitPrice: Number(ctx.unitPrice || 0),
+      }),
+    }).catch((err) => {
+      appendLog(logs, `Dispatch failed: ${err instanceof Error ? err.message : "unknown"}`);
+    });
+
+    return;
   }
 
   const elapsedSec = Math.max(1, Math.round((Date.now() - startedAtMs) / 1000));
@@ -1215,15 +1282,48 @@ async function runBackgroundBatch(ctx: BackgroundBatchContext): Promise<void> {
   const finalStatus = failed === 0 ? "success" : "error";
   appendLog(logs, `Finished: status=${finalStatus}, ok=${succeeded}, fail=${failed}, rate=${finalRate}/s`);
 
-  await patchBackgroundJob(ctx, {
+  await upsertBackgroundJob(ctx, {
     status: finalStatus,
     completed: total,
     succeeded,
     failed,
     rate: finalRate,
+    total,
+    started_at: ctx.startedAtIso,
     finished_at: new Date().toISOString(),
-    logs,
+    logs: logs.slice(-200),
   });
+
+  // Persist sale after full completion (public IP server-side path)
+  if (ctx.userId) {
+    const unitPrice = Number(ctx.unitPrice || 0);
+    const totalAmount = succeeded * unitPrice;
+    const salePayload = {
+      user_id: ctx.userId,
+      batch_id: crypto.randomUUID(),
+      profile_name: ctx.profileName || "",
+      card_count: total,
+      success_count: succeeded,
+      failed_count: failed,
+      unit_price: unitPrice,
+      total_amount: totalAmount,
+      voucher_type: ctx.voucherType || "usermanager",
+      router_host: ctx.host,
+      notes: `دفعة ${total} كرت (server-side)` ,
+      sales_point: ctx.salesPoint || "",
+    };
+
+    await fetch(`${ctx.supabaseUrl}/rest/v1/sales`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: ctx.supabaseAnonKey,
+        Authorization: ctx.authHeader,
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify(salePayload),
+    }).catch(() => undefined);
+  }
 }
 
 // ─── Health Check ───────────────────────────────────────────────────────
@@ -1323,6 +1423,16 @@ serve(async (req) => {
       const label = String(body.label || `Background batch (${commands.length})`).trim();
       if (!userId) throw new Error("Missing userId");
 
+      const startedAtIso = String(body.startedAtIso || new Date().toISOString());
+      const completed = Number(body.completed || 0);
+      const succeeded = Number(body.succeeded || 0);
+      const failed = Number(body.failed || 0);
+      const logs = Array.isArray(body.logs) ? body.logs : [];
+      const profileName = String(body.profileName || "");
+      const salesPoint = String(body.salesPoint || "");
+      const voucherType = String(body.voucherType || "usermanager");
+      const unitPrice = Number(body.unitPrice || 0);
+
       const actualPort = mode === "api"
         ? (port || "8728")
         : (port || (protocol === "https" ? "443" : "80"));
@@ -1348,6 +1458,15 @@ serve(async (req) => {
         port: actualPort,
         protocol: actualProtocol,
         commands,
+        startedAtIso,
+        completed,
+        succeeded,
+        failed,
+        logs,
+        profileName,
+        salesPoint,
+        voucherType,
+        unitPrice,
       });
 
       const edgeRuntime = (globalThis as any).EdgeRuntime;

@@ -1086,10 +1086,14 @@ export default function VouchersPage() {
         jobKey: jobId,
         userId: user.id,
         label: `إضافة ${cards.length} كرت (${cards[0]?.profile || ""})`,
+        profileName: cards[0]?.profile || "",
+        salesPoint: selectedSalesPoint,
+        voucherType: type,
+        unitPrice,
       });
 
-      setPushProgress(100);
-      setPushMessage("بدأ التنفيذ على السيرفر بالخلفية");
+      setPushProgress(15);
+      setPushMessage("العملية بدأت على السيرفر... تابعها من العمليات الخلفية");
       addJobLog(jobId, "تم تسليم العملية إلى Edge Function. ستستمر حتى لو أُغلق المتصفح.");
       toast.success("تم تشغيل الإضافة على السيرفر بالخلفية. يمكنك إغلاق المتصفح.");
       return;
@@ -2168,6 +2172,21 @@ export default function VouchersPage() {
       toast.error("اختر الباقة أولاً قبل الطباعة");
       return;
     }
+    const printJobId = `print-${Date.now()}`;
+    addJob({
+      id: printJobId,
+      label: `طباعة ${toPrint.length} كرت`,
+      type: "bulk",
+      status: "running",
+      total: toPrint.length,
+      completed: 0,
+      succeeded: 0,
+      failed: 0,
+      rate: 0,
+      startedAt: Date.now(),
+      routerHost: currentRouterHost,
+      logs: [{ ts: Date.now(), msg: `بدأ تجهيز ملف الطباعة (${toPrint.length} كرت)` }],
+    });
     toast.info("جاري تجهيز ملف الطباعة...");
     const doc = await buildVoucherPdf(toPrint);
     const blob = doc.output("blob");
@@ -2181,6 +2200,12 @@ export default function VouchersPage() {
       a.click();
       document.body.removeChild(a);
       toast.info("تم تنزيل الملف، اطبعه من قارئ PDF");
+      updateJob(printJobId, {
+        status: "success",
+        completed: toPrint.length,
+        succeeded: toPrint.length,
+        finishedAt: Date.now(),
+      });
       return;
     }
     setTimeout(() => {
@@ -2192,6 +2217,12 @@ export default function VouchersPage() {
       }
     }, 700);
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    updateJob(printJobId, {
+      status: "success",
+      completed: toPrint.length,
+      succeeded: toPrint.length,
+      finishedAt: Date.now(),
+    });
   };
 
   const handleExportPdf = async (cardsToPrint?: VoucherCard[]) => {
@@ -2200,10 +2231,30 @@ export default function VouchersPage() {
       toast.error("لا توجد كروت للتصدير");
       return;
     }
+    const exportJobId = `pdf-${Date.now()}`;
+    addJob({
+      id: exportJobId,
+      label: `تصدير PDF (${toPrint.length} كرت)`,
+      type: "bulk",
+      status: "running",
+      total: toPrint.length,
+      completed: 0,
+      succeeded: 0,
+      failed: 0,
+      rate: 0,
+      startedAt: Date.now(),
+      routerHost: currentRouterHost,
+    });
     toast.info("جاري تجهيز الـ PDF...");
     const doc = await buildVoucherPdf(toPrint);
     const safeName = (cardTitle || "WiFi-Card").replace(/[^\w\u0600-\u06FF-]+/g, "-");
     doc.save(`${safeName}.pdf`);
+    updateJob(exportJobId, {
+      status: "success",
+      completed: toPrint.length,
+      succeeded: toPrint.length,
+      finishedAt: Date.now(),
+    });
   };
 
   const handleExportCsv = (cardsToExport?: VoucherCard[]) => {
