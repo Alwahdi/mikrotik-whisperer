@@ -1,5 +1,6 @@
+'use client'
 import { useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { useRouterPrefetch } from "@/hooks/useRouterPrefetch";
 import { Progress } from "@/components/ui/progress";
 import { Loader2, Wifi, AlertTriangle, RefreshCw } from "lucide-react";
@@ -7,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
 
 export default function RouterDataLoader() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { prefetch, progress, currentStep, loading, error } = useRouterPrefetch();
   const started = useRef(false);
   const config = getMikrotikConfig();
@@ -17,14 +18,14 @@ export default function RouterDataLoader() {
     started.current = true;
 
     if (!config) {
-      navigate("/routers", { replace: true });
+      router.replace("/routers");
       return;
     }
 
     prefetch().then((success) => {
       if (success) {
         // Small delay to show 100% before navigating
-        setTimeout(() => navigate("/dashboard", { replace: true }), 400);
+        setTimeout(() => router.replace("/dashboard"), 400);
       }
     });
   }, []);
@@ -53,13 +54,13 @@ export default function RouterDataLoader() {
               <p className="text-sm text-destructive">{error}</p>
             </div>
             <div className="flex gap-2 justify-center">
-              <Button size="sm" variant="outline" onClick={() => navigate("/routers", { replace: true })}>
+              <Button size="sm" variant="outline" onClick={() => router.replace("/routers")}>
                 الراوترات
               </Button>
               <Button size="sm" onClick={() => {
                 started.current = false;
                 prefetch().then((success) => {
-                  if (success) setTimeout(() => navigate("/dashboard", { replace: true }), 250);
+                  if (success) setTimeout(() => router.replace("/dashboard"), 250);
                 });
               }}>
                 <RefreshCw className="h-3.5 w-3.5 ml-1" />

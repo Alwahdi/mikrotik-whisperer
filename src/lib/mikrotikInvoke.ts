@@ -92,7 +92,7 @@ function getAgentEndpoint(agentUrl: string): string {
 }
 
 function getAgentUrlFromEnv(): string {
-  return normalizeAgentUrl(import.meta.env.VITE_MIKROTIK_AGENT_URL as string | undefined);
+  return normalizeAgentUrl(process.env.NEXT_PUBLIC_MIKROTIK_AGENT_URL as string | undefined);
 }
 
 export function getMikrotikAgentUrl(): string {

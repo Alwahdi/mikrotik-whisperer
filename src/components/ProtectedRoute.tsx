@@ -1,5 +1,7 @@
+'use client'
 import { useAuth } from "@/contexts/AuthContext";
-import { Navigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -11,6 +13,7 @@ interface Props {
 
 export default function ProtectedRoute({ children, requireAdmin }: Props) {
   const { user, loading, isAdmin } = useAuth();
+  const router = useRouter();
 
   const { data: access, isLoading: accessLoading } = useQuery({
     queryKey: ["user-access-check", user?.id],
@@ -26,6 +29,28 @@ export default function ProtectedRoute({ children, requireAdmin }: Props) {
     },
   });
 
+  useEffect(() => {
+    if (!loading && !user) {
+      router.replace('/auth');
+    }
+  }, [loading, user, router]);
+
+  useEffect(() => {
+    if (!loading && !accessLoading && user && !isAdmin && access) {
+      const status = access.status;
+      const expired = status === "active" && access.expires_at && new Date(access.expires_at) < new Date();
+      if (status === "pending" || status === "suspended" || status === "expired" || expired) {
+        router.replace('/access');
+      }
+    }
+  }, [loading, accessLoading, user, isAdmin, access, router]);
+
+  useEffect(() => {
+    if (!loading && user && requireAdmin && !isAdmin) {
+      router.replace('/dashboard');
+    }
+  }, [loading, user, requireAdmin, isAdmin, router]);
+
   if (loading || accessLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -34,20 +59,17 @@ export default function ProtectedRoute({ children, requireAdmin }: Props) {
     );
   }
 
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user) return null;
 
-  // Admin always has access
   if (!isAdmin && access) {
     const status = access.status;
     const expired = status === "active" && access.expires_at && new Date(access.expires_at) < new Date();
     if (status === "pending" || status === "suspended" || status === "expired" || expired) {
-      return <Navigate to="/access" replace />;
+      return null;
     }
   }
 
-  if (requireAdmin && !isAdmin) {
-    return <Navigate to="/dashboard" replace />;
-  }
+  if (requireAdmin && !isAdmin) return null;
 
   return <>{children}</>;
 }

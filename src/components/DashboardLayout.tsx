@@ -1,5 +1,7 @@
+'use client'
 import { ReactNode, useState, useEffect } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Wifi, Users, Settings, Menu, X,
   Router, Moon, Sun, LogOut, Activity, CreditCard,
@@ -23,8 +25,8 @@ const navItems = [
 ];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const location = useLocation();
-  const navigate = useNavigate();
+  const pathname = usePathname();
+  const router = useRouter();
   const { signOut, role, isAdmin } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
@@ -35,7 +37,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
 
   // Live badge counts
   const { data: hotspotUsers } = useHotspotUsers();
-  const { data: umCountData } = useUserManagerCount({ enabled: location.pathname.startsWith("/usermanager") });
+  const { data: umCountData } = useUserManagerCount({ enabled: pathname.startsWith("/usermanager") });
   const hotspotCount = Array.isArray(hotspotUsers) ? hotspotUsers.length : 0;
   const umCount = umCountData?.total ?? 0;
 
@@ -93,12 +95,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         {/* Nav */}
         <nav className="p-2 mt-2 space-y-0.5">
           {filteredNav.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isActive = pathname === item.path;
             const badge = getBadge(item.path);
             return (
               <Link
                 key={item.path}
-                to={item.path}
+                href={item.path}
                 onClick={() => setSidebarOpen(false)}
                 className={`
                   flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-all relative
@@ -139,12 +141,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               {isDark ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
               {isDark ? "نهاري" : "ليلي"}
             </button>
-            <Link to="/routers" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/routers" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               تغيير الراوتر
             </Link>
           </div>
           <button
-            onClick={() => { signOut(); navigate("/auth"); }}
+            onClick={() => { signOut(); router.push("/auth"); }}
             className="w-full flex items-center justify-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1.5 rounded-md hover:bg-muted"
           >
             <LogOut className="h-3 w-3" />
@@ -190,12 +192,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden glass border-t border-border pb-[max(env(safe-area-inset-bottom),0.35rem)]">
         <div className="flex items-center justify-around py-2 px-1">
           {filteredNav.slice(0, 5).map(item => {
-            const isActive = location.pathname === item.path;
+            const isActive = pathname === item.path;
             const badge = getBadge(item.path);
             return (
               <Link
                 key={item.path}
-                to={item.path}
+                href={item.path}
                 className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-md transition-colors relative ${
                   isActive ? "text-primary" : "text-muted-foreground"
                 }`}
