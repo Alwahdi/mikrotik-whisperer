@@ -1,4 +1,5 @@
 {
+  "framework": "nextjs",
   "buildCommand": "cd ../.. && pnpm turbo run build --filter=@repo/app",
   "installCommand": "cd ../.. && pnpm install"
 }
