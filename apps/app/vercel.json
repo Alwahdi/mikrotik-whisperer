@@ -1,0 +1,4 @@
+{
+  "buildCommand": "cd ../.. && pnpm turbo run build --filter=@repo/app",
+  "installCommand": "pnpm install --filter=@repo/app..."
+}
