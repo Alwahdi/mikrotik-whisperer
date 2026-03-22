@@ -103,3 +103,14 @@ export function restoreJobs(restoredJobs: BackgroundJob[]): void {
   jobs = [...jobs, ...newJobs];
   notify();
 }
+
+/** Upsert one job from remote source (DB/realtime). */
+export function upsertRemoteJob(job: BackgroundJob): void {
+  const idx = jobs.findIndex((j) => j.id === job.id);
+  if (idx === -1) {
+    jobs = [job, ...jobs];
+  } else {
+    jobs = jobs.map((j) => (j.id === job.id ? { ...j, ...job } : j));
+  }
+  notify();
+}

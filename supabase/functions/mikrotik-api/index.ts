@@ -1101,6 +1101,131 @@ async function handleBatchRest(
   return { results, errors };
 }
 
+type BackgroundBatchContext = {
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  authHeader: string;
+  userId: string;
+  jobKey: string;
+  label: string;
+  host: string;
+  user: string;
+  pass: string;
+  mode: string;
+  port: string;
+  protocol: string;
+  commands: { command: string; args?: string[] }[];
+};
+
+async function patchBackgroundJob(
+  ctx: BackgroundBatchContext,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  if (!ctx.supabaseUrl || !ctx.supabaseAnonKey || !ctx.authHeader) return;
+
+  const params = new URLSearchParams({
+    user_id: `eq.${ctx.userId}`,
+    job_key: `eq.${ctx.jobKey}`,
+  });
+
+  await fetch(`${ctx.supabaseUrl}/rest/v1/background_jobs?${params.toString()}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: ctx.supabaseAnonKey,
+      Authorization: ctx.authHeader,
+      Prefer: "return=minimal",
+    },
+    body: JSON.stringify(patch),
+  }).catch(() => undefined);
+}
+
+function appendLog(logs: { ts: number; msg: string }[], msg: string) {
+  logs.push({ ts: Date.now(), msg });
+}
+
+async function runBackgroundBatch(ctx: BackgroundBatchContext): Promise<void> {
+  const startedAtMs = Date.now();
+  const logs: { ts: number; msg: string }[] = [];
+  const total = ctx.commands.length;
+  let completed = 0;
+  let succeeded = 0;
+  let failed = 0;
+
+  appendLog(logs, `Started on edge server: ${total} commands`);
+
+  await patchBackgroundJob(ctx, {
+    label: ctx.label,
+    type: "add",
+    status: "running",
+    total,
+    completed: 0,
+    succeeded: 0,
+    failed: 0,
+    rate: 0,
+    router_host: ctx.host,
+    started_at: new Date(startedAtMs).toISOString(),
+    logs,
+  });
+
+  const chunkSize = ctx.mode === "rest" ? 4 : 20;
+
+  for (let i = 0; i < ctx.commands.length; i += chunkSize) {
+    const chunk = ctx.commands.slice(i, i + chunkSize);
+
+    try {
+      const result = ctx.mode === "api"
+        ? await handleBatch(ctx.host, ctx.port, ctx.protocol === "api-ssl", ctx.user, ctx.pass, chunk)
+        : await handleBatchRest(ctx.host, ctx.port, ctx.protocol || "https", ctx.user, ctx.pass, chunk);
+
+      const errors = Array.isArray(result?.errors) ? result.errors : [];
+
+      for (let j = 0; j < chunk.length; j++) {
+        const message = typeof errors[j] === "string" ? errors[j].trim() : "";
+        if (!message || isAlreadyExistsError(message)) {
+          succeeded += 1;
+        } else {
+          failed += 1;
+        }
+      }
+    } catch (error: unknown) {
+      // Chunk-level failure: count all chunk commands as failed.
+      failed += chunk.length;
+      const message = error instanceof Error ? error.message : "Chunk failed";
+      appendLog(logs, `Chunk failed (${chunk.length}): ${message}`);
+    }
+
+    completed += chunk.length;
+    const elapsedSec = Math.max(1, Math.round((Date.now() - startedAtMs) / 1000));
+    const rate = Math.round(completed / elapsedSec);
+    appendLog(logs, `Progress ${completed}/${total} (ok ${succeeded}, fail ${failed})`);
+
+    await patchBackgroundJob(ctx, {
+      status: "running",
+      completed,
+      succeeded,
+      failed,
+      rate,
+      logs,
+    });
+  }
+
+  const elapsedSec = Math.max(1, Math.round((Date.now() - startedAtMs) / 1000));
+  const finalRate = Math.round(total / elapsedSec);
+  const finalStatus = failed === 0 ? "success" : "error";
+  appendLog(logs, `Finished: status=${finalStatus}, ok=${succeeded}, fail=${failed}, rate=${finalRate}/s`);
+
+  await patchBackgroundJob(ctx, {
+    status: finalStatus,
+    completed: total,
+    succeeded,
+    failed,
+    rate: finalRate,
+    finished_at: new Date().toISOString(),
+    logs,
+  });
+}
+
 // ─── Health Check ───────────────────────────────────────────────────────
 async function handleHealthCheck(
   host: string, port: string, useTls: boolean,
@@ -1184,6 +1309,57 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+    }
+
+    // ─── Background Batch Action ─────────────────────────────────
+    if (action === "batch-background") {
+      if (!host || !user || !pass) throw new Error("Missing credentials");
+
+      const commands = body.commands as { command: string; args?: string[] }[];
+      if (!Array.isArray(commands) || commands.length === 0) throw new Error("Missing commands array");
+
+      const userId = String(body.userId || "").trim();
+      const jobKey = String(body.jobKey || `push-${Date.now()}`).trim();
+      const label = String(body.label || `Background batch (${commands.length})`).trim();
+      if (!userId) throw new Error("Missing userId");
+
+      const actualPort = mode === "api"
+        ? (port || "8728")
+        : (port || (protocol === "https" ? "443" : "80"));
+      const actualProtocol = mode === "api"
+        ? (protocol || "api-plain")
+        : (protocol || "https");
+
+      const authHeader = req.headers.get("authorization") || "";
+      const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+      const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
+
+      const runner = runBackgroundBatch({
+        supabaseUrl,
+        supabaseAnonKey,
+        authHeader,
+        userId,
+        jobKey,
+        label,
+        host,
+        user,
+        pass,
+        mode: mode || "api",
+        port: actualPort,
+        protocol: actualProtocol,
+        commands,
+      });
+
+      const edgeRuntime = (globalThis as any).EdgeRuntime;
+      if (edgeRuntime?.waitUntil) {
+        edgeRuntime.waitUntil(runner);
+      } else {
+        runner.catch((err: unknown) => console.error("Background batch failed:", err));
+      }
+
+      return new Response(JSON.stringify({ accepted: true, jobKey, total: commands.length }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (!host) throw new Error("Missing router address");

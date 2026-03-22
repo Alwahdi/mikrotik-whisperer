@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import {
   setSyncCallbacks,
   restoreJobs,
-  updateJob,
+  upsertRemoteJob,
   type BackgroundJob,
   type JobLogEntry,
 } from "@/stores/backgroundJobStore";
@@ -116,6 +116,33 @@ export function useJobHistory() {
     load();
   }, [userId]);
 
+  // ─── Realtime sync from DB → in-memory store ───────────────────────────
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel(`background-jobs-${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "background_jobs",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          if (!row || !row.job_key) return;
+          upsertRemoteJob(rowToJob(row));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
   // ─── Register sync callbacks ─────────────────────────────────────────────
   useEffect(() => {
     if (!userId) return;
@@ -125,7 +152,9 @@ export function useJobHistory() {
       if (existing) clearTimeout(existing);
       const timer = setTimeout(async () => {
         pendingWrites.current.delete(job.id);
-        await supabase.from("background_jobs").upsert(jobToRow(job, userId));
+        await supabase
+          .from("background_jobs")
+          .upsert(jobToRow(job, userId), { onConflict: "user_id,job_key" });
       }, 300);
       pendingWrites.current.set(job.id, timer);
     };
@@ -146,7 +175,7 @@ export function useJobHistory() {
         }
         const { error } = await supabase
           .from("background_jobs")
-          .upsert(jobToRow(job, userId));
+          .upsert(jobToRow(job, userId), { onConflict: "user_id,job_key" });
 
         if (error) {
           console.error("Failed to persist job to DB:", error);

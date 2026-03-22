@@ -32,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
 import { getMikrotikConfig } from "@/lib/mikrotikConfig";
+import { invokeMikrotik, isLocalHostTarget } from "@/lib/mikrotikInvoke";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { addJob, updateJob, addJobLog, type BackgroundJob } from "@/stores/backgroundJobStore";
@@ -1035,7 +1036,6 @@ export default function VouchersPage() {
     let totalSuccess = 0;
     let totalFailed = 0;
     const startedAt = performance.now();
-    let progressPulse: ReturnType<typeof setInterval> | null = null;
 
     addJob({
       id: jobId,
@@ -1051,6 +1051,49 @@ export default function VouchersPage() {
       routerHost: currentRouterHost,
       logs: [{ ts: Date.now(), msg: `بدأت إضافة ${cards.length} كرت (${type}) إلى ${currentRouterHost}` }],
     });
+
+    const commandForCard = (card: VoucherCard) => {
+      // v6 user-manager uses "name" instead of "username", and "customer" instead of "owner"
+      const args: string[] = type === "hotspot"
+        ? [`=name=${card.username}`, `=password=${card.password}`, `=profile=${card.profile}`]
+        : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`, `=owner=admin`];
+      return { command: addEndpoint, args };
+    };
+
+    // Public IP path: run full batch on server-side edge background task.
+    // This keeps running even if browser tab is closed.
+    if (!isLocalHostTarget(currentRouterHost)) {
+      if (!config?.host || !config?.user || !config?.pass) {
+        throw new Error("بيانات الراوتر غير مكتملة للتشغيل السحابي");
+      }
+      if (!user?.id) {
+        throw new Error("تعذر تحديد المستخدم الحالي لتسجيل العملية");
+      }
+
+      const commands = cards.map(commandForCard);
+      setPushProgress(10);
+      setPushMessage("تم إرسال العملية للسيرفر...");
+
+      await invokeMikrotik({
+        action: "batch-background",
+        host: config.host,
+        user: config.user,
+        pass: config.pass,
+        port: config.port,
+        protocol: config.protocol,
+        mode: config.mode,
+        commands,
+        jobKey: jobId,
+        userId: user.id,
+        label: `إضافة ${cards.length} كرت (${cards[0]?.profile || ""})`,
+      });
+
+      setPushProgress(100);
+      setPushMessage("بدأ التنفيذ على السيرفر بالخلفية");
+      addJobLog(jobId, "تم تسليم العملية إلى Edge Function. ستستمر حتى لو أُغلق المتصفح.");
+      toast.success("تم تشغيل الإضافة على السيرفر بالخلفية. يمكنك إغلاق المتصفح.");
+      return;
+    }
 
     const isDuplicateError = (message: string) => {
       const m = message.toLowerCase();
@@ -1069,14 +1112,7 @@ export default function VouchersPage() {
       return true;
     };
 
-    const commandForIndex = (idx: number) => {
-      const card = cards[idx];
-      // v6 user-manager uses "name" instead of "username", and "customer" instead of "owner"
-      const args: string[] = type === "hotspot"
-        ? [`=name=${card.username}`, `=password=${card.password}`, `=profile=${card.profile}`]
-        : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`, `=owner=admin`];
-      return { command: addEndpoint, args };
-    };
+    const commandForIndex = (idx: number) => commandForCard(cards[idx]);
 
     const buildChunks = (indexes: number[], chunkSize: number): number[][] => {
       const out: number[][] = [];
@@ -1185,19 +1221,6 @@ export default function VouchersPage() {
       await Promise.all(Array.from({ length: Math.min(Math.max(1, concurrency), chunks.length) }, () => worker()));
       return Array.from(retrySet);
     };
-
-    progressPulse = setInterval(() => {
-      setPushProgress((prev) => {
-        const actualResolved = resolved.size;
-        const actualPct = actualResolved > 0
-          ? Math.max(1, Math.min(98, Math.round((actualResolved / cards.length) * 100)))
-          : 0;
-        if (actualPct > prev) return actualPct;
-        // Slow crawl to show continuous activity (max 95%)
-        if (prev < 95) return Math.min(95, prev + 0.2);
-        return prev;
-      });
-    }, 200);
 
     try {
       const isLargeBatch = cards.length >= 300;
@@ -1319,10 +1342,6 @@ export default function VouchersPage() {
       toast.error(err?.message || "فشلت عملية الإضافة");
       updateJob(jobId, { status: "error", finishedAt: Date.now() });
     } finally {
-      if (progressPulse) {
-        clearInterval(progressPulse);
-        progressPulse = null;
-      }
       pushingRef.current = false;
       setPushing(false);
     }

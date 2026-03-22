@@ -14,6 +14,9 @@ type MikrotikInvokeBody = {
   timeoutMs?: number;
   args?: string[];
   commands?: { command: string; args?: string[] }[];
+  jobKey?: string;
+  userId?: string;
+  label?: string;
 };
 
 export type AgentHealthInfo = {
