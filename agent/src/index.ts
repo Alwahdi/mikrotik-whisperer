@@ -19,19 +19,19 @@ app.use("/api", interfacesRouter);
 app.use("/api", usersRouter);
 app.use("/api", vouchersRouter);
 
-app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  const message = err instanceof Error ? err.message : "Agent internal error";
-  res.status(500).json({ error: message });
-});
+app.use(
+  (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const message = err instanceof Error ? err.message : "Agent internal error";
+    res.status(500).json({ error: message });
+  }
+);
 
 const server = app.listen(port, host, () => {
-  // eslint-disable-next-line no-console
   console.log(`[agent] CoreRoute Local Agent running on http://${host}:${port}`);
 });
 
 server.on("error", (error: NodeJS.ErrnoException) => {
   if (error.code === "EADDRINUSE") {
-    // eslint-disable-next-line no-console
     console.log(`[agent] Port ${port} already in use. Assuming agent is already running.`);
     process.exit(0);
   }

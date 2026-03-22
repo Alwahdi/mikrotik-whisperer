@@ -7,18 +7,50 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+.pnp
+.pnp.js
+.pnpm-store
+
+# Build outputs
 dist
 dist-ssr
+build
+.next/
+out/
+
+# Testing
+coverage
+.nyc_output
+playwright-report
+test-results
+
+# Environment files
 *.local
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Mobile (Expo)
 mobile/.expo/
 mobile/dist/
+.expo
+.eas
+android
+ios
+
+# Turbo
+.turbo
+*.tsbuildinfo
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
 .idea
 .DS_Store
 *.suo
@@ -26,4 +58,17 @@ mobile/dist/
 *.njsproj
 *.sln
 *.sw?
-.next/
+
+# Lock files (monorepo uses npm)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+bun.lock
+
+# Cache
+.cache
+.eslintcache
+
+# Vercel
+.vercel

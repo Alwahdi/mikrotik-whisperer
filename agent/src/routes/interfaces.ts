@@ -26,6 +26,8 @@ interfacesRouter.post("/interfaces", async (req, res) => {
     const data = await executeCommand(config, "/interface/print");
     return res.json(data);
   } catch (error) {
-    return res.status(500).json({ error: error instanceof Error ? error.message : "Failed to list interfaces" });
+    return res
+      .status(500)
+      .json({ error: error instanceof Error ? error.message : "Failed to list interfaces" });
   }
 });
