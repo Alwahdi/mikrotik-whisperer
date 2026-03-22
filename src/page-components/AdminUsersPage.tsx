@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,7 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Home, Users, Search, Check, X, Clock, Ban, Shield,
+  Home, Users, Search, Check, Clock, Ban, Shield,
   ChevronLeft, ChevronRight, CalendarPlus, RotateCcw,
 } from "lucide-react";
 import Link from "next/link";
@@ -57,7 +57,6 @@ const PAGE_SIZE = 10;
 
 export default function AdminUsersPage() {
   const { user } = useAuth();
-  const qc = useQueryClient();
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | AccessStatus>("all");
@@ -69,7 +68,7 @@ export default function AdminUsersPage() {
   const [duration, setDuration] = useState<"1" | "3" | "6" | "12">("1");
   const [notes, setNotes] = useState("");
   const [newRole, setNewRole] = useState<"admin" | "cashier">("cashier");
-  const [confirmRoleChange, setConfirmRoleChange] = useState(false);
+  const [, setConfirmRoleChange] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Fetch all users with access info

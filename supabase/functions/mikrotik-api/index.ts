@@ -1,11 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+function getCorsHeaders(): Record<string, string> {
+  const allowed = Deno.env.get("ALLOWED_ORIGIN") || "*";
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  };
+}
+const corsHeaders = getCorsHeaders();
 
 const restVariantPreference = new Map<string, number>();
 
@@ -1353,13 +1357,17 @@ serve(async (req) => {
   try {
     const body = await req.json();
 
+    // ─── Authenticate caller ────────────────────────────────────
+    // All actions require a valid JWT unless the request comes from
+    // a service-role caller (e.g. backup-scheduler).
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) throw new Error("Authentication required");
+
     // ─── Resolve credentials from router_id ─────────────────────
     // When routerId is provided and no password is sent, look up
     // credentials from the routers table using the caller's JWT.
     // RLS ensures users can only access their own routers.
     if (body.routerId && !body.pass) {
-      const authHeader = req.headers.get("Authorization");
-      if (!authHeader) throw new Error("Authentication required");
 
       const supabaseClient = createClient(
         Deno.env.get("SUPABASE_URL")!,

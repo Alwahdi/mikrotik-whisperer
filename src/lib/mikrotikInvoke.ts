@@ -50,9 +50,9 @@ function normalizeForUserManager(body: MikrotikInvokeBody): MikrotikInvokeBody {
   return body;
 }
 
-async function invokeCloud(body: MikrotikInvokeBody) {
+async function invokeCloud(body: MikrotikInvokeBody, signal?: AbortSignal) {
   const started = performance.now();
-  const { data, error } = await supabase.functions.invoke("mikrotik-api", { body });
+  const { data, error } = await supabase.functions.invoke("mikrotik-api", { body, signal });
   if (error) {
     addConnectionDebug({
       id: crypto.randomUUID(),
@@ -104,12 +104,12 @@ async function invokeCloud(body: MikrotikInvokeBody) {
   return data;
 }
 
-export async function invokeMikrotik(body: MikrotikInvokeBody) {
+export async function invokeMikrotik(body: MikrotikInvokeBody, signal?: AbortSignal) {
   const normalizedBody = normalizeForUserManager(body);
   // When using routerId, the Edge Function resolves host/user/pass from the DB
   if (!normalizedBody.routerId) {
     const host = normalizedBody.host?.trim();
     if (!host) throw new Error("عنوان الراوتر مطلوب");
   }
-  return invokeCloud(normalizedBody);
+  return invokeCloud(normalizedBody, signal);
 }

@@ -1,11 +1,15 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+function getCorsHeaders(): Record<string, string> {
+  const allowed = Deno.env.get("ALLOWED_ORIGIN") || "*";
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  };
+}
+const corsHeaders = getCorsHeaders();
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -14,33 +18,34 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
+    if (!authHeader) throw new Error("Authentication required");
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    let userId: string | null = null;
-    if (authHeader) {
-      const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-      const userClient = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-      });
-      const { data: { user } } = await userClient.auth.getUser();
-      userId = user?.id || null;
-    }
+    // User-scoped client for data queries (respects RLS)
+    const userClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user } } = await userClient.auth.getUser();
+    if (!user) throw new Error("Authentication required");
+    const userId = user.id;
+
+    // Service-role client ONLY for storage operations (uploads/downloads)
+    const serviceClient = createClient(supabaseUrl, supabaseKey);
 
     const body = await req.json();
     const { action, router_id, router_label, backup_id, restore_type } = body;
 
     // ─── CREATE BACKUP ──────────────────────────────────────────
     if (action === "create") {
-      if (!userId) throw new Error("Authentication required");
       if (!router_id) throw new Error("Router ID required");
 
-      const { data: router, error: routerErr } = await supabase
+      const { data: router, error: routerErr } = await userClient
         .from("routers")
         .select("*")
         .eq("id", router_id)
-        .eq("user_id", userId)
         .single();
 
       if (routerErr || !router) throw new Error("Router not found");
@@ -90,7 +95,7 @@ serve(async (req) => {
       const fileName = `${userId}/${router_id}/${Date.now()}.json`;
       const fileContent = JSON.stringify(backupData, null, 2);
 
-      const { error: uploadErr } = await supabase.storage
+      const { error: uploadErr } = await serviceClient.storage
         .from("router-backups")
         .upload(fileName, fileContent, { contentType: "application/json" });
 
@@ -103,7 +108,7 @@ serve(async (req) => {
         hotspot_profiles: Array.isArray(backupData.hotspot_profiles) ? backupData.hotspot_profiles.length : 0,
       };
 
-      const { data: backup, error: insertErr } = await supabase
+      const { data: backup, error: insertErr } = await userClient
         .from("backups")
         .insert({
           user_id: userId,
@@ -126,19 +131,17 @@ serve(async (req) => {
 
     // ─── RESTORE BACKUP ─────────────────────────────────────────
     if (action === "restore") {
-      if (!userId) throw new Error("Authentication required");
       if (!backup_id) throw new Error("Backup ID required");
 
-      const { data: backup, error: backupErr } = await supabase
+      const { data: backup, error: backupErr } = await userClient
         .from("backups")
         .select("*")
         .eq("id", backup_id)
-        .eq("user_id", userId)
         .single();
 
       if (backupErr || !backup) throw new Error("Backup not found");
 
-      const { data: fileData, error: downloadErr } = await supabase.storage
+      const { data: fileData, error: downloadErr } = await serviceClient.storage
         .from("router-backups")
         .download(backup.file_path!);
 
@@ -146,11 +149,10 @@ serve(async (req) => {
 
       const backupContent = JSON.parse(await fileData.text());
 
-      const { data: router, error: routerErr } = await supabase
+      const { data: router, error: routerErr } = await userClient
         .from("routers")
         .select("*")
         .eq("id", backup.router_id!)
-        .eq("user_id", userId)
         .single();
 
       if (routerErr || !router) throw new Error("Router not found for restore");
@@ -234,23 +236,21 @@ serve(async (req) => {
 
     // ─── DELETE BACKUP ──────────────────────────────────────────
     if (action === "delete") {
-      if (!userId) throw new Error("Authentication required");
       if (!backup_id) throw new Error("Backup ID required");
 
-      const { data: backup, error: backupErr } = await supabase
+      const { data: backup, error: backupErr } = await userClient
         .from("backups")
         .select("file_path")
         .eq("id", backup_id)
-        .eq("user_id", userId)
         .single();
 
       if (backupErr || !backup) throw new Error("Backup not found");
 
       if (backup.file_path) {
-        await supabase.storage.from("router-backups").remove([backup.file_path]);
+        await serviceClient.storage.from("router-backups").remove([backup.file_path]);
       }
 
-      await supabase.from("backups").delete().eq("id", backup_id);
+      await userClient.from("backups").delete().eq("id", backup_id);
 
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -7,7 +7,6 @@ import {
   Loader2, CheckCircle, XCircle, RefreshCw, X, ChevronUp, ChevronDown,
   Activity, Trash2, ChevronRight, Clock, WifiOff, ScrollText,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 function statusIcon(status: BackgroundJob["status"]) {
   switch (status) {

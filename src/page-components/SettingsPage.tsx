@@ -1,6 +1,6 @@
 import { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
-import { Settings, CheckCircle, WifiOff, Server, Wifi, Router } from "lucide-react";
+import { CheckCircle, WifiOff, Server, Wifi, Router } from "lucide-react";
 import {
   getActiveRouter, clearActiveRouter,
 } from "@/lib/mikrotikConfig";

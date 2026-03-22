@@ -28,7 +28,11 @@ async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>
   const timeoutMs = extraBody?.timeoutMs ?? (endpoint.endsWith("/print") ? 30000 : 15000);
   const { timeoutMs: _timeoutMs, ...safeExtraBody } = extraBody || {};
 
-  const request = invokeMikrotik({
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await invokeMikrotik({
       endpoint,
       routerId: router.routerId,
       host: router.host,
@@ -37,16 +41,13 @@ async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>
       mode: router.mode,
       timeoutMs,
       ...safeExtraBody,
-  });
-
-  const response = await Promise.race([
-    request,
-    new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`انتهت مهلة الطلب: ${endpoint}`)), timeoutMs);
-    }),
-  ]) as any;
-
-  return response;
+    }, controller.signal);
+  } catch (err) {
+    if (controller.signal.aborted) throw new Error(`انتهت مهلة الطلب: ${endpoint}`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function callMikrotikAction(action: string, extraBody?: Record<string, any>) {
@@ -56,7 +57,11 @@ async function callMikrotikAction(action: string, extraBody?: Record<string, any
   const timeoutMs = extraBody?.timeoutMs ?? (action === "batch" ? 70000 : 20000);
   const { timeoutMs: _timeoutMs, ...safeExtraBody } = extraBody || {};
 
-  const request = invokeMikrotik({
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await invokeMikrotik({
       action,
       routerId: router.routerId,
       host: router.host,
@@ -65,16 +70,13 @@ async function callMikrotikAction(action: string, extraBody?: Record<string, any
       mode: router.mode,
       timeoutMs,
       ...safeExtraBody,
-  });
-
-  const response = await Promise.race([
-    request,
-    new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error(`انتهت مهلة العملية: ${action}`)), timeoutMs);
-    }),
-  ]) as any;
-
-  return response;
+    }, controller.signal);
+  } catch (err) {
+    if (controller.signal.aborted) throw new Error(`انتهت مهلة العملية: ${action}`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function useEnabled() {
@@ -102,7 +104,7 @@ export function useRouterHealth() {
 export function useBatchAction() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ commands, invalidateKeys }: {
+    mutationFn: async ({ commands }: {
       commands: { command: string; args?: string[] }[];
       invalidateKeys?: string[];
     }) => {

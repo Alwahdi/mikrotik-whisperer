@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { clearActiveRouter } from "@/lib/mikrotikConfig";
+import { clearConnectionDebugEntries } from "@/lib/connectionDebug";
 import type { User, Session } from "@supabase/supabase-js";
 
 type AppRole = "admin" | "cashier" | null;
@@ -80,6 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    clearActiveRouter();
+    clearConnectionDebugEntries();
     setRole(null);
   };
 

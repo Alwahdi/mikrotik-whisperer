@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Home, Database, Plus, Trash2, RotateCcw, Loader2, Clock,
   CheckCircle, AlertTriangle, HardDrive, Users, Wifi,
-  Download, Filter,
+  Filter,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";

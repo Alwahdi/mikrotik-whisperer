@@ -6,7 +6,7 @@ import StatCard from "@/components/StatCard";
 import SystemInfoCard from "@/components/SystemInfoCard";
 import TrafficChart from "@/components/TrafficChart";
 import {
-  Wifi, Users, Cpu, HardDrive, Clock, Activity, Settings,
+  Wifi, Users, Cpu, HardDrive, Clock, Settings,
   Network, Gauge, MemoryStick, CreditCard, UserPlus, AlertTriangle,
   Zap, ArrowRight, DollarSign, TrendingUp,
 } from "lucide-react";
@@ -26,7 +26,6 @@ import { useQuery } from "@tanstack/react-query";
 export default function Index() {
   const { user } = useAuth();
   const config = getActiveRouter();
-  const enabled = !!config;
 
   const { data: hotspotUsers, isLoading: loadingH } = useHotspotUsers();
   const { data: umUsers, isLoading: loadingU } = useUserManagerUsers();

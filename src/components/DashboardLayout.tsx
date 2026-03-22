@@ -27,7 +27,7 @@ const navItems = [
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { signOut, role, isAdmin } = useAuth();
+  const { signOut, role } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
   const config = getActiveRouter();

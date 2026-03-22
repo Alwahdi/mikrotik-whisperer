@@ -10,7 +10,7 @@ import {
   Server, Search, Moon, Sun, Signal,
 } from "lucide-react";
 import { toast } from "sonner";
-import { setActiveRouter, type ActiveRouter, type ConnectionMode, type ConnectionProtocol, getDefaultPort, getProtocolOptions } from "@/lib/mikrotikConfig";
+import { setActiveRouter, type ConnectionMode, type ConnectionProtocol, getDefaultPort, getProtocolOptions } from "@/lib/mikrotikConfig";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";

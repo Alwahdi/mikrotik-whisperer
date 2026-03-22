@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { NextRequest } from "next/server";
 
 /**
  * Middleware is hard to unit-test in isolation since it imports

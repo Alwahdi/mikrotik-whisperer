@@ -51,7 +51,12 @@ function processResult(key: string, data: any): any {
 
 async function invokeStep(config: RouterConfig, step: PrefetchStep) {
   const args = step.proplist ? [`=.proplist=${step.proplist}`] : [];
-  const request = invokeMikrotik({
+  const timeoutMs = step.timeoutMs ?? 15000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await invokeMikrotik({
       endpoint: step.command,
       routerId: config.routerId,
       host: config.host,
@@ -59,14 +64,13 @@ async function invokeStep(config: RouterConfig, step: PrefetchStep) {
       protocol: config.protocol,
       mode: config.mode,
       args,
-  });
-
-  const timeoutMs = step.timeoutMs ?? 15000;
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error(`انتهت مهلة ${step.label}`)), timeoutMs);
-  });
-
-  return Promise.race([request, timeoutPromise]);
+    }, controller.signal);
+  } catch (err) {
+    if (controller.signal.aborted) throw new Error(`انتهت مهلة ${step.label}`);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function warmDataInBackground(
@@ -74,7 +78,7 @@ async function warmDataInBackground(
   routerKey: string,
   queryClient: ReturnType<typeof useQueryClient>,
 ) {
-  const CONCURRENCY = 1;
+  const CONCURRENCY = 3;
   let index = 0;
 
   const worker = async () => {
