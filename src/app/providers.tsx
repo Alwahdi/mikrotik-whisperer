@@ -7,7 +7,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { AuthProvider } from "@/contexts/AuthContext"
 import LiveQueuePanel from "@/components/LiveQueuePanel"
 import ConnectionDebugDrawer from "@/components/ConnectionDebugDrawer"
-import AgentRuntimeBanner from "@/components/AgentRuntimeBanner"
 import { Analytics } from "@vercel/analytics/react"
 import { useState } from "react"
 
@@ -22,7 +21,6 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         <LiveQueuePanel />
         <ConnectionDebugDrawer />
         <AuthProvider>
-          <AgentRuntimeBanner />
           {children}
         </AuthProvider>
         <Analytics />

@@ -7,7 +7,7 @@ import {
   Router, Moon, Sun, LogOut, Activity, CreditCard,
   Database, Shield, HeartPulse,
 } from "lucide-react";
-import { getMikrotikConfig } from "@/lib/mikrotikConfig";
+import { getActiveRouter } from "@/lib/mikrotikConfig";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHotspotUsers, useUserManagerCount } from "@/hooks/useMikrotik";
 import { useJobHistory } from "@/hooks/useJobHistory";
@@ -30,7 +30,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { signOut, role, isAdmin } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
-  const config = getMikrotikConfig();
+  const config = getActiveRouter();
 
   // Loads job history from Supabase and registers sync callbacks
   useJobHistory();

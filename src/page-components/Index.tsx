@@ -16,7 +16,7 @@ import {
   useInterfaces, useDHCPLeases, useRouterHealth,
   useUserManagerSessions,
 } from "@/hooks/useMikrotik";
-import { getMikrotikConfig } from "@/lib/mikrotikConfig";
+import { getActiveRouter } from "@/lib/mikrotikConfig";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,7 +25,7 @@ import { useQuery } from "@tanstack/react-query";
 
 export default function Index() {
   const { user } = useAuth();
-  const config = getMikrotikConfig();
+  const config = getActiveRouter();
   const enabled = !!config;
 
   const { data: hotspotUsers, isLoading: loadingH } = useHotspotUsers();

@@ -33,8 +33,8 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import QRCode from "qrcode";
 import { jsPDF } from "jspdf";
-import { getMikrotikConfig } from "@/lib/mikrotikConfig";
-import { invokeMikrotik, isLocalHostTarget } from "@/lib/mikrotikInvoke";
+import { getActiveRouter } from "@/lib/mikrotikConfig";
+import { invokeMikrotik } from "@/lib/mikrotikInvoke";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { addJob, updateJob, addJobLog, type BackgroundJob } from "@/stores/backgroundJobStore";
@@ -766,7 +766,7 @@ export default function VouchersPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
 
-  const config = getMikrotikConfig();
+  const config = getActiveRouter();
   const currentRouterHost = config?.host || "";
 
   // Persist
@@ -1023,7 +1023,6 @@ export default function VouchersPage() {
   const pushToRouter = async () => {
     if (cards.length === 0 || pushingRef.current) return;
 
-    const isRestMode = config?.mode === "rest";
     const addEndpoint = type === "hotspot" ? "/ip/hotspot/user/add" : "/user-manager/user/add";
     const jobId = `push-${Date.now()}`;
 
@@ -1032,12 +1031,6 @@ export default function VouchersPage() {
     setPushProgress(1);
     setPushMessage("تهيئة إضافة الدفعة...");
     toast.info(`بدء إضافة ${cards.length} كرت بالخلفية`);
-
-    const updatedCards: VoucherCard[] = cards.map((c) => ({ ...c, status: "pending", error: undefined }));
-    const resolved = new Set<number>();
-    let totalSuccess = 0;
-    let totalFailed = 0;
-    const startedAt = performance.now();
 
     addJob({
       id: jobId,
@@ -1049,7 +1042,7 @@ export default function VouchersPage() {
       succeeded: 0,
       failed: 0,
       rate: 0,
-      startedAt,
+      startedAt: performance.now(),
       routerHost: currentRouterHost,
       logs: [{ ts: Date.now(), msg: `بدأت إضافة ${cards.length} كرت (${type}) إلى ${currentRouterHost}` }],
     });
@@ -1062,25 +1055,24 @@ export default function VouchersPage() {
       return { command: addEndpoint, args };
     };
 
-    // Public IP path: run full batch on server-side edge background task.
+    // Run full batch on server-side edge background task.
     // This keeps running even if browser tab is closed.
-    if (!isLocalHostTarget(currentRouterHost)) {
-      if (!config?.host || !config?.user || !config?.pass) {
-        throw new Error("بيانات الراوتر غير مكتملة للتشغيل السحابي");
-      }
-      if (!user?.id) {
-        throw new Error("تعذر تحديد المستخدم الحالي لتسجيل العملية");
-      }
+    if (!config?.routerId || !config?.host) {
+      throw new Error("بيانات الراوتر غير مكتملة للتشغيل السحابي");
+    }
+    if (!user?.id) {
+      throw new Error("تعذر تحديد المستخدم الحالي لتسجيل العملية");
+    }
 
+    try {
       const commands = cards.map(commandForCard);
       setPushProgress(10);
       setPushMessage("تم إرسال العملية للسيرفر...");
 
       await invokeMikrotik({
         action: "batch-background",
+        routerId: config.routerId,
         host: config.host,
-        user: config.user,
-        pass: config.pass,
         port: config.port,
         protocol: config.protocol,
         mode: config.mode,
@@ -1098,254 +1090,9 @@ export default function VouchersPage() {
       setPushMessage("العملية بدأت على السيرفر... تابعها من العمليات الخلفية");
       addJobLog(jobId, "تم تسليم العملية إلى Edge Function. ستستمر حتى لو أُغلق المتصفح.");
       toast.success("تم تشغيل الإضافة على السيرفر بالخلفية. يمكنك إغلاق المتصفح.");
-      return;
-    }
-
-    const isDuplicateError = (message: string) => {
-      const m = message.toLowerCase();
-      return m.includes("already") || m.includes("exists") || m.includes("failure: already") || m.includes("same name");
-    };
-
-    const isRetryableError = (message: string) => {
-      const m = message.toLowerCase();
-      if (!m) return true;
-      if (isDuplicateError(m)) return false;
-      // Known permanent errors — do not retry
-      if (m.includes("unknown parameter") || m.includes("input does not match") || m.includes("invalid value")) return false;
-      if (m.includes("not enough permissions") || m.includes("authentication") || m.includes("unauthorized")) return false;
-      if (m.includes("bad format") || m.includes("wrong type")) return false;
-      // Everything else is potentially transient — retry it
-      return true;
-    };
-
-    const commandForIndex = (idx: number) => commandForCard(cards[idx]);
-
-    const buildChunks = (indexes: number[], chunkSize: number): number[][] => {
-      const out: number[][] = [];
-      for (let i = 0; i < indexes.length; i += chunkSize) out.push(indexes.slice(i, i + chunkSize));
-      return out;
-    };
-
-    const markSuccess = (idx: number) => {
-      if (!resolved.has(idx)) {
-        resolved.add(idx);
-        totalSuccess += 1;
-      }
-      updatedCards[idx] = { ...updatedCards[idx], status: "success", error: undefined };
-    };
-
-    const markFinalError = (idx: number, message: string) => {
-      if (!resolved.has(idx)) {
-        resolved.add(idx);
-        totalFailed += 1;
-      }
-      updatedCards[idx] = { ...updatedCards[idx], status: "error", error: message || "فشل التنفيذ" };
-    };
-
-    const markPending = (idx: number, message?: string) => {
-      if (resolved.has(idx)) return;
-      updatedCards[idx] = { ...updatedCards[idx], status: "pending", error: message };
-    };
-
-    const renderLiveProgress = (label: string) => {
-      const done = resolved.size;
-      const pct = Math.max(1, Math.min(98, Math.round((done / cards.length) * 100)));
-      const elapsedNow = Math.max(1, (performance.now() - startedAt) / 1000);
-      const liveRate = Math.round(done / elapsedNow);
-      setPushProgress((prev) => Math.max(prev, pct));
-      setPushMessage(`${label}: ${done}/${cards.length} • ${liveRate} كرت/ث`);
-      updateJob(jobId, {
-        completed: done,
-        succeeded: totalSuccess,
-        failed: totalFailed,
-        rate: liveRate,
-        status: label.includes("النهائية") ? "retrying" : "running",
-      });
-    };
-
-    const runPass = async (
-      indexes: number[],
-      chunkSize: number,
-      concurrency: number,
-      label: string,
-      finalPass: boolean,
-    ): Promise<number[]> => {
-      if (indexes.length === 0) return [];
-
-      const chunks = buildChunks(indexes, Math.max(1, chunkSize));
-      let nextChunkIndex = 0;
-      const retrySet = new Set<number>();
-
-      const processChunk = async (chunk: number[]) => {
-        try {
-          const commands = chunk.map(commandForIndex);
-          const result = await rawBatch.mutateAsync({ commands });
-          const errors = Array.isArray(result?.errors) ? result.errors : [];
-
-          for (let j = 0; j < chunk.length; j++) {
-            const cardIdx = chunk[j];
-            const message = typeof errors[j] === "string" ? errors[j].trim() : "";
-
-            if (!message || isDuplicateError(message)) {
-              markSuccess(cardIdx);
-              continue;
-            }
-
-            if (!finalPass && isRetryableError(message)) {
-              retrySet.add(cardIdx);
-              markPending(cardIdx, message);
-            } else {
-              markFinalError(cardIdx, message);
-            }
-          }
-        } catch (err: any) {
-          const message = err?.message || "فشل التنفيذ";
-          for (const cardIdx of chunk) {
-            if (!finalPass) {
-              // On non-final passes, always retry if the whole chunk request failed
-              retrySet.add(cardIdx);
-              markPending(cardIdx, message);
-            } else {
-              markFinalError(cardIdx, message);
-            }
-          }
-        }
-
-        setCards([...updatedCards]);
-        renderLiveProgress(label);
-      };
-
-      const worker = async () => {
-        while (true) {
-          const current = nextChunkIndex;
-          nextChunkIndex += 1;
-          if (current >= chunks.length) break;
-          await processChunk(chunks[current]);
-        }
-      };
-
-      await Promise.all(Array.from({ length: Math.min(Math.max(1, concurrency), chunks.length) }, () => worker()));
-      return Array.from(retrySet);
-    };
-
-    try {
-      const isLargeBatch = cards.length >= 300;
-      const isXLBatch = cards.length >= 1000;
-      // Optimized for RouterOS: smaller chunks give more frequent progress updates
-      const firstChunk = isRestMode
-        ? (type === "usermanager" ? (isXLBatch ? 3 : isLargeBatch ? 4 : 6) : (isXLBatch ? 4 : isLargeBatch ? 6 : 10))
-        : (type === "usermanager" ? (isXLBatch ? 15 : isLargeBatch ? 20 : 30) : (isXLBatch ? 20 : isLargeBatch ? 30 : 50));
-      const firstConcurrency = isRestMode
-        ? 1
-        : (type === "usermanager" ? (isXLBatch ? 2 : isLargeBatch ? 2 : 3) : (isXLBatch ? 2 : isLargeBatch ? 3 : 4));
-
-      let pending = await runPass(
-        cards.map((_, idx) => idx),
-        firstChunk,
-        firstConcurrency,
-        "المحاولة 1",
-        false,
-      );
-
-      addJobLog(jobId, `المحاولة الأولى: نجح ${totalSuccess} / فشل ${pending.length} يحتاج إعادة محاولة`);
-
-      if (pending.length > 0) {
-        // Short delay before retry to let the router recover
-        await new Promise(r => setTimeout(r, 800));
-        pending = await runPass(
-          pending,
-          Math.max(1, Math.floor(firstChunk / 2)),
-          Math.max(1, firstConcurrency - 1),
-          "المحاولة 2",
-          false,
-        );
-        addJobLog(jobId, `المحاولة الثانية: متبقي ${pending.length} للمحاولة النهائية`);
-      }
-
-      if (pending.length > 0) {
-        // Longer delay before final retry
-        await new Promise(r => setTimeout(r, 1500));
-        await runPass(pending, 1, 1, "المحاولة النهائية", true);
-      }
-
-      for (let i = 0; i < updatedCards.length; i++) {
-        if (!resolved.has(i)) {
-          markFinalError(i, updatedCards[i].error || "فشل التنفيذ");
-        }
-      }
-
-      setCards([...updatedCards]);
-      setPushProgress(100);
-      setPushMessage("اكتملت العملية");
-
-      const elapsedSec = Math.max(1, (performance.now() - startedAt) / 1000);
-      const rate = Math.round(resolved.size / elapsedSec);
-
-      const finishedLog = totalFailed === 0
-        ? `✅ اكتملت: نجح ${totalSuccess}/${cards.length} كرت — ${Math.round(rate)} كرت/ث — الوقت: ${Math.round(elapsedSec)}ث`
-        : `⚠️ اكتملت بأخطاء: نجح ${totalSuccess} / فشل ${totalFailed} — ${Math.round(rate)} كرت/ث`;
-      addJobLog(jobId, finishedLog);
-
-      // Collect failed items for retry
-      const failedItemsList = updatedCards
-        .map((c, idx) => c.status === "error" ? { index: idx, error: c.error || "" } : null)
-        .filter(Boolean) as { index: number; error: string }[];
-
-      updateJob(jobId, {
-        status: totalFailed === 0 ? "success" : "error",
-        completed: resolved.size,
-        succeeded: totalSuccess,
-        failed: totalFailed,
-        rate: Math.round(rate),
-        finishedAt: Date.now(),
-        failedItems: failedItemsList.length > 0 ? failedItemsList : undefined,
-        retryFn: totalFailed > 0 ? async () => {
-          // Will re-trigger a push for failed items only via a new pushToRouter-like flow
-          toast.info(`إعادة محاولة ${totalFailed} كرت فاشل...`);
-        } : undefined,
-      });
-
-      setBatches(prev => {
-        const updated = [...prev];
-        const target = activeBatchId
-          ? updated.find(b => b.id === activeBatchId)
-          : updated.find(b => b.cards[0]?.username === cards[0]?.username);
-        if (target) {
-          target.pushed = true;
-          target.pushResults = { success: totalSuccess, failed: totalFailed };
-          target.cards = updatedCards;
-        }
-        return updated;
-      });
-
-      if (totalSuccess > 0 && user?.id) {
-        const saleRecord: PendingSaleRecord = {
-          user_id: user.id,
-          batch_id: crypto.randomUUID(),
-          profile_name: cards[0]?.profile || "",
-          card_count: cards.length,
-          success_count: totalSuccess,
-          failed_count: totalFailed,
-          unit_price: unitPrice,
-          total_amount: totalSuccess * unitPrice,
-          voucher_type: type,
-          router_host: currentRouterHost,
-          notes: `دفعة ${cards.length} كرت`,
-          sales_point: selectedSalesPoint,
-        };
-        const saleWrite = await persistSaleRecord(saleRecord);
-        if (!saleWrite.ok) {
-          toast.warning("تم الرفع للراوتر، لكن فشل حفظ المبيعات على السيرفر وتمت إضافتها لقائمة مزامنة لاحقة");
-        }
-      }
-
-      if (totalFailed === 0) {
-        toast.success(`تمت إضافة ${totalSuccess} كرت (${Math.round(rate)} كرت/ث)`);
-      } else {
-        toast.warning(`نجح ${totalSuccess} — فشل ${totalFailed} (${Math.round(rate)} كرت/ث)`);
-      }
-    } catch (err: any) {
-      toast.error(err?.message || "فشلت عملية الإضافة");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "فشلت عملية الإضافة";
+      toast.error(message);
       updateJob(jobId, { status: "error", finishedAt: Date.now() });
     } finally {
       pushingRef.current = false;

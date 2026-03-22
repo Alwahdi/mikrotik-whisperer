@@ -10,7 +10,7 @@ import {
   Server, Search, Moon, Sun, Signal,
 } from "lucide-react";
 import { toast } from "sonner";
-import { saveMikrotikConfig, type MikrotikConfig, type ConnectionMode, type ConnectionProtocol, getDefaultPort, getProtocolOptions } from "@/lib/mikrotikConfig";
+import { setActiveRouter, type ActiveRouter, type ConnectionMode, type ConnectionProtocol, getDefaultPort, getProtocolOptions } from "@/lib/mikrotikConfig";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -196,10 +196,13 @@ export default function RoutersPage() {
         timeoutMs: 7000,
       });
 
-      saveMikrotikConfig({
-        host: router.host, user: router.username, pass: router.password,
-        port: router.port, protocol: router.protocol as ConnectionProtocol,
-        mode: router.mode as ConnectionMode, label: router.label,
+      setActiveRouter({
+        routerId: router.id,
+        host: router.host,
+        port: router.port,
+        label: router.label,
+        protocol: router.protocol as ConnectionProtocol,
+        mode: router.mode as ConnectionMode,
       });
 
       await supabase.from("routers").update({

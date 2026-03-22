@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1351,6 +1352,39 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
+
+    // ─── Resolve credentials from router_id ─────────────────────
+    // When routerId is provided and no password is sent, look up
+    // credentials from the routers table using the caller's JWT.
+    // RLS ensures users can only access their own routers.
+    if (body.routerId && !body.pass) {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) throw new Error("Authentication required");
+
+      const supabaseClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } },
+      );
+
+      const { data: router, error: routerErr } = await supabaseClient
+        .from("routers")
+        .select("host, port, username, password, protocol, mode")
+        .eq("id", body.routerId)
+        .single();
+
+      if (routerErr || !router) {
+        throw new Error("Router not found or access denied");
+      }
+
+      body.host = router.host;
+      body.user = router.username;
+      body.pass = router.password;
+      if (!body.mode) body.mode = router.mode;
+      if (!body.protocol) body.protocol = router.protocol;
+      if (!body.port) body.port = router.port;
+    }
+
     const { endpoint, host, user, pass, port, protocol, mode, action, args } = body;
 
     // ─── Port Scan Action ─────────────────────────────────────────

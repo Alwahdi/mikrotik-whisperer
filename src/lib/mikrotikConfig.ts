@@ -1,36 +1,44 @@
 export type ConnectionMode = "rest" | "api";
 export type ConnectionProtocol = "https" | "http" | "api-ssl" | "api-plain";
 
-export interface MikrotikConfig {
+/**
+ * Display-only active router reference stored in localStorage.
+ * Credentials are NEVER stored client-side — the Edge Function resolves
+ * them from the Supabase `routers` table using routerId + auth token.
+ */
+export interface ActiveRouter {
+  routerId: string;
   host: string;
-  user: string;
-  pass: string;
   port: string;
-  protocol: ConnectionProtocol;
+  label: string;
   mode: ConnectionMode;
-  label?: string; // friendly name
+  protocol: ConnectionProtocol;
 }
 
-const STORAGE_KEY = "mikrotik_config";
+const STORAGE_KEY = "mikrotik_active_router";
+const LEGACY_KEY = "mikrotik_config";
 
-export function getMikrotikConfig(): MikrotikConfig | null {
+export function getActiveRouter(): ActiveRouter | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const config = JSON.parse(raw) as MikrotikConfig;
-    if (!config.host || !config.user || !config.pass) return null;
-    return config;
+    const router = JSON.parse(raw) as ActiveRouter;
+    if (!router.routerId || !router.host) return null;
+    return router;
   } catch {
     return null;
   }
 }
 
-export function saveMikrotikConfig(config: MikrotikConfig) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+export function setActiveRouter(router: ActiveRouter) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(router));
+  // Remove legacy credential storage if present
+  localStorage.removeItem(LEGACY_KEY);
 }
 
-export function clearMikrotikConfig() {
+export function clearActiveRouter() {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(LEGACY_KEY);
 }
 
 export function getDefaultPort(mode: ConnectionMode, protocol: ConnectionProtocol): string {

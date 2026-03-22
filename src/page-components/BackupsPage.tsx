@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { getMikrotikConfig } from "@/lib/mikrotikConfig";
+import { getActiveRouter } from "@/lib/mikrotikConfig";
 import {
   useHotspotUsers, useUserManagerUsers,
 } from "@/hooks/useMikrotik";
@@ -52,7 +52,7 @@ interface RestoreResult {
 
 export default function BackupsPage() {
   const { user } = useAuth();
-  const config = getMikrotikConfig();
+  const config = getActiveRouter();
   const [backups, setBackups] = useState<BackupRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -89,18 +89,10 @@ export default function BackupsPage() {
     }
     setCreating(true);
     try {
-      const { data: routers } = await supabase
-        .from("routers")
-        .select("id, label")
-        .eq("user_id", user.id)
-        .eq("host", config.host)
-        .limit(1);
-
-      const router = routers?.[0];
-      if (!router) throw new Error("لم يتم العثور على الراوتر");
+      if (!config?.routerId) throw new Error("لم يتم العثور على الراوتر");
 
       const { data, error } = await supabase.functions.invoke("backup-scheduler", {
-        body: { action: "create", router_id: router.id, router_label: router.label },
+        body: { action: "create", router_id: config.routerId, router_label: config.label },
       });
 
       if (error) throw error;

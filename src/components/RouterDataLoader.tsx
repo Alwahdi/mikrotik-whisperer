@@ -5,13 +5,13 @@ import { useRouterPrefetch } from "@/hooks/useRouterPrefetch";
 import { Progress } from "@/components/ui/progress";
 import { Loader2, Wifi, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getMikrotikConfig } from "@/lib/mikrotikConfig";
+import { getActiveRouter } from "@/lib/mikrotikConfig";
 
 export default function RouterDataLoader() {
   const router = useRouter();
   const { prefetch, progress, currentStep, loading, error } = useRouterPrefetch();
   const started = useRef(false);
-  const config = getMikrotikConfig();
+  const config = getActiveRouter();
 
   useEffect(() => {
     if (started.current) return;

@@ -45,7 +45,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import Link from "next/link";
 import { toast } from "sonner";
-import { getMikrotikConfig } from "@/lib/mikrotikConfig";
+import { getActiveRouter } from "@/lib/mikrotikConfig";
 
 const PAGE_SIZE = 20;
 
@@ -122,7 +122,7 @@ export default function UserManagerPage() {
     uptimeLimit: "",
   });
 
-  const config = getMikrotikConfig();
+  const config = getActiveRouter();
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["mikrotik"] });

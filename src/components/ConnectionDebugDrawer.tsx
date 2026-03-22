@@ -17,7 +17,7 @@ function statusColor(entry: ConnectionDebugEntry) {
 export default function ConnectionDebugDrawer() {
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<ConnectionDebugEntry[]>(() => getConnectionDebugEntries());
-  const [routeFilter, setRouteFilter] = useState<"all" | "local-agent" | "cloud">("all");
+  const [routeFilter, setRouteFilter] = useState<"all" | "cloud">("all");
 
   useEffect(() => {
     return subscribeConnectionDebug((next) => setEntries(next));
@@ -74,7 +74,6 @@ export default function ConnectionDebugDrawer() {
               className="ml-auto rounded border border-border bg-muted px-2 py-1 text-[11px]"
             >
               <option value="all">All routes</option>
-              <option value="local-agent">Local Agent</option>
               <option value="cloud">Cloud</option>
             </select>
 

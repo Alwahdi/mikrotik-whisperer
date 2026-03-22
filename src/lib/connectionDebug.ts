@@ -3,7 +3,7 @@ export type ConnectionDebugStatus = "ok" | "error";
 export interface ConnectionDebugEntry {
   id: string;
   ts: number;
-  route: "local-agent" | "cloud";
+  route: "cloud";
   host?: string;
   mode?: string;
   protocol?: string;

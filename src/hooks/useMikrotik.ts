@@ -1,12 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getMikrotikConfig } from "@/lib/mikrotikConfig";
+import { getActiveRouter } from "@/lib/mikrotikConfig";
 import { invokeMikrotik } from "@/lib/mikrotikInvoke";
 import { toast } from "sonner";
 
 // Router-scoped cache key prefix to prevent cross-router data leaks
 function getRouterKey(): string {
-  const config = getMikrotikConfig();
-  return config ? `${config.host}:${config.port}` : "none";
+  const router = getActiveRouter();
+  return router ? router.routerId : "none";
 }
 
 function isLikelyLocalHost(host?: string): boolean {
@@ -22,20 +22,19 @@ function isLikelyLocalHost(host?: string): boolean {
 }
 
 async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>) {
-  const config = getMikrotikConfig();
-  if (!config) throw new Error("لم يتم إعداد بيانات الاتصال بالمايكروتيك");
+  const router = getActiveRouter();
+  if (!router) throw new Error("لم يتم إعداد بيانات الاتصال بالمايكروتيك");
 
   const timeoutMs = extraBody?.timeoutMs ?? (endpoint.endsWith("/print") ? 30000 : 15000);
   const { timeoutMs: _timeoutMs, ...safeExtraBody } = extraBody || {};
 
   const request = invokeMikrotik({
       endpoint,
-      host: config.host,
-      user: config.user,
-      pass: config.pass,
-      port: config.port,
-      protocol: config.protocol,
-      mode: config.mode,
+      routerId: router.routerId,
+      host: router.host,
+      port: router.port,
+      protocol: router.protocol,
+      mode: router.mode,
       timeoutMs,
       ...safeExtraBody,
   });
@@ -51,20 +50,19 @@ async function callMikrotikApi(endpoint: string, extraBody?: Record<string, any>
 }
 
 async function callMikrotikAction(action: string, extraBody?: Record<string, any>) {
-  const config = getMikrotikConfig();
-  if (!config) throw new Error("لم يتم إعداد بيانات الاتصال بالمايكروتيك");
+  const router = getActiveRouter();
+  if (!router) throw new Error("لم يتم إعداد بيانات الاتصال بالمايكروتيك");
 
   const timeoutMs = extraBody?.timeoutMs ?? (action === "batch" ? 70000 : 20000);
   const { timeoutMs: _timeoutMs, ...safeExtraBody } = extraBody || {};
 
   const request = invokeMikrotik({
       action,
-      host: config.host,
-      user: config.user,
-      pass: config.pass,
-      port: config.port,
-      protocol: config.protocol,
-      mode: config.mode,
+      routerId: router.routerId,
+      host: router.host,
+      port: router.port,
+      protocol: router.protocol,
+      mode: router.mode,
       timeoutMs,
       ...safeExtraBody,
   });
@@ -80,7 +78,7 @@ async function callMikrotikAction(action: string, extraBody?: Record<string, any
 }
 
 function useEnabled() {
-  return !!getMikrotikConfig();
+  return !!getActiveRouter();
 }
 
 const CACHE_OPTIONS = {
@@ -210,8 +208,8 @@ export function useHotspotUserAction() {
 // ─── User Manager ──────────────────────────
 export function useUserManagerUsers(options?: { enabled?: boolean }) {
   const routerKey = getRouterKey();
-  const config = getMikrotikConfig();
-  const local = isLikelyLocalHost(config?.host);
+  const router = getActiveRouter();
+  const local = isLikelyLocalHost(router?.host);
   return useQuery({
     queryKey: ["mikrotik", routerKey, "usermanager", "users"],
     queryFn: () => callMikrotikApi("/user-manager/user/print", {
@@ -232,8 +230,8 @@ export function useUserManagerUsers(options?: { enabled?: boolean }) {
 // Count-only query for dashboard stats (fast, minimal payload)
 export function useUserManagerCount(options?: { enabled?: boolean }) {
   const routerKey = getRouterKey();
-  const config = getMikrotikConfig();
-  const local = isLikelyLocalHost(config?.host);
+  const router = getActiveRouter();
+  const local = isLikelyLocalHost(router?.host);
   return useQuery({
     queryKey: ["mikrotik", routerKey, "usermanager", "count"],
     queryFn: async () => {
@@ -309,8 +307,8 @@ export function useUserManagerCount(options?: { enabled?: boolean }) {
 export function useUserManagerSearchUsers(search: string, options?: { enabled?: boolean }) {
   const routerKey = getRouterKey();
   const hasSearch = search.trim().length >= 2;
-  const config = getMikrotikConfig();
-  const local = isLikelyLocalHost(config?.host);
+  const router = getActiveRouter();
+  const local = isLikelyLocalHost(router?.host);
   return useQuery({
     queryKey: ["mikrotik", routerKey, "usermanager", "search", search],
     queryFn: () => {
@@ -349,8 +347,8 @@ export function useUserManagerProfiles(options?: { enabled?: boolean }) {
 }
 export function useUserManagerSessions(options?: { enabled?: boolean }) {
   const routerKey = getRouterKey();
-  const config = getMikrotikConfig();
-  const local = isLikelyLocalHost(config?.host);
+  const router = getActiveRouter();
+  const local = isLikelyLocalHost(router?.host);
   return useQuery({
     queryKey: ["mikrotik", routerKey, "usermanager", "sessions"],
     queryFn: () => callMikrotikApi("/user-manager/session/print", {
@@ -547,10 +545,10 @@ export function useUserManagerBatchAdd() {
       users: BatchAddUser[];
       onProgress?: (done: number, total: number) => void;
     }): Promise<BatchAddResult> => {
-      const config = getMikrotikConfig();
-      if (!config) throw new Error("لم يتم إعداد بيانات الاتصال");
+      const router = getActiveRouter();
+      if (!router) throw new Error("لم يتم إعداد بيانات الاتصال");
 
-      const isRestMode = config.mode === "rest";
+      const isRestMode = router.mode === "rest";
       // REST mode is stateless/slower, so use smaller chunks and no concurrency.
       // API (WebSocket) mode can handle larger batches in parallel.
       const REST_CHUNK_SIZE = 6;

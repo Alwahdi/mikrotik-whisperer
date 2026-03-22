@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getMikrotikConfig } from "@/lib/mikrotikConfig";
+import { getActiveRouter } from "@/lib/mikrotikConfig";
 import { invokeMikrotik } from "@/lib/mikrotikInvoke";
 
 interface PrefetchStep {
@@ -11,7 +11,7 @@ interface PrefetchStep {
   timeoutMs?: number;
 }
 
-type RouterConfig = NonNullable<ReturnType<typeof getMikrotikConfig>>;
+type RouterConfig = NonNullable<ReturnType<typeof getActiveRouter>>;
 
 // خطوات حرجة فقط قبل الدخول (سريعة جدًا)
 const CRITICAL_STEPS: PrefetchStep[] = [
@@ -53,9 +53,8 @@ async function invokeStep(config: RouterConfig, step: PrefetchStep) {
   const args = step.proplist ? [`=.proplist=${step.proplist}`] : [];
   const request = invokeMikrotik({
       endpoint: step.command,
+      routerId: config.routerId,
       host: config.host,
-      user: config.user,
-      pass: config.pass,
       port: config.port,
       protocol: config.protocol,
       mode: config.mode,
@@ -107,7 +106,7 @@ export function useRouterPrefetch() {
   const [error, setError] = useState<string | null>(null);
 
   const prefetch = useCallback(async () => {
-    const config = getMikrotikConfig();
+    const config = getActiveRouter();
     if (!config) {
       setError("لم يتم إعداد الاتصال بالراوتر");
       return false;
@@ -118,7 +117,7 @@ export function useRouterPrefetch() {
     setProgress(5);
     setCurrentStep("جاري التحقق السريع من الاتصال...");
 
-    const routerKey = `${config.host}:${config.port}`;
+    const routerKey = config.routerId;
     let pulseTimer: ReturnType<typeof setInterval> | null = null;
 
     try {
