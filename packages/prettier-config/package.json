@@ -1,0 +1,25 @@
+{
+  "name": "@repo/prettier-config",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "prettier-plugin-tailwindcss": "^0.6.11"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.16.5",
+    "prettier": "^3.4.2",
+    "typescript": "^5.8.3"
+  },
+  "peerDependencies": {
+    "prettier": "^3.0.0"
+  }
+}

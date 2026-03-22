@@ -6,6 +6,9 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env", ".env.*"],
       "env": [
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+        "NEXT_PUBLIC_MIKROTIK_AGENT_URL",
         "SUPABASE_URL",
         "SUPABASE_ANON_KEY",
         "SUPABASE_PUBLISHABLE_KEY",
@@ -25,7 +28,8 @@
         "SENTRY_AUTH_TOKEN",
         "SENTRY_PUBLIC_KEY",
         "SENTRY_OTLP_TRACES_URL",
-        "SENTRY_VERCEL_LOG_DRAIN_URL"
+        "SENTRY_VERCEL_LOG_DRAIN_URL",
+        "NODE_ENV"
       ],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
@@ -33,8 +37,20 @@
       "cache": false,
       "persistent": true
     },
-    "lint": {},
-    "type-check": {},
-    "test": {}
+    "lint": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "eslint.config.js", ".eslintrc*"],
+      "outputs": []
+    },
+    "type-check": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "tsconfig.json"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      "outputs": ["coverage/**"]
+    }
   }
 }

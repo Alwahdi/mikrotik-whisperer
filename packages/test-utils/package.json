@@ -1,0 +1,50 @@
+{
+  "name": "@repo/test-utils",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared testing utilities and mocks for MikroTik Whisperer",
+  "type": "module",
+  "exports": {
+    "./mocks/supabase": {
+      "types": "./src/mocks/supabase.ts",
+      "default": "./dist/mocks/supabase.js"
+    },
+    "./mocks/mikrotik": {
+      "types": "./src/mocks/mikrotik.ts",
+      "default": "./dist/mocks/mikrotik.js"
+    },
+    "./fixtures": {
+      "types": "./src/fixtures/index.ts",
+      "default": "./dist/fixtures/index.js"
+    },
+    "./render": {
+      "types": "./src/utils/render.tsx",
+      "default": "./dist/utils/render.js"
+    },
+    "./matchers": {
+      "types": "./src/utils/matchers.ts",
+      "default": "./dist/utils/matchers.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "vitest": "^1.5.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.7",
+    "@testing-library/react": "^15.0.6",
+    "msw": "^2.2.13"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/react": "^18.2.0",
+    "tsup": "^8.0.2",
+    "typescript": "^5.8.0"
+  }
+}
