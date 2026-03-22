@@ -1,0 +1,40 @@
+{
+  "name": "@repo/services",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./mikrotik": {
+      "types": "./dist/mikrotik/index.d.ts",
+      "import": "./dist/mikrotik/index.js"
+    },
+    "./voucher": {
+      "types": "./dist/voucher/index.d.ts",
+      "import": "./dist/voucher/index.js"
+    },
+    "./sales": {
+      "types": "./dist/sales/index.d.ts",
+      "import": "./dist/sales/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@repo/database": "workspace:*",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "tsup": "^8.3.5",
+    "typescript": "^5.8.3"
+  }
+}
