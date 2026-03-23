@@ -260,84 +260,73 @@
 }
 
 /* ─── Mobile Responsive Overrides ─── */
-/* Compact card padding on small screens */
+/* Supabase-style responsive enhancements */
 @media (max-width: 639px) {
   /* Card: reduce header padding */
   [data-slot="card-header"] {
-    padding: 0.75rem;
+    padding: 1rem;
   }
 
   /* Card: reduce content padding */
   [data-slot="card-content"] {
-    padding: 0.75rem;
+    padding: 1rem;
     padding-top: 0;
   }
 
   /* Card: reduce footer padding */
   [data-slot="card-footer"] {
-    padding: 0.75rem;
+    padding: 1rem;
     padding-top: 0;
   }
 
-  /* CardTitle: reduce from text-2xl to text-sm */
+  /* CardTitle: reduce from text-2xl to text-lg */
   [data-slot="card-title"] {
-    font-size: 0.875rem;
+    font-size: 1.125rem;
+    line-height: 1.75rem;
   }
 
   /* Table: compact head rows */
   [data-slot="table-head"] {
-    height: 2.25rem;
-    padding: 0.375rem 0.5rem;
-    font-size: 0.6875rem;
+    height: 2.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
   }
 
   /* Table: compact cells */
   [data-slot="table-cell"] {
-    padding: 0.375rem 0.5rem;
-    font-size: 0.75rem;
-  }
-
-  /* Reduce all gap-3 grids to gap-2 */
-  .gap-3 {
-    gap: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
   }
 
   /* Compact Dialog on mobile */
   [role="dialog"] {
-    max-width: calc(100vw - 1.5rem) !important;
-    max-height: 90dvh !important;
+    max-width: calc(100vw - 2rem) !important;
+    max-height: 92dvh !important;
     margin: auto;
+    border-radius: 0.75rem;
   }
 
   /* Badge: tighter on mobile */
   .inline-flex.items-center.rounded-full {
-    padding-left: 0.375rem;
-    padding-right: 0.375rem;
-    font-size: 0.625rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+    font-size: 0.6875rem;
   }
 
   /* Compact Alert on mobile */
   [role="alert"] {
-    padding: 0.5rem 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
   }
-
-  /* More compact spacing between sections */
-  .mb-6 { margin-bottom: 1rem; }
-  .mb-5 { margin-bottom: 0.75rem; }
-  .space-y-6 > * + * { margin-top: 1rem; }
-  .space-y-4 > * + * { margin-top: 0.625rem; }
-  .space-y-3 > * + * { margin-top: 0.5rem; }
-
-  /* Body text scale */
-  body { font-size: 0.875rem; }
 
   /* Better touch targets */
   button, [role="button"], a {
-    min-height: 2rem;
+    min-height: 2.75rem;
+    min-width: 2.75rem;
   }
 
   /* Prevent text overflow */
-  h1, h2, h3, h4 {
+  h1, h2, h3, h4, h5, h6 {
     overflow-wrap: break-word;
     word-break: break-word;
   }
@@ -356,27 +345,68 @@
     top: 0;
     left: 0;
     bottom: 0;
-    width: 1.5rem;
+    width: 2rem;
     background: linear-gradient(to right, hsl(var(--card)), transparent);
     pointer-events: none;
-    opacity: 0.6;
+    opacity: 0.7;
     z-index: 1;
+  }
+
+  /* Stack form elements vertically */
+  .grid.grid-cols-2,
+  .grid.grid-cols-3,
+  .grid.grid-cols-4 {
+    grid-template-columns: 1fr;
   }
 }
 
 /* Extra-small screens (< 375px) */
 @media (max-width: 374px) {
   [data-slot="card-header"] {
-    padding: 0.5rem;
+    padding: 0.75rem;
   }
 
   [data-slot="card-content"] {
-    padding: 0.5rem;
+    padding: 0.75rem;
     padding-top: 0;
   }
 
-  [data-slot="table-head"] { padding: 0.25rem 0.375rem; font-size: 0.625rem; }
-  [data-slot="table-cell"] { padding: 0.25rem 0.375rem; font-size: 0.6875rem; }
+  [data-slot="card-title"] {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+
+  [data-slot="table-head"] {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.6875rem;
+  }
+
+  [data-slot="table-cell"] {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.8125rem;
+  }
+
+  button, [role="button"] {
+    min-height: 2.5rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* Tablet and up: Enhanced spacing */
+@media (min-width: 768px) {
+  [data-slot="card"] {
+    transition: all 0.2s ease-in-out;
+  }
+
+  [data-slot="card"]:hover {
+    transform: translateY(-1px);
+  }
+
+  /* Better button spacing */
+  button + button,
+  [role="button"] + [role="button"] {
+    margin-right: 0.5rem;
+  }
 }
 
 /* Viewport and safe area handling */

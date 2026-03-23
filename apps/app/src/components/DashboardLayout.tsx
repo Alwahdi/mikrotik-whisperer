@@ -3,7 +3,7 @@ import { ReactNode, useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, Wifi, Users, Settings, Menu,
+  LayoutDashboard, Wifi, Users, Settings,
   Router, Moon, Sun, LogOut, Activity, CreditCard,
   Database, Shield, HeartPulse,
 } from "lucide-react";
@@ -25,11 +25,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarSeparator,
   SidebarTrigger,
-  useSidebar,
 } from "@repo/design-system/components/ui/sidebar";
-import { Button } from "@repo/design-system/components/ui/button";
 import { Separator } from "@repo/design-system/components/ui/separator";
 import {
   DropdownMenu,

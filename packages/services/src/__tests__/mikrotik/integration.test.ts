@@ -4,14 +4,12 @@
  * CRITICAL PRIORITY - Tests retry logic, timeout handling, and connection scenarios
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { MikrotikService } from '../../mikrotik'
 import {
   createMockMikrotikAPI,
   createFailingMikrotikAPI,
   createTrackingMikrotikAPI,
   MOCK_CONNECTIONS,
 } from '@repo/test-utils/mocks/mikrotik'
-import type { ServiceResult } from '../../shared/utils'
 
 describe('MikrotikService - Integration Tests', () => {
   beforeEach(() => {
@@ -54,7 +52,7 @@ describe('MikrotikService - Integration Tests', () => {
         { ...MOCK_CONNECTIONS.valid, port: 8080 },
       ]
 
-      for (const connection of connections) {
+      for (const _connection of connections) {
         const mockAPI = createMockMikrotikAPI()
         const result = await mockAPI.connect()
         expect(result.success).toBe(true)
@@ -108,24 +106,22 @@ describe('MikrotikService - Integration Tests', () => {
       let attempts = 0
       const mockAPI = createMockMikrotikAPI()
 
-      mockAPI.execute = vi.fn(async () => {
+      mockAPI.execute = vi.fn(async (_command: string) => {
         attempts++
         if (attempts < 3) {
           throw new Error('Network error')
         }
         return { success: true, data: { status: 'ok' } }
-      })
+      }) as any
 
       // Simulate retry with exponential backoff
-      let lastError: Error | undefined
       for (let i = 0; i < 3; i++) {
         try {
           const result = await mockAPI.execute('/system/resource')
           expect(result.success).toBe(true)
           expect(attempts).toBe(3)
           break
-        } catch (err) {
-          lastError = err as Error
+        } catch (_err) {
           await new Promise((resolve) => setTimeout(resolve, 10))
         }
       }
@@ -167,13 +163,13 @@ describe('MikrotikService - Integration Tests', () => {
       let attempts = 0
 
       const mockAPI = createMockMikrotikAPI()
-      mockAPI.execute = vi.fn(async () => {
+      mockAPI.execute = vi.fn(async (_command: string) => {
         attempts++
         if (attempts < 3) {
           throw new Error('Network error')
         }
         return { success: true, data: {} }
-      })
+      }) as any
 
       const startTime = Date.now()
       let lastAttemptTime = startTime
@@ -201,10 +197,10 @@ describe('MikrotikService - Integration Tests', () => {
       const mockAPI = createMockMikrotikAPI()
       let attempts = 0
 
-      mockAPI.execute = vi.fn(async () => {
+      mockAPI.execute = vi.fn(async (_command: string) => {
         attempts++
         throw new Error('VALIDATION_ERROR: Invalid command')
-      })
+      }) as any
 
       // Should not retry validation errors
       try {
@@ -222,11 +218,11 @@ describe('MikrotikService - Integration Tests', () => {
       const mockAPI = createMockMikrotikAPI()
       const timeoutMs = 1000
 
-      mockAPI.execute = vi.fn(async () => {
+      mockAPI.execute = vi.fn(async (_command: string) => {
         // Simulate slow command
         await new Promise((resolve) => setTimeout(resolve, 2000))
         return { success: true, data: {} }
-      })
+      }) as any
 
       const executeWithTimeout = async () => {
         return Promise.race([
@@ -244,11 +240,11 @@ describe('MikrotikService - Integration Tests', () => {
       const mockAPI = createMockMikrotikAPI()
       const timeoutMs = 1000
 
-      mockAPI.execute = vi.fn(async () => {
+      mockAPI.execute = vi.fn(async (_command: string) => {
         // Simulate fast command
         await new Promise((resolve) => setTimeout(resolve, 100))
         return { success: true, data: { status: 'ok' } }
-      })
+      }) as any
 
       const executeWithTimeout = async () => {
         return Promise.race([
@@ -276,10 +272,10 @@ describe('MikrotikService - Integration Tests', () => {
       const timeouts = [500, 1000, 2000]
 
       for (const timeoutMs of timeouts) {
-        mockAPI.execute = vi.fn(async () => {
+        mockAPI.execute = vi.fn(async (_command: string) => {
           await new Promise((resolve) => setTimeout(resolve, timeoutMs + 100))
           return { success: true, data: {} }
-        })
+        }) as any
 
         const executeWithTimeout = async () => {
           return Promise.race([
@@ -376,12 +372,6 @@ describe('MikrotikService - Integration Tests', () => {
 
   describe('Different Router Configurations', () => {
     it('should work with HTTP protocol', async () => {
-      const connection = {
-        ...MOCK_CONNECTIONS.valid,
-        protocol: 'http' as const,
-        port: 80,
-      }
-
       const mockAPI = createMockMikrotikAPI()
       const result = await mockAPI.connect()
 
@@ -389,8 +379,6 @@ describe('MikrotikService - Integration Tests', () => {
     })
 
     it('should work with HTTPS protocol', async () => {
-      const connection = MOCK_CONNECTIONS.valid
-
       const mockAPI = createMockMikrotikAPI()
       const result = await mockAPI.connect()
 
@@ -401,7 +389,6 @@ describe('MikrotikService - Integration Tests', () => {
       const ports = [80, 443, 8080, 8443]
 
       for (const port of ports) {
-        const connection = { ...MOCK_CONNECTIONS.valid, port }
         const mockAPI = createMockMikrotikAPI()
         const result = await mockAPI.connect()
         expect(result.success).toBe(true)
@@ -416,7 +403,6 @@ describe('MikrotikService - Integration Tests', () => {
       ]
 
       for (const creds of credentials) {
-        const connection = { ...MOCK_CONNECTIONS.valid, ...creds }
         const mockAPI = createMockMikrotikAPI()
         const result = await mockAPI.connect()
         expect(result.success).toBe(true)
