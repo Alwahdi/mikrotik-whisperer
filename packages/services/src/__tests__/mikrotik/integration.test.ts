@@ -372,12 +372,6 @@ describe('MikrotikService - Integration Tests', () => {
 
   describe('Different Router Configurations', () => {
     it('should work with HTTP protocol', async () => {
-      const _connection = {
-        ...MOCK_CONNECTIONS.valid,
-        protocol: 'http' as const,
-        port: 80,
-      }
-
       const mockAPI = createMockMikrotikAPI()
       const result = await mockAPI.connect()
 
@@ -385,8 +379,6 @@ describe('MikrotikService - Integration Tests', () => {
     })
 
     it('should work with HTTPS protocol', async () => {
-      const _connection = MOCK_CONNECTIONS.valid
-
       const mockAPI = createMockMikrotikAPI()
       const result = await mockAPI.connect()
 
@@ -397,7 +389,6 @@ describe('MikrotikService - Integration Tests', () => {
       const ports = [80, 443, 8080, 8443]
 
       for (const port of ports) {
-        const _connection = { ...MOCK_CONNECTIONS.valid, port }
         const mockAPI = createMockMikrotikAPI()
         const result = await mockAPI.connect()
         expect(result.success).toBe(true)
@@ -412,7 +403,6 @@ describe('MikrotikService - Integration Tests', () => {
       ]
 
       for (const creds of credentials) {
-        const _connection = { ...MOCK_CONNECTIONS.valid, ...creds }
         const mockAPI = createMockMikrotikAPI()
         const result = await mockAPI.connect()
         expect(result.success).toBe(true)
