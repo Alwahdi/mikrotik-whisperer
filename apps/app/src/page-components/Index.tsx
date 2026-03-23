@@ -19,6 +19,12 @@ import {
 import { getActiveRouter } from "@repo/mikrotik";
 import Link from "next/link";
 import { Button } from "@repo/design-system/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@repo/design-system/components/ui/card";
+import { Alert, AlertDescription } from "@repo/design-system/components/ui/alert";
+import { Badge } from "@repo/design-system/components/ui/badge";
+import {
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+} from "@repo/design-system/components/ui/table";
 import { supabase } from "@repo/database";
 import { useAuth } from "@repo/auth";
 import { useQuery } from "@tanstack/react-query";
@@ -156,14 +162,14 @@ export default function Index() {
       {alerts.length > 0 && (
         <div className="mb-5 space-y-2">
           {alerts.map((a, i) => (
-            <div key={i} className={`flex items-center gap-2 p-3 rounded-lg border text-xs ${
-              a.type === "error" 
-                ? "bg-destructive/5 border-destructive/20 text-destructive" 
-                : "bg-warning/5 border-warning/20 text-warning"
-            }`}>
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-              {a.msg}
-            </div>
+            <Alert key={i} variant={a.type === "error" ? "destructive" : "default"} className={
+              a.type === "error"
+                ? ""
+                : "border-warning/20 bg-warning/5 text-warning [&>svg]:text-warning"
+            }>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription className="text-xs">{a.msg}</AlertDescription>
+            </Alert>
           ))}
         </div>
       )}
@@ -183,14 +189,16 @@ export default function Index() {
         <StatCard title="مبيعات اليوم" value={todayRevenue.toLocaleString()} icon={DollarSign} variant="accent" />
         <StatCard title="كروت اليوم" value={todayCardsCount} icon={CreditCard} />
         <Link href="/sales" className="col-span-2 sm:col-span-1">
-          <div className="rounded-lg border border-border bg-card p-4 hover:border-primary/30 transition-colors h-full flex flex-col justify-center">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-              <TrendingUp className="h-3.5 w-3.5" />
-              أفضل باقة اليوم
-            </div>
-            <p className="text-sm font-semibold text-foreground truncate">{topPackageToday || "—"}</p>
-            <p className="text-[10px] text-primary mt-1 flex items-center gap-1">عرض التقارير <ArrowRight className="h-2.5 w-2.5" /></p>
-          </div>
+          <Card className="hover:border-primary/30 transition-colors h-full">
+            <CardContent className="p-4 flex flex-col justify-center h-full">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                <TrendingUp className="h-3.5 w-3.5" />
+                أفضل باقة اليوم
+              </div>
+              <p className="text-sm font-semibold text-foreground truncate">{topPackageToday || "—"}</p>
+              <p className="text-[10px] text-primary mt-1 flex items-center gap-1">عرض التقارير <ArrowRight className="h-2.5 w-2.5" /></p>
+            </CardContent>
+          </Card>
         </Link>
       </div>
 
@@ -213,69 +221,78 @@ export default function Index() {
 
       {/* Active Hotspot Users */}
       {Array.isArray(hotspotUsers) && hotspotUsers.length > 0 && (
-        <div className="rounded-lg border border-border bg-card shadow-card p-5 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide flex items-center gap-2">
-              <Wifi className="h-3.5 w-3.5" />
-              المتصلين ({hotspotUsers.length})
-            </h3>
-            <Link href="/hotspot" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-              عرض الكل <ArrowRight className="h-3 w-3" />
-            </Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-muted-foreground border-b border-border">
-                  <th className="text-right p-2 font-medium">المستخدم</th>
-                  <th className="text-right p-2 font-medium">IP</th>
-                  <th className="text-right p-2 font-medium hidden sm:table-cell">MAC</th>
-                  <th className="text-right p-2 font-medium">المدة</th>
-                  <th className="text-right p-2 font-medium">↓</th>
-                  <th className="text-right p-2 font-medium">↑</th>
-                </tr>
-              </thead>
-              <tbody>
+        <Card className="mb-6">
+          <CardHeader className="p-5 pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wide flex items-center gap-2">
+                <Wifi className="h-3.5 w-3.5" />
+                المتصلين
+                <Badge variant="secondary" className="text-[10px] font-mono">{hotspotUsers.length}</Badge>
+              </CardTitle>
+              <Link href="/hotspot" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+                عرض الكل <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-right text-xs">المستخدم</TableHead>
+                  <TableHead className="text-right text-xs">IP</TableHead>
+                  <TableHead className="text-right text-xs hidden sm:table-cell">MAC</TableHead>
+                  <TableHead className="text-right text-xs">المدة</TableHead>
+                  <TableHead className="text-right text-xs">↓</TableHead>
+                  <TableHead className="text-right text-xs">↑</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 {hotspotUsers.slice(0, 8).map((u: any, i: number) => (
-                  <tr key={i} className="border-b border-border/30 hover:bg-muted/50 transition-colors">
-                    <td className="p-2 font-medium text-foreground">{u.user || "—"}</td>
-                    <td className="p-2 font-mono text-muted-foreground">{u.address || "—"}</td>
-                    <td className="p-2 font-mono text-muted-foreground hidden sm:table-cell">{u["mac-address"] || "—"}</td>
-                    <td className="p-2 text-muted-foreground">{u.uptime || "—"}</td>
-                    <td className="p-2 font-mono text-foreground">{formatSize(u["bytes-in"])}</td>
-                    <td className="p-2 font-mono text-foreground">{formatSize(u["bytes-out"])}</td>
-                  </tr>
+                  <TableRow key={i}>
+                    <TableCell className="text-xs font-medium">{u.user || "—"}</TableCell>
+                    <TableCell className="text-xs font-mono text-muted-foreground">{u.address || "—"}</TableCell>
+                    <TableCell className="text-xs font-mono text-muted-foreground hidden sm:table-cell">{u["mac-address"] || "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{u.uptime || "—"}</TableCell>
+                    <TableCell className="text-xs font-mono">{formatSize(u["bytes-in"])}</TableCell>
+                    <TableCell className="text-xs font-mono">{formatSize(u["bytes-out"])}</TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
       {/* Interfaces */}
       {Array.isArray(interfaces) && interfaces.length > 0 && (
-        <div className="rounded-lg border border-border bg-card shadow-card p-5">
-          <h3 className="text-xs font-semibold text-foreground mb-4 uppercase tracking-wide flex items-center gap-2">
-            <Network className="h-3.5 w-3.5" />
-            الواجهات
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-            {interfaces.filter((i: any) => i.type !== "loopback").slice(0, 9).map((iface: any, i: number) => {
-              const running = iface.running === "true" || iface.running === true;
-              return (
-                <div key={i} className={`p-3 rounded-md border transition-colors ${running ? "border-success/20 bg-success/5" : "border-border bg-muted/50"}`}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-foreground font-mono">{iface.name}</span>
-                    <span className={`h-1.5 w-1.5 rounded-full ${running ? "bg-success" : "bg-muted-foreground/30"}`} />
+        <Card>
+          <CardHeader className="p-5 pb-3">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wide flex items-center gap-2">
+              <Network className="h-3.5 w-3.5" />
+              الواجهات
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-5 pt-0">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {interfaces.filter((i: any) => i.type !== "loopback").slice(0, 9).map((iface: any, i: number) => {
+                const running = iface.running === "true" || iface.running === true;
+                return (
+                  <div key={i} className={`p-3 rounded-md border transition-colors ${running ? "border-success/20 bg-success/5" : "border-border bg-muted/50"}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-foreground font-mono">{iface.name}</span>
+                      <Badge variant={running ? "default" : "secondary"} className="text-[9px] h-4 px-1.5">
+                        {running ? "نشط" : "متوقف"}
+                      </Badge>
+                    </div>
+                    <div className="text-[10px] text-muted-foreground font-mono">
+                      ↓ {formatSize(iface["rx-byte"])} / ↑ {formatSize(iface["tx-byte"])}
+                    </div>
                   </div>
-                  <div className="text-[10px] text-muted-foreground font-mono">
-                    ↓ {formatSize(iface["rx-byte"])} / ↑ {formatSize(iface["tx-byte"])}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       )}
     </DashboardLayout>
   );

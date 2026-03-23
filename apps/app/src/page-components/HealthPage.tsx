@@ -2,6 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Activity, CheckCircle2, RefreshCcw, Timer, XCircle } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@repo/design-system/components/ui/button";
+import { Card, CardHeader, CardTitle, CardContent } from "@repo/design-system/components/ui/card";
+import { Badge } from "@repo/design-system/components/ui/badge";
+import {
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+} from "@repo/design-system/components/ui/table";
 import { getActiveRouter } from "@repo/mikrotik";
 import { invokeMikrotik } from "@repo/mikrotik";
 
@@ -108,61 +113,72 @@ export default function HealthPage() {
         </div>
 
         {!config && (
-          <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-            اختر راوتر أولاً من صفحة الراوترات لبدء فحوصات الصحة.
-          </div>
+          <Card>
+            <CardContent className="p-4 text-sm text-muted-foreground">
+              اختر راوتر أولاً من صفحة الراوترات لبدء فحوصات الصحة.
+            </CardContent>
+          </Card>
         )}
 
         {config && (
           <>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="rounded-lg border border-border bg-card p-4">
-                <p className="text-[11px] text-muted-foreground">Services OK</p>
-                <p className="text-sm font-semibold mt-1">{summary.ok} / {results.length || CHECKS.length}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-card p-4">
-                <p className="text-[11px] text-muted-foreground">Failed</p>
-                <p className="text-sm font-semibold mt-1">{summary.failed}</p>
-              </div>
-              <div className="rounded-lg border border-border bg-card p-4">
-                <p className="text-[11px] text-muted-foreground">Avg Latency</p>
-                <p className="text-sm font-semibold mt-1">{summary.avg} ms</p>
-              </div>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-[11px] text-muted-foreground">Services OK</p>
+                  <p className="text-sm font-semibold mt-1">{summary.ok} / {results.length || CHECKS.length}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-[11px] text-muted-foreground">Failed</p>
+                  <p className="text-sm font-semibold mt-1">{summary.failed}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4">
+                  <p className="text-[11px] text-muted-foreground">Avg Latency</p>
+                  <p className="text-sm font-semibold mt-1">{summary.avg} ms</p>
+                </CardContent>
+              </Card>
             </div>
 
-            <div className="rounded-lg border border-border bg-card p-4 overflow-x-auto">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold flex items-center gap-2"><Activity className="h-4 w-4" /> Service Readiness</h3>
-                <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Timer className="h-3 w-3" /> {checkedAt ? new Date(checkedAt).toLocaleTimeString() : "not checked yet"}</span>
-              </div>
-
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border text-muted-foreground">
-                    <th className="text-right p-2">Service</th>
-                    <th className="text-right p-2">Status</th>
-                    <th className="text-right p-2">Latency</th>
-                    <th className="text-right p-2">Details</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(results.length > 0 ? results : CHECKS.map((c) => ({ key: c.key, label: c.label, ok: false, latencyMs: 0, error: "pending" }))).map((row) => (
-                    <tr key={row.key} className="border-b border-border/40">
-                      <td className="p-2 font-medium">{row.label}</td>
-                      <td className="p-2">
-                        {row.ok ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-600"><CheckCircle2 className="h-3.5 w-3.5" /> Ready</span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-red-600"><XCircle className="h-3.5 w-3.5" /> Failed</span>
-                        )}
-                      </td>
-                      <td className="p-2 font-mono">{row.latencyMs} ms</td>
-                      <td className="p-2 text-muted-foreground truncate max-w-[380px]">{row.error || "OK"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Card>
+              <CardHeader className="p-4 pb-0">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2"><Activity className="h-4 w-4" /> Service Readiness</CardTitle>
+                  <span className="text-[11px] text-muted-foreground flex items-center gap-1"><Timer className="h-3 w-3" /> {checkedAt ? new Date(checkedAt).toLocaleTimeString() : "not checked yet"}</span>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0 pt-3">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right text-xs">Service</TableHead>
+                      <TableHead className="text-right text-xs">Status</TableHead>
+                      <TableHead className="text-right text-xs">Latency</TableHead>
+                      <TableHead className="text-right text-xs">Details</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(results.length > 0 ? results : CHECKS.map((c) => ({ key: c.key, label: c.label, ok: false, latencyMs: 0, error: "pending" }))).map((row) => (
+                      <TableRow key={row.key}>
+                        <TableCell className="text-xs font-medium">{row.label}</TableCell>
+                        <TableCell className="text-xs">
+                          {row.ok ? (
+                            <Badge variant="default" className="text-[10px] bg-success/10 text-success border-success/20"><CheckCircle2 className="h-3 w-3 mr-1" /> Ready</Badge>
+                          ) : (
+                            <Badge variant="destructive" className="text-[10px]"><XCircle className="h-3 w-3 mr-1" /> Failed</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs font-mono">{row.latencyMs} ms</TableCell>
+                        <TableCell className="text-xs text-muted-foreground truncate max-w-[380px]">{row.error || "OK"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
           </>
         )}
       </div>

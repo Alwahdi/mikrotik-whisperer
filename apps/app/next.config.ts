@@ -2,6 +2,7 @@ import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ['192.168.0.180'],
   reactStrictMode: true,
   poweredByHeader: false,
   transpilePackages: [

@@ -7,6 +7,9 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Card, CardHeader, CardTitle, CardContent } from "@repo/design-system/components/ui/card";
+import { Alert, AlertDescription } from "@repo/design-system/components/ui/alert";
+import { Button } from "@repo/design-system/components/ui/button";
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -29,67 +32,69 @@ export default function SettingsPage() {
 
       <div className="max-w-xl space-y-4">
         {config ? (
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-success/5 border border-success/20">
-            <CheckCircle className="h-4 w-4 text-success shrink-0" />
-            <div>
+          <Alert className="border-success/20 bg-success/5 [&>svg]:text-success">
+            <CheckCircle className="h-4 w-4" />
+            <AlertDescription>
               <p className="text-sm font-medium text-foreground">متصل: {config.label}</p>
               <p className="text-[10px] text-muted-foreground font-mono">{config.mode === "rest" ? "REST" : "API"} • {config.host}:{config.port}</p>
-            </div>
-          </div>
+            </AlertDescription>
+          </Alert>
         ) : (
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted border border-border">
-            <WifiOff className="h-4 w-4 text-muted-foreground shrink-0" />
-            <p className="text-sm text-muted-foreground">غير متصل بأي راوتر</p>
-          </div>
+          <Alert>
+            <WifiOff className="h-4 w-4" />
+            <AlertDescription className="text-sm text-muted-foreground">غير متصل بأي راوتر</AlertDescription>
+          </Alert>
         )}
 
         {config && (
-          <div className="rounded-lg border border-border bg-card shadow-card p-5 space-y-3">
-            <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide">معلومات الاتصال</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                {config.mode === "rest"
-                  ? <Server className="h-4 w-4 text-muted-foreground" />
-                  : <Wifi className="h-4 w-4 text-muted-foreground" />}
-                <span className="text-foreground font-medium">{config.mode === "rest" ? "REST API" : "MikroTik API"}</span>
-                <span className="text-muted-foreground text-xs">({config.protocol})</span>
+          <Card>
+            <CardHeader className="p-5 pb-3">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wide">معلومات الاتصال</CardTitle>
+            </CardHeader>
+            <CardContent className="p-5 pt-0 space-y-3">
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2">
+                  {config.mode === "rest"
+                    ? <Server className="h-4 w-4 text-muted-foreground" />
+                    : <Wifi className="h-4 w-4 text-muted-foreground" />}
+                  <span className="text-foreground font-medium">{config.mode === "rest" ? "REST API" : "MikroTik API"}</span>
+                  <span className="text-muted-foreground text-xs">({config.protocol})</span>
+                </div>
+                <p className="text-muted-foreground font-mono text-xs" dir="ltr">{config.host}:{config.port}</p>
               </div>
-              <p className="text-muted-foreground font-mono text-xs" dir="ltr">{config.host}:{config.port}</p>
-            </div>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={() => navigation.push("/routers")}
-                className="flex-1 gradient-primary text-primary-foreground font-medium py-2.5 rounded-lg text-sm transition-all hover:opacity-90 flex items-center justify-center gap-2"
-              >
-                <Router className="h-4 w-4" />
-                إدارة الراوترات
-              </button>
-              <button onClick={disconnect} className="py-2.5 px-4 rounded-lg text-sm font-medium border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-1.5">
-                <WifiOff className="h-4 w-4" />قطع
-              </button>
-            </div>
-          </div>
+              <div className="flex gap-2 pt-2">
+                <Button onClick={() => navigation.push("/routers")} className="flex-1">
+                  <Router className="h-4 w-4" />
+                  إدارة الراوترات
+                </Button>
+                <Button variant="destructive" onClick={disconnect}>
+                  <WifiOff className="h-4 w-4" />قطع
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {!config && (
-          <button
-            onClick={() => navigation.push("/routers")}
-            className="w-full gradient-primary text-primary-foreground font-medium py-3 rounded-lg text-sm transition-all hover:opacity-90 flex items-center justify-center gap-2"
-          >
+          <Button onClick={() => navigation.push("/routers")} className="w-full">
             <Router className="h-4 w-4" />
             اختيار راوتر
-          </button>
+          </Button>
         )}
 
-        <div className="rounded-lg border border-border bg-card shadow-card p-5">
-          <h3 className="text-xs font-semibold text-foreground mb-3 uppercase tracking-wide">نصائح</h3>
-          <ul className="space-y-1.5 text-[11px] text-muted-foreground leading-relaxed">
-            <li>• REST API: فعّل www أو www-ssl من IP → Services</li>
-            <li>• MikroTik API: فعّل api أو api-ssl من IP → Services</li>
-            <li>• تأكد من فتح البورت في الفايروول</li>
-            <li>• بيانات الاتصال محمية ولا تُخزَّن في المتصفح</li>
-          </ul>
-        </div>
+        <Card>
+          <CardHeader className="p-5 pb-3">
+            <CardTitle className="text-xs font-semibold uppercase tracking-wide">نصائح</CardTitle>
+          </CardHeader>
+          <CardContent className="p-5 pt-0">
+            <ul className="space-y-1.5 text-[11px] text-muted-foreground leading-relaxed">
+              <li>• REST API: فعّل www أو www-ssl من IP → Services</li>
+              <li>• MikroTik API: فعّل api أو api-ssl من IP → Services</li>
+              <li>• تأكد من فتح البورت في الفايروول</li>
+              <li>• بيانات الاتصال محمية ولا تُخزَّن في المتصفح</li>
+            </ul>
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );

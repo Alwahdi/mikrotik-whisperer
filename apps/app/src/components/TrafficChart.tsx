@@ -1,4 +1,5 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { Card, CardHeader, CardTitle, CardContent } from "@repo/design-system/components/ui/card";
 
 interface TrafficChartProps {
   interfaces: any[] | undefined;
@@ -16,10 +17,14 @@ function formatTraffic(bytes: string | number | undefined): string {
 export default function TrafficChart({ interfaces }: TrafficChartProps) {
   if (!Array.isArray(interfaces) || interfaces.length === 0) {
     return (
-      <div className="rounded-lg border border-border bg-card shadow-card p-5">
-        <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide mb-4">حركة البيانات</h3>
-        <p className="text-muted-foreground text-xs text-center py-8">لا توجد بيانات</p>
-      </div>
+      <Card>
+        <CardHeader className="p-5 pb-3">
+          <CardTitle className="text-xs font-semibold uppercase tracking-wide">حركة البيانات</CardTitle>
+        </CardHeader>
+        <CardContent className="p-5 pt-0">
+          <p className="text-muted-foreground text-xs text-center py-8">لا توجد بيانات</p>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -37,38 +42,42 @@ export default function TrafficChart({ interfaces }: TrafficChartProps) {
     }));
 
   return (
-    <div className="rounded-lg border border-border bg-card shadow-card p-5">
-      <h3 className="text-xs font-semibold text-foreground uppercase tracking-wide mb-4">حركة البيانات (MB)</h3>
-      <div className="h-52" dir="ltr">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} barGap={2}>
-            <XAxis dataKey="name" tick={{ fontSize: 10 }} tickLine={false} stroke="hsl(30, 5%, 50%)" />
-            <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v.toFixed(0)}`} stroke="hsl(30, 5%, 50%)" />
-            <Tooltip
-              formatter={(value: number, name: string) => [
-                formatTraffic(value * 1048576),
-                name === "rx" ? "تحميل ↓" : "رفع ↑",
-              ]}
-              contentStyle={{
-                fontSize: 12,
-                borderRadius: 8,
-                border: "1px solid hsl(35, 15%, 89%)",
-                background: "hsl(40, 25%, 99%)",
-              }}
-            />
-            <Bar dataKey="rx" name="rx" radius={[3, 3, 0, 0]} maxBarSize={24} fill="hsl(30, 10%, 25%)" fillOpacity={0.7} />
-            <Bar dataKey="tx" name="tx" radius={[3, 3, 0, 0]} maxBarSize={24} fill="hsl(35, 30%, 72%)" fillOpacity={0.8} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="flex gap-5 mt-3 justify-center text-[11px] text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-sm" style={{ background: "hsl(30, 10%, 25%)" }} /> تحميل (RX)
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-sm" style={{ background: "hsl(35, 30%, 72%)" }} /> رفع (TX)
-        </span>
-      </div>
-    </div>
+    <Card>
+      <CardHeader className="p-5 pb-3">
+        <CardTitle className="text-xs font-semibold uppercase tracking-wide">حركة البيانات (MB)</CardTitle>
+      </CardHeader>
+      <CardContent className="p-5 pt-0">
+        <div className="h-52" dir="ltr">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} barGap={2}>
+              <XAxis dataKey="name" tick={{ fontSize: 10 }} tickLine={false} stroke="hsl(var(--muted-foreground))" />
+              <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v.toFixed(0)}`} stroke="hsl(var(--muted-foreground))" />
+              <Tooltip
+                formatter={(value: number, name: string) => [
+                  formatTraffic(value * 1048576),
+                  name === "rx" ? "تحميل ↓" : "رفع ↑",
+                ]}
+                contentStyle={{
+                  fontSize: 12,
+                  borderRadius: 8,
+                  border: "1px solid hsl(var(--border))",
+                  background: "hsl(var(--card))",
+                }}
+              />
+              <Bar dataKey="rx" name="rx" radius={[3, 3, 0, 0]} maxBarSize={24} fill="hsl(var(--primary))" fillOpacity={0.7} />
+              <Bar dataKey="tx" name="tx" radius={[3, 3, 0, 0]} maxBarSize={24} fill="hsl(var(--muted-foreground))" fillOpacity={0.5} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="flex gap-5 mt-3 justify-center text-[11px] text-muted-foreground">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-sm bg-primary/70" /> تحميل (RX)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-sm bg-muted-foreground/50" /> رفع (TX)
+          </span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

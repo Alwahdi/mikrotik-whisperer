@@ -1,3 +1,6 @@
+import { Card, CardHeader, CardTitle, CardContent } from "@repo/design-system/components/ui/card";
+import { Separator } from "@repo/design-system/components/ui/separator";
+
 interface SystemInfoProps {
   resource: Record<string, any> | undefined;
   identity: Record<string, any> | undefined;
@@ -17,18 +20,25 @@ export default function SystemInfoCard({ resource, identity, routerboard }: Syst
   ].filter((item) => item.value);
 
   return (
-    <div className="rounded-lg border border-border bg-card shadow-card p-5">
-      <h3 className="text-xs font-semibold text-foreground mb-4 uppercase tracking-wide">
-        معلومات النظام
-      </h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-        {items.map((item, i) => (
-          <div key={i} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
-            <span className="text-xs text-muted-foreground">{item.label}</span>
-            <span className="text-xs font-mono text-foreground">{item.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+    <Card>
+      <CardHeader className="pb-3 p-5">
+        <CardTitle className="text-xs font-semibold uppercase tracking-wide">
+          معلومات النظام
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-5 pt-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+          {items.map((item, i) => (
+            <div key={i}>
+              <div className="flex justify-between items-center py-2">
+                <span className="text-xs text-muted-foreground">{item.label}</span>
+                <span className="text-xs font-mono text-foreground">{item.value}</span>
+              </div>
+              {i < items.length - 1 && <Separator className="opacity-50" />}
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

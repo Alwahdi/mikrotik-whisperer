@@ -1,4 +1,6 @@
 import { LucideIcon } from "lucide-react";
+import { Card, CardContent } from "@repo/design-system/components/ui/card";
+import { cn } from "@repo/design-system";
 
 interface StatCardProps {
   title: string;
@@ -11,22 +13,22 @@ interface StatCardProps {
 const variantStyles = {
   default: {
     icon: "text-muted-foreground",
-    bg: "bg-card",
-    border: "border-border",
+    iconBg: "bg-muted/50",
+    border: "",
   },
   primary: {
-    icon: "text-foreground",
-    bg: "bg-card",
+    icon: "text-primary",
+    iconBg: "bg-primary/10",
     border: "border-primary/10",
   },
   accent: {
     icon: "text-success",
-    bg: "bg-card",
+    iconBg: "bg-success/10",
     border: "border-success/10",
   },
   warning: {
     icon: "text-warning",
-    bg: "bg-card",
+    iconBg: "bg-warning/10",
     border: "border-warning/10",
   },
 };
@@ -34,17 +36,19 @@ const variantStyles = {
 export default function StatCard({ title, value, subtitle, icon: Icon, variant = "default" }: StatCardProps) {
   const styles = variantStyles[variant];
   return (
-    <div className={`rounded-lg border ${styles.border} ${styles.bg} p-4 shadow-card hover-lift press-scale`}>
-      <div className="flex items-start justify-between">
-        <div className="min-w-0">
-          <p className="text-[11px] text-muted-foreground mb-1 uppercase tracking-wide">{title}</p>
-          <p className="text-xl font-bold text-foreground truncate animate-count">{value}</p>
-          {subtitle && <p className="text-[10px] text-muted-foreground mt-0.5">{subtitle}</p>}
+    <Card className={cn("transition-all duration-200 hover:-translate-y-0.5", styles.border)}>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-muted-foreground mb-1.5 font-medium">{title}</p>
+            <p className="text-xl font-bold text-foreground truncate tabular-nums">{value}</p>
+            {subtitle && <p className="text-[10px] text-muted-foreground mt-1">{subtitle}</p>}
+          </div>
+          <div className={cn("p-2 rounded-lg shrink-0", styles.iconBg)}>
+            <Icon className={cn("h-4 w-4", styles.icon)} />
+          </div>
         </div>
-        <div className={`p-1.5 rounded-md bg-muted/50`}>
-          <Icon className={`h-4 w-4 shrink-0 ${styles.icon}`} />
-        </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }

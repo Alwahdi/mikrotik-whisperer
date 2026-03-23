@@ -15,6 +15,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/design-system/co
 import { Button } from "@repo/design-system/components/ui/button";
 import { Input } from "@repo/design-system/components/ui/input";
 import { Skeleton } from "@repo/design-system/components/ui/skeleton";
+import { Card, CardContent } from "@repo/design-system/components/ui/card";
+import { Badge } from "@repo/design-system/components/ui/badge";
+import {
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+} from "@repo/design-system/components/ui/table";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuTrigger, DropdownMenuSeparator,
@@ -143,26 +148,32 @@ export default function HotspotPage() {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-3 gap-3 mb-5">
-        <div className="rounded-lg border border-border bg-card p-3">
-          <div className="flex items-center gap-2 mb-1">
-            <Wifi className="h-3.5 w-3.5 text-success" />
-            <span className="text-xs text-muted-foreground">متصلين</span>
-          </div>
-          {loadingActive ? <Skeleton className="h-7 w-12" /> : <p className="text-xl font-bold text-foreground">{activeList.length}</p>}
-        </div>
-        <div className="rounded-lg border border-border bg-card p-3">
-          <div className="flex items-center gap-2 mb-1">
-            <Users className="h-3.5 w-3.5 text-foreground" />
-            <span className="text-xs text-muted-foreground">إجمالي</span>
-          </div>
-          {loadingAll ? <Skeleton className="h-7 w-12" /> : <p className="text-xl font-bold text-foreground">{allUsersList.length}</p>}
-        </div>
-        <div className="rounded-lg border border-border bg-card p-3">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs text-muted-foreground">بروفايلات</span>
-          </div>
-          <p className="text-xl font-bold text-foreground">{Array.isArray(profiles) ? profiles.length : 0}</p>
-        </div>
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Wifi className="h-3.5 w-3.5 text-success" />
+              <span className="text-xs text-muted-foreground">متصلين</span>
+            </div>
+            {loadingActive ? <Skeleton className="h-7 w-12" /> : <p className="text-xl font-bold text-foreground">{activeList.length}</p>}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Users className="h-3.5 w-3.5 text-foreground" />
+              <span className="text-xs text-muted-foreground">إجمالي</span>
+            </div>
+            {loadingAll ? <Skeleton className="h-7 w-12" /> : <p className="text-xl font-bold text-foreground">{allUsersList.length}</p>}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs text-muted-foreground">بروفايلات</span>
+            </div>
+            <p className="text-xl font-bold text-foreground">{Array.isArray(profiles) ? profiles.length : 0}</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Search */}
@@ -180,107 +191,107 @@ export default function HotspotPage() {
 
         {/* Active Users */}
         <TabsContent value="active">
-          <div className="rounded-lg border border-border bg-card shadow-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50">
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">المستخدم</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">IP</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground hidden sm:table-cell">MAC</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">المدة</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">↓</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">↑</th>
-                    <th className="text-center p-3 w-12"></th>
-                  </tr>
-                </thead>
-                <tbody>
+          <Card className="overflow-hidden">
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right text-xs">المستخدم</TableHead>
+                    <TableHead className="text-right text-xs">IP</TableHead>
+                    <TableHead className="text-right text-xs hidden sm:table-cell">MAC</TableHead>
+                    <TableHead className="text-right text-xs">المدة</TableHead>
+                    <TableHead className="text-right text-xs">↓</TableHead>
+                    <TableHead className="text-right text-xs">↑</TableHead>
+                    <TableHead className="text-center w-12"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {loadingActive ? (
                     Array.from({ length: 5 }).map((_, i) => (
-                      <tr key={i} className="border-b border-border/50">
+                      <TableRow key={i}>
                         {Array.from({ length: 7 }).map((_, j) => (
-                          <td key={j} className="p-3"><Skeleton className="h-4 w-16" /></td>
+                          <TableCell key={j}><Skeleton className="h-4 w-16" /></TableCell>
                         ))}
-                      </tr>
+                      </TableRow>
                     ))
                   ) : paginatedActive.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="p-10 text-center">
+                    <TableRow>
+                      <TableCell colSpan={7} className="p-10 text-center">
                         <Wifi className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
                         <p className="text-muted-foreground text-sm">{search ? "لا توجد نتائج" : "لا يوجد متصلين حالياً"}</p>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     paginatedActive.map((user: any, i: number) => (
-                      <tr key={user[".id"] || i} className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
-                        <td className="p-3 font-medium text-foreground text-sm">{user.user || "—"}</td>
-                        <td className="p-3 font-mono text-xs text-muted-foreground">{user.address || "—"}</td>
-                        <td className="p-3 font-mono text-xs text-muted-foreground hidden sm:table-cell">{user["mac-address"] || "—"}</td>
-                        <td className="p-3 text-muted-foreground text-xs">{user.uptime || "—"}</td>
-                        <td className="p-3 font-mono text-xs text-foreground">{formatBytes(user["bytes-in"])}</td>
-                        <td className="p-3 font-mono text-xs text-foreground">{formatBytes(user["bytes-out"])}</td>
-                        <td className="p-3 text-center">
+                      <TableRow key={user[".id"] || i} className="group">
+                        <TableCell className="text-xs font-medium">{user.user || "—"}</TableCell>
+                        <TableCell className="text-xs font-mono text-muted-foreground">{user.address || "—"}</TableCell>
+                        <TableCell className="text-xs font-mono text-muted-foreground hidden sm:table-cell">{user["mac-address"] || "—"}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{user.uptime || "—"}</TableCell>
+                        <TableCell className="text-xs font-mono">{formatBytes(user["bytes-in"])}</TableCell>
+                        <TableCell className="text-xs font-mono">{formatBytes(user["bytes-out"])}</TableCell>
+                        <TableCell className="text-center">
                           <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => handleAction("kick", user)} title="فصل">
                             <LogOut className="h-3.5 w-3.5" />
                           </Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))
                   )}
-                </tbody>
-              </table>
-            </div>
+                </TableBody>
+              </Table>
+            </CardContent>
             {!loadingActive && filteredActive.length > PAGE_SIZE && (
               <PaginationBar page={activePage} totalPages={activeTotalPages} onPageChange={setActivePage} total={filteredActive.length} />
             )}
-          </div>
+          </Card>
         </TabsContent>
 
         {/* All Users */}
         <TabsContent value="users">
-          <div className="rounded-lg border border-border bg-card shadow-card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50">
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">المستخدم</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">البروفايل</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground hidden sm:table-cell">الحد</th>
-                    <th className="text-right p-3 font-medium text-xs text-muted-foreground">الحالة</th>
-                    <th className="text-center p-3 w-12"></th>
-                  </tr>
-                </thead>
-                <tbody>
+          <Card className="overflow-hidden">
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right text-xs">المستخدم</TableHead>
+                    <TableHead className="text-right text-xs">البروفايل</TableHead>
+                    <TableHead className="text-right text-xs hidden sm:table-cell">الحد</TableHead>
+                    <TableHead className="text-right text-xs">الحالة</TableHead>
+                    <TableHead className="text-center w-12"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {loadingAll ? (
                     Array.from({ length: 5 }).map((_, i) => (
-                      <tr key={i} className="border-b border-border/50">
+                      <TableRow key={i}>
                         {Array.from({ length: 5 }).map((_, j) => (
-                          <td key={j} className="p-3"><Skeleton className="h-4 w-16" /></td>
+                          <TableCell key={j}><Skeleton className="h-4 w-16" /></TableCell>
                         ))}
-                      </tr>
+                      </TableRow>
                     ))
                   ) : paginatedAll.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="p-10 text-center">
+                    <TableRow>
+                      <TableCell colSpan={5} className="p-10 text-center">
                         <Users className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
                         <p className="text-muted-foreground text-sm">{search ? "لا توجد نتائج" : "لا يوجد مستخدمين"}</p>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ) : (
                     paginatedAll.map((user: any, i: number) => {
                       const isDisabled = user.disabled === "true" || user.disabled === true;
                       return (
-                        <tr key={user[".id"] || i} className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
-                          <td className="p-3 font-medium text-foreground text-sm">{user.name || "—"}</td>
-                          <td className="p-3 text-muted-foreground text-xs">{user.profile || "—"}</td>
-                          <td className="p-3 text-muted-foreground text-xs hidden sm:table-cell">{user["limit-uptime"] || "—"}</td>
-                          <td className="p-3">
-                            <span className={`inline-flex items-center gap-1 text-xs ${isDisabled ? "text-destructive" : "text-success"}`}>
-                              {isDisabled ? <XCircle className="h-3 w-3" /> : <CheckCircle className="h-3 w-3" />}
+                        <TableRow key={user[".id"] || i} className="group">
+                          <TableCell className="text-xs font-medium">{user.name || "—"}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{user.profile || "—"}</TableCell>
+                          <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">{user["limit-uptime"] || "—"}</TableCell>
+                          <TableCell>
+                            <Badge variant={isDisabled ? "destructive" : "default"} className={`text-[10px] ${!isDisabled ? "bg-success/10 text-success border-success/20" : ""}`}>
+                              {isDisabled ? <XCircle className="h-3 w-3 mr-1" /> : <CheckCircle className="h-3 w-3 mr-1" />}
                               {isDisabled ? "معطل" : "نشط"}
-                            </span>
-                          </td>
-                          <td className="p-3 text-center">
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -307,32 +318,34 @@ export default function HotspotPage() {
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       );
                     })
                   )}
-                </tbody>
-              </table>
-            </div>
+                </TableBody>
+              </Table>
+            </CardContent>
             {!loadingAll && filteredAll.length > PAGE_SIZE && (
               <PaginationBar page={usersPage} totalPages={usersTotalPages} onPageChange={setUsersPage} total={filteredAll.length} />
             )}
-          </div>
+          </Card>
         </TabsContent>
 
         {/* Profiles */}
         <TabsContent value="profiles">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {Array.isArray(profiles) && profiles.map((profile: any, i: number) => (
-              <div key={i} className="rounded-lg border border-border bg-card shadow-card p-4 hover:border-foreground/10 transition-colors">
-                <h3 className="font-semibold text-foreground mb-3 text-sm">{profile.name}</h3>
-                <div className="space-y-2 text-sm">
-                  {profile["rate-limit"] && <InfoRow label="السرعة" value={profile["rate-limit"]} />}
-                  {profile["shared-users"] && <InfoRow label="مشاركة" value={profile["shared-users"]} />}
-                  {profile["session-timeout"] && <InfoRow label="المدة" value={profile["session-timeout"]} />}
-                </div>
-              </div>
+              <Card key={i} className="hover:border-foreground/10 transition-colors">
+                <CardContent className="p-4">
+                  <h3 className="font-semibold text-foreground mb-3 text-sm">{profile.name}</h3>
+                  <div className="space-y-2 text-sm">
+                    {profile["rate-limit"] && <InfoRow label="السرعة" value={profile["rate-limit"]} />}
+                    {profile["shared-users"] && <InfoRow label="مشاركة" value={profile["shared-users"]} />}
+                    {profile["session-timeout"] && <InfoRow label="المدة" value={profile["session-timeout"]} />}
+                  </div>
+                </CardContent>
+              </Card>
             ))}
             {(!Array.isArray(profiles) || profiles.length === 0) && (
               <div className="col-span-full text-center py-10">
