@@ -3,14 +3,14 @@ import { ReactNode, useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, Wifi, Users, Settings, Menu,
+  LayoutDashboard, Wifi, Users, Settings,
   Router, Moon, Sun, LogOut, Activity, CreditCard,
   Database, Shield, HeartPulse,
 } from "lucide-react";
 import { getActiveRouter } from "@repo/mikrotik";
 import { useAuth } from "@repo/auth";
-import { useHotspotUsers, useUserManagerCount } from "@repo/mikrotik";
-import { useJobHistory } from "@repo/mikrotik";
+import { useHotspotUsers, useUserManagerCount, useJobHistory } from "@repo/mikrotik";
+
 import {
   Sidebar,
   SidebarContent,
@@ -25,11 +25,9 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarSeparator,
   SidebarTrigger,
-  useSidebar,
 } from "@repo/design-system/components/ui/sidebar";
-import { Button } from "@repo/design-system/components/ui/button";
+
 import { Separator } from "@repo/design-system/components/ui/separator";
 import {
   DropdownMenu,
@@ -66,16 +64,27 @@ function SidebarNav() {
   const router = useRouter();
   const { signOut, role } = useAuth();
   const config = getActiveRouter();
-  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"));
+
+  const [isDark, setIsDark] = useState(false);
 
   const { data: hotspotUsers } = useHotspotUsers();
   const { data: umCountData } = useUserManagerCount({ enabled: pathname.startsWith("/usermanager") });
+
   const hotspotCount = Array.isArray(hotspotUsers) ? hotspotUsers.length : 0;
   const umCount = umCountData?.total ?? 0;
 
+  // ✅ FIX: load theme safely
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme");
+    const isDarkMode = savedTheme === "dark";
+    setIsDark(isDarkMode);
+  }, []);
+
+  // ✅ apply theme
   useEffect(() => {
     if (isDark) document.documentElement.classList.add("dark");
     else document.documentElement.classList.remove("dark");
+
     localStorage.setItem("theme", isDark ? "dark" : "light");
   }, [isDark]);
 
@@ -119,7 +128,6 @@ function SidebarNav() {
       </SidebarHeader>
 
       <SidebarContent>
-        {/* Main Nav */}
         <SidebarGroup>
           <SidebarGroupLabel>الرئيسية</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -127,18 +135,16 @@ function SidebarNav() {
               {filteredMain.map(item => {
                 const isActive = pathname === item.path;
                 const badge = getBadge(item.path);
+
                 return (
                   <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={isActive}
-                      tooltip={item.label}
-                    >
+                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.label}>
                       <Link href={item.path}>
                         <item.icon />
                         <span>{item.label}</span>
                       </Link>
                     </SidebarMenuButton>
+
                     {badge !== null && (
                       <SidebarMenuBadge>{badge}</SidebarMenuBadge>
                     )}
@@ -149,7 +155,6 @@ function SidebarNav() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Admin Nav */}
         {filteredAdmin.length > 0 && (
           <SidebarGroup>
             <SidebarGroupLabel>الإدارة</SidebarGroupLabel>
@@ -157,13 +162,10 @@ function SidebarNav() {
               <SidebarMenu>
                 {filteredAdmin.map(item => {
                   const isActive = pathname === item.path;
+
                   return (
                     <SidebarMenuItem key={item.path}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive}
-                        tooltip={item.label}
-                      >
+                      <SidebarMenuButton asChild isActive={isActive} tooltip={item.label}>
                         <Link href={item.path}>
                           <item.icon />
                           <span>{item.label}</span>
@@ -188,29 +190,35 @@ function SidebarNav() {
                   <span>{role === "admin" ? "مدير النظام" : "كاشير"}</span>
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
-              <DropdownMenuContent
-                side="top"
-                align="end"
-                className="w-48"
-              >
-                <DropdownMenuItem onClick={() => setIsDark(!isDark)}>
+
+              <DropdownMenuContent side="top" align="end" className="w-48">
+                <DropdownMenuItem onClick={() => setIsDark(prev => !prev)}>
                   {isDark ? <Sun className="size-4" /> : <Moon className="size-4" />}
                   <span>{isDark ? "الوضع النهاري" : "الوضع الليلي"}</span>
                 </DropdownMenuItem>
+
                 <DropdownMenuItem asChild>
                   <Link href="/routers">
                     <Router className="size-4" />
                     <span>تغيير الراوتر</span>
                   </Link>
                 </DropdownMenuItem>
+
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => { signOut(); router.push("/auth"); }}>
+
+                <DropdownMenuItem
+                  onClick={() => {
+                    signOut();
+                    router.push("/auth");
+                  }}
+                >
                   <LogOut className="size-4" />
                   <span>تسجيل خروج</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarMenuItem>
+
           {config && (
             <SidebarMenuItem>
               <SidebarMenuButton size="sm" className="pointer-events-none text-muted-foreground">
@@ -234,14 +242,16 @@ function DashboardHeader() {
   const currentPage = allItems.find(item => pathname === item.path);
 
   return (
-    <header className="flex h-10 sm:h-12 shrink-0 items-center gap-2 border-b px-3 sm:px-4">
+    <header className="flex h-10 sm:h-12 items-center gap-2 border-b px-3 sm:px-4">
       <SidebarTrigger className="-mr-1" />
       <Separator orientation="vertical" className="ml-2 h-4" />
+
       {currentPage && (
-        <h2 className="text-sm font-medium text-foreground">
+        <h2 className="text-sm font-medium">
           {currentPage.label}
         </h2>
       )}
+
       {config && (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-auto">
           <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
@@ -255,8 +265,10 @@ function DashboardHeader() {
 function MobileBottomNav() {
   const pathname = usePathname();
   const { role } = useAuth();
+
   const { data: hotspotUsers } = useHotspotUsers();
   const { data: umCountData } = useUserManagerCount({ enabled: pathname.startsWith("/usermanager") });
+
   const hotspotCount = Array.isArray(hotspotUsers) ? hotspotUsers.length : 0;
   const umCount = umCountData?.total ?? 0;
 
@@ -275,21 +287,23 @@ function MobileBottomNav() {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 pb-[max(env(safe-area-inset-bottom),0.125rem)]">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden border-t bg-background/95 backdrop-blur pb-[max(env(safe-area-inset-bottom),0.125rem)]">
       <div className="flex items-center justify-around py-1 px-1">
         {allFiltered.slice(0, 5).map(item => {
           const isActive = pathname === item.path;
           const badge = getBadge(item.path);
+
           return (
             <Link
               key={item.path}
               href={item.path}
-              className={`relative flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-lg transition-colors ${
+              className={`relative flex flex-col items-center gap-0.5 px-2.5 py-1 rounded-lg ${
                 isActive ? "text-primary" : "text-muted-foreground"
               }`}
             >
               <item.icon className="h-[18px] w-[18px]" />
               <span className="text-[9px] font-medium">{item.label}</span>
+
               {badge !== null && (
                 <span className="absolute -top-0.5 -left-0.5 h-3.5 min-w-[14px] flex items-center justify-center text-[8px] font-bold bg-primary text-primary-foreground rounded-full px-0.5">
                   {badge}
