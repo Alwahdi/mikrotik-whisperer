@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:aapt="http://schemas.android.com/aapt" android:height="23dp" android:width="23dp" android:viewportWidth="22" android:viewportHeight="22">
+    <group android:scaleX="0.98" android:scaleY="0.98" android:translateX="0.1" android:translateY="0.1">
+        <path android:fillColor="#000000" android:pathData="M6 3A3 3 0 0 0 3 6L3 18A3 3 0 0 0 6 21L18 21A3 3 0 0 0 21 18L21 6A3 3 0 0 0 18 3ZM18 4.5A1.5 1.5 0 0 1 19.5 6L19.5 18A1.5 1.5 0 0 1 18 19.5L6 19.5A1.5 1.5 0 0 1 4.5 18L4.5 6A1.5 1.5 0 0 1 6 4.5L18 4.5Z"/>
+    </group>
+</vector>

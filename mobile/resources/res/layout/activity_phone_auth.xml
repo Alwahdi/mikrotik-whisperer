@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:orientation="vertical" android:id="@+id/main_layout" android:background="@color/white" android:layout_width="match_parent" android:layout_height="wrap_content" android:weightSum="4" android:layoutDirection="rtl">
+    <LinearLayout android:gravity="center_horizontal" android:orientation="vertical" android:paddingBottom="10dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp" android:layout_weight="3">
+        <ImageView android:id="@+id/icon" android:layout_width="160dp" android:layout_height="124dp" android:src="@drawable/logonew" android:scaleType="fitXY" android:contentDescription="@string/desc_firebase_lockup" style="@style/ThemeOverlay.FirebaseIcon"/>
+        <TextView android:textSize="20dp" android:textColor="@color/mainColor" android:id="@+id/titleText" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="10sp" android:text="@string/phone_title_text"/>
+        <TextView android:id="@+id/status" android:text="@string/signed_out" style="@style/ThemeOverlay.MyTextDetail"/>
+        <TextView android:id="@+id/detail" style="@style/ThemeOverlay.MyTextDetail"/>
+    </LinearLayout>
+    <RelativeLayout android:gravity="center_vertical" android:background="@drawable/shadow" android:paddingTop="10dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="10dp" android:layout_weight="1">
+        <LinearLayout android:orientation="vertical" android:id="@+id/phoneAuthFields" android:paddingLeft="16dp" android:paddingRight="16dp" android:layout_width="match_parent" android:layout_height="wrap_content">
+            <LinearLayout android:gravity="center" android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:weightSum="2">
+                <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="10dp" android:layout_marginRight="10dp" android:layout_marginBottom="15dp">
+                    <LinearLayout android:orientation="vertical" android:background="@drawable/blue_leftcorner_bkg" android:layout_width="60dp" android:layout_height="wrap_content">
+                        <LinearLayout android:gravity="center" android:orientation="vertical" android:layout_width="match_parent" android:layout_height="55dp">
+                            <ImageView android:layout_width="35dp" android:layout_height="35dp" android:src="@drawable/phone" android:scaleType="fitCenter"/>
+                        </LinearLayout>
+                    </LinearLayout>
+                    <LinearLayout android:orientation="vertical" android:background="@drawable/white_rightcorner_bkg" android:layout_width="match_parent" android:layout_height="match_parent">
+                        <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="55dp">
+                            <RelativeLayout android:layout_width="match_parent" android:layout_height="50dp">
+                                <ImageView android:id="@+id/countryImage" android:layout_width="20dp" android:layout_height="20dp" android:src="@drawable/flag_ye" android:layout_centerVertical="true" android:layout_marginStart="10dp"/>
+                                <EditText android:textSize="13dp" android:gravity="center" android:id="@+id/numkey" android:layout_width="wrap_content" android:layout_height="match_parent" android:text="+967" android:editable="false" android:layout_alignParentBottom="true" android:layout_marginStart="6dp" android:layout_toEndOf="@+id/countryImage"/>
+                                <EditText android:textSize="15dp" android:id="@+id/fieldPhoneNumber" android:background="@null" android:layout_width="match_parent" android:layout_height="match_parent" android:hint="رقم الموبايل" android:maxLines="1" android:layout_alignParentBottom="true" android:inputType="phone" android:imeOptions="actionNext" android:textAlignment="center" android:paddingStart="10dp" android:paddingEnd="10dp" android:layout_toEndOf="@+id/numkey"/>
+                            </RelativeLayout>
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+                <Button android:textColor="@color/black" android:id="@+id/buttonStartVerification" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/start_phone_auth" android:layout_marginStart="@dimen/button_horizontal_margin" android:layout_marginEnd="@dimen/button_horizontal_margin"/>
+                <EditText android:id="@+id/fieldVerificationCode" android:background="@drawable/rect" android:layout_width="220dp" android:layout_height="wrap_content" android:layout_marginTop="15dp" android:layout_marginBottom="5dp" android:minWidth="305sp" android:hint="اكتب رمز التاكيد" android:inputType="number" android:textAlignment="center"/>
+            </LinearLayout>
+            <LinearLayout android:gravity="center" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:weightSum="2">
+                <Button android:textColor="@color/black" android:id="@+id/buttonVerifyPhone" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/verify_phone_auth" android:layout_marginStart="@dimen/button_horizontal_margin" android:layout_marginEnd="@dimen/button_horizontal_margin"/>
+                <Button android:textColor="@color/black" android:id="@+id/buttonResend" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/resend_phone_auth" android:layout_marginStart="@dimen/button_horizontal_margin" android:layout_marginEnd="@dimen/button_horizontal_margin"/>
+            </LinearLayout>
+        </LinearLayout>
+        <LinearLayout android:orientation="horizontal" android:id="@+id/signedInButtons" android:paddingLeft="16dp" android:paddingRight="16dp" android:visibility="gone" android:layout_width="match_parent" android:layout_height="wrap_content" android:weightSum="1" android:layout_centerInParent="true">
+            <Button android:theme="@style/ThemeOverlay.MyDarkButton" android:id="@+id/signOutButton" android:background="@drawable/rect_blue" android:layout_width="0dp" android:layout_height="wrap_content" android:text="@string/sign_out" android:layout_weight="1"/>
+        </LinearLayout>
+    </RelativeLayout>
+</LinearLayout>

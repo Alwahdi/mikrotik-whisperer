@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:orientation="vertical" android:background="@drawable/btn_orange_2" android:layout_width="match_parent" android:layout_height="wrap_content" android:elevation="2dp">
+    <LinearLayout android:orientation="vertical" android:id="@+id/l_tarjeta_discover" android:padding="10dp" android:clickable="true" android:layout_width="match_parent" android:layout_height="match_parent">
+        <LinearLayout android:gravity="center" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="match_parent">
+            <TextView android:textColor="@color/black" android:id="@+id/txtBoardNameDiscover" android:background="@drawable/card_background" android:padding="3dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="dsds"/>
+        </LinearLayout>
+        <LinearLayout android:gravity="center" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="match_parent">
+            <TextView android:textSize="17sp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/txtIPDiscover" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"/>
+            <TextView android:id="@+id/txtMacDiscover" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"/>
+        </LinearLayout>
+        <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="match_parent">
+            <TextView android:gravity="end" android:id="@+id/txtIdentityDiscover" android:layout_width="match_parent" android:layout_height="wrap_content" android:textAlignment="center"/>
+        </LinearLayout>
+    </LinearLayout>
+    <LinearLayout android:background="@drawable/round_border" android:layout_width="match_parent" android:layout_height="match_parent"/>
+</LinearLayout>

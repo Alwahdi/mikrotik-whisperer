@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:orientation="vertical" android:layout_width="wrap_content" android:layout_height="match_parent" android:layoutDirection="rtl">
+    <LinearLayout android:orientation="vertical" android:id="@+id/title" android:background="@color/colorPrimaryDark" android:layout_width="match_parent" android:layout_height="wrap_content">
+        <LinearLayout android:orientation="horizontal" android:paddingTop="5dp" android:paddingBottom="5dp" android:layout_width="wrap_content" android:layout_height="wrap_content">
+            <TextView android:textSize="12sp" android:textStyle="bold" android:textColor="@color/white" android:id="@+id/tit_isselected" android:layout_width="35dp" android:layout_height="wrap_content" android:text="تحديد"/>
+            <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/at" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minWidth="100dp" android:text="اسم المستخدم"/>
+            <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/bt" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minWidth="100dp" android:text="اسم الباقة"/>
+            <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/ct" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minWidth="113dp" android:text="الوقت"/>
+            <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/dt" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minWidth="100dp" android:text="التحميل"/>
+            <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/et" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minWidth="100dp" android:text="الرفع"/>
+        </LinearLayout>
+        <View android:id="@+id/vv" android:background="#4b4b4b" android:layout_width="match_parent" android:layout_height="2dp"/>
+    </LinearLayout>
+    <LinearLayout android:orientation="horizontal" android:id="@+id/data_layout" android:layout_width="wrap_content" android:layout_height="wrap_content">
+        <CheckBox android:id="@+id/isselected" android:focusable="false" android:layout_width="35dp" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:layout_marginBottom="2dp" android:scaleX="0.88" android:scaleY="0.88"/>
+        <TextView android:textSize="13sp" android:id="@+id/uname" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:layout_marginBottom="2dp" android:minWidth="100dp" android:text="لا اليوم بيانات" android:textDirection="rtl"/>
+        <TextView android:textSize="13sp" android:id="@+id/profile" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:layout_marginBottom="2dp" android:minWidth="100dp" android:text="لا من بيانات" android:textDirection="rtl"/>
+        <TextView android:textSize="13sp" android:id="@+id/uptime" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:layout_marginBottom="2dp" android:minWidth="113dp" android:text="لا الى بيانات" android:textDirection="rtl" android:textAlignment="textStart"/>
+        <TextView android:textSize="13sp" android:id="@+id/download" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:layout_marginBottom="2dp" android:minWidth="100dp" android:text="لا الى بيانات" android:textDirection="rtl"/>
+        <TextView android:textSize="13sp" android:id="@+id/upload" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:layout_marginBottom="2dp" android:minWidth="100dp" android:text="لا الى بيانات" android:textDirection="rtl"/>
+    </LinearLayout>
+    <View android:background="#cacaca" android:layout_width="match_parent" android:layout_height="1dp"/>
+</LinearLayout>

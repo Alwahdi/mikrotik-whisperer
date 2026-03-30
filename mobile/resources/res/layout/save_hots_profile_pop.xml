@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:background="#ffffff" android:layout_width="match_parent" android:layout_height="match_parent" android:layoutDirection="rtl">
+    <LinearLayout android:orientation="vertical" android:paddingBottom="10sp" android:layout_width="match_parent" android:layout_height="wrap_content">
+        <LinearLayout android:gravity="center" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content">
+            <TextView android:textSize="15sp" android:textStyle="bold" android:textColor="@color/black" android:gravity="center" android:layout_gravity="center" android:id="@+id/refresh_img" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_margin="10sp" android:text="حفظ بيانات الباقة"/>
+        </LinearLayout>
+        <LinearLayout android:gravity="center" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="25sp" android:layout_marginRight="25sp">
+            <TextView android:textSize="13.5sp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/field_tit" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_margin="3sp" android:layout_marginLeft="3dp" android:layout_marginRight="3dp" android:text="إسم القالب" android:textAlignment="center"/>
+            <EditText android:textSize="13sp" android:textColor="@color/black" android:id="@+id/save_profile_name" android:background="@drawable/rect" android:paddingTop="5sp" android:paddingBottom="5sp" android:layout_width="0dp" android:layout_height="36dp" android:layout_marginLeft="3dp" android:layout_marginTop="5dp" android:layout_marginRight="3dp" android:layout_marginBottom="5dp" android:hint="اكتب الإسم " android:singleLine="true" android:layout_weight="1" android:paddingStart="8sp" android:paddingEnd="8sp"/>
+        </LinearLayout>
+        <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/white" android:gravity="center" android:layout_gravity="center" android:id="@+id/save_profile_btn" android:background="@drawable/rect_blue" android:padding="8dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_margin="10sp" android:minWidth="100sp" android:text="حــفظ"/>
+    </LinearLayout>
+</RelativeLayout>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<tabs xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt">
+    <tab activeColor="#118df0" icon="@drawable/ic_message_square" id="@+id/tab_home" inActiveColor="#4de9e9e9"/>
+    <tab activeColor="#118df0" icon="@drawable/ic_message_square" id="@+id/tab_message" inActiveColor="#4de9e9e9"/>
+    <tab activeColor="#118df0" icon="@drawable/ic_message_square" id="@+id/tab_photo" inActiveColor="#4de9e9e9"/>
+    <tab activeColor="#118df0" icon="@drawable/ic_tag" id="@+id/tab_tag" inActiveColor="#4de9e9e9"/>
+    <tab activeColor="#118df0" icon="@drawable/ic_user" id="@+id/tab_profile" inActiveColor="#4de9e9e9"/>
+</tabs>

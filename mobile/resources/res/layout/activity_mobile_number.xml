@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:background="@drawable/rect_grey" android:layout_width="match_parent" android:layout_height="match_parent">
+    <ImageView android:id="@+id/back_img" android:visibility="gone" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_margin="5dp" app:srcCompat="@drawable/ic_next"/>
+    <ImageView android:id="@+id/app_logo" android:padding="0dp" android:layout_width="170dp" android:layout_height="170dp" android:layout_marginTop="7dp" android:src="@drawable/logonew" android:layout_centerHorizontal="true" android:contentDescription="دخول"/>
+    <LinearLayout android:gravity="bottom" android:layout_gravity="bottom" android:orientation="vertical" android:padding="10dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="50dp" android:layout_below="@+id/app_logo">
+        <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="10dp" android:layout_marginRight="10dp" android:layout_marginBottom="15dp">
+            <LinearLayout android:orientation="vertical" android:background="@drawable/blue_leftcorner_bkg" android:layout_width="60dp" android:layout_height="wrap_content">
+                <LinearLayout android:gravity="center" android:orientation="vertical" android:layout_width="match_parent" android:layout_height="55dp">
+                    <ImageView android:layout_width="35dp" android:layout_height="35dp" android:src="@drawable/phone" android:scaleType="fitCenter"/>
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout android:orientation="vertical" android:background="@drawable/white_rightcorner_bkg" android:layout_width="match_parent" android:layout_height="match_parent">
+                <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="55dp">
+                    <RelativeLayout android:layout_width="match_parent" android:layout_height="50dp">
+                        <ImageView android:id="@+id/countryImage" android:layout_width="20dp" android:layout_height="20dp" android:src="@drawable/flag_ye" android:layout_centerVertical="true" android:layout_marginStart="10dp"/>
+                        <EditText android:textSize="12dp" android:gravity="center" android:id="@+id/countryNumber" android:layout_width="wrap_content" android:layout_height="match_parent" android:text="+967" android:layout_alignParentBottom="true" android:layout_marginStart="6dp" android:layout_toEndOf="@+id/countryImage"/>
+                        <EditText android:textSize="15dp" android:textStyle="bold" android:id="@+id/ed_mobile_number" android:background="@android:color/transparent" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginLeft="5dp" android:layout_marginRight="5dp" android:hint="رقم الموبايل" android:singleLine="true" android:inputType="textEmailAddress" android:textAlignment="center" android:layout_toEndOf="@+id/countryNumber"/>
+                    </RelativeLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content">
+            <Button android:textSize="17dp" android:textColor="#25536e" android:gravity="center" android:id="@+id/fiver" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="10dp" android:layout_marginTop="30dp" android:layout_marginRight="10dp" android:text="phone-auth"/>
+        </LinearLayout>
+        <Button android:textSize="16dp" android:textStyle="bold" android:textColor="@color/white" android:id="@+id/next_btn" android:background="@drawable/rect_blue" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="20dp" android:layout_marginTop="30dp" android:layout_marginRight="20dp" android:text="التالي"/>
+        <TextView android:textSize="17dp" android:textColor="#25536e" android:gravity="center" android:id="@+id/already_have_aacount_txt" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="10dp" android:layout_marginTop="30dp" android:layout_marginRight="10dp" android:text="تسجيل دخـــول"/>
+    </LinearLayout>
+</RelativeLayout>

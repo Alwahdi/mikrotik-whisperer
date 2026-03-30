@@ -1,0 +1,16 @@
+package defpackage;
+
+import com.blogspot.yemeninfo4it.mumsmobile_app.model.UsermanagerCards;
+
+/* renamed from: de  reason: default package */
+public final /* synthetic */ class de implements ha0 {
+    public final /* synthetic */ CharSequence a;
+
+    public /* synthetic */ de(CharSequence charSequence) {
+        this.a = charSequence;
+    }
+
+    public final boolean test(Object obj) {
+        return ((UsermanagerCards) obj).getUname().toLowerCase().startsWith(this.a.toString().toLowerCase());
+    }
+}

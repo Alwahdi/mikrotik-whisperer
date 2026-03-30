@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:layout_width="match_parent" android:layout_height="match_parent" android:layoutDirection="rtl">
+    <LinearLayout android:orientation="vertical" android:id="@+id/mtool" android:layout_width="match_parent" android:layout_height="wrap_content">
+        <include layout="@layout/toolbar_act"/>
+        <LinearLayout android:orientation="vertical" android:paddingTop="10dp" android:paddingBottom="10dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:paddingStart="10dp" android:paddingEnd="7dp">
+            <LinearLayout android:gravity="center" android:orientation="horizontal" android:padding="2dp" android:visibility="gone" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <RadioButton android:textSize="14dp" android:id="@+id/unexpire_userman" android:layout_width="wrap_content" android:layout_height="wrap_content" android:checked="true" android:text="الكروت الغير منتهية"/>
+                <RadioButton android:textSize="14sp" android:id="@+id/expire_userman" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="الكروت الغير منتهية"/>
+            </LinearLayout>
+            <LinearLayout android:orientation="horizontal" android:padding="1dp" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <RadioButton android:textSize="14sp" android:id="@+id/alluser_check" android:layout_width="wrap_content" android:layout_height="wrap_content" android:checked="true" android:text="الكل"/>
+                <RadioButton android:textSize="14sp" android:id="@+id/used_check" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="الكروت المستخدمة" android:layout_marginStart="5dp"/>
+                <RadioButton android:textSize="14sp" android:id="@+id/unused_check" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="الكروت الغير مستخدمة" android:layout_marginStart="5dp"/>
+            </LinearLayout>
+            <LinearLayout android:orientation="horizontal" android:padding="1dp" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <RadioButton android:textSize="14sp" android:id="@+id/search_userman" android:layout_width="0dp" android:layout_height="wrap_content" android:checked="true" android:text="بحث حسب اسم المستخدم" android:layout_weight="1"/>
+                <RadioButton android:textSize="14sp" android:id="@+id/search_profile" android:layout_width="0dp" android:layout_height="wrap_content" android:text="بحث حسب اسم الباقة" android:layout_weight="1"/>
+            </LinearLayout>
+            <LinearLayout android:orientation="vertical" android:id="@+id/searchlay" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:layout_marginEnd="10dp">
+                    <TextView android:textSize="14sp" android:textColor="@color/mainColorDark" android:layout_gravity="center" android:id="@+id/search_header" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="5dp" android:layout_marginBottom="3dp" android:text="اكتب رقم الكرت للبحث" android:textAllCaps="false"/>
+                    <SearchView android:textSize="15sp" android:id="@+id/mySearchView" android:background="@drawable/rect" android:padding="4dp" android:layout_width="match_parent" android:layout_height="39sp" android:layout_marginLeft="5dp" android:layout_marginRight="5dp" android:layout_marginBottom="5dp" android:queryHint="بحث بالاسم"/>
+                    <Spinner android:textSize="14sp" android:textColor="@color/white" android:gravity="center_vertical" android:id="@+id/profilename" android:background="@drawable/rect" android:padding="7dp" android:visibility="gone" android:layout_width="match_parent" android:layout_height="37dp" android:layout_marginLeft="5dp" android:layout_marginRight="5dp" android:layout_marginBottom="5dp" android:hint="اسم الباقة" android:singleLine="true" android:layout_weight="1" android:spinnerMode="dialog"/>
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout android:orientation="horizontal" android:id="@+id/btn_layout" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_below="@+id/searchlay">
+                <androidx.appcompat.widget.AppCompatCheckBox android:textSize="12sp" android:textStyle="bold" android:textColor="@color/mainColor" android:id="@+id/chk_select_all" android:layout_width="100dp" android:layout_height="wrap_content" android:text="تحديد الكل" app:buttonTint="@color/mainColor"/>
+                <TextView android:textSize="14sp" android:textColor="#ffffff" android:layout_gravity="start" android:id="@+id/btn_delete_all" android:background="@drawable/loginbutton_selector" android:paddingLeft="12dp" android:paddingTop="7dp" android:paddingRight="12dp" android:paddingBottom="7dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="5dp" android:text="حذف المحدد" android:textAllCaps="false" android:layout_marginStart="5dp" android:layout_marginEnd="10dp"/>
+                <TextView android:textSize="14sp" android:textColor="#ffffff" android:gravity="end" android:layout_gravity="end" android:id="@+id/print_selected" android:background="@drawable/loginbutton_selector" android:paddingLeft="13dp" android:paddingTop="7dp" android:paddingRight="13dp" android:paddingBottom="7dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="5dp" android:text="طباعة المحدد" android:textAllCaps="false" android:layout_marginStart="20dp" android:layout_marginEnd="5dp"/>
+            </LinearLayout>
+            <LinearLayout android:gravity="center" android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView android:textSize="13.5sp" android:textStyle="bold" android:textColor="@color/mainColor" android:layout_gravity="center" android:id="@+id/card_count" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="1dp" android:layout_marginBottom="1dp"/>
+            </LinearLayout>
+            <TextView android:textSize="12sp" android:textStyle="bold" android:textColor="@color/colorPrimaryDark" android:layout_gravity="center" android:padding="3dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="قم بالضغط باستمرار على السجل الذي تريده" android:textAlignment="center"/>
+        </LinearLayout>
+    </LinearLayout>
+    <HorizontalScrollView android:scrollbars="none|horizontal|vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:layout_below="@+id/mtool">
+        <LinearLayout android:gravity="center" android:orientation="horizontal" android:layout_width="wrap_content" android:layout_height="wrap_content">
+            <ListView android:id="@+id/myCustomListView" android:scrollbars="none|horizontal|vertical" android:layout_width="match_parent" android:layout_height="match_parent"/>
+        </LinearLayout>
+    </HorizontalScrollView>
+</RelativeLayout>

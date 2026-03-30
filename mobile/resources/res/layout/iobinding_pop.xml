@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:paddingBottom="25dp" android:layout_width="match_parent" android:layout_height="wrap_content">
+    <LinearLayout android:scrollbarAlwaysDrawVerticalTrack="true" android:gravity="center_horizontal" android:orientation="vertical" android:scrollbars="vertical" android:layout_width="match_parent" android:layout_height="match_parent">
+        <LinearLayout android:gravity="center" android:orientation="horizontal" android:scrollbars="vertical" android:layout_width="match_parent" android:layout_height="match_parent">
+            <TextView android:textSize="16sp" android:textStyle="bold" android:textColor="@color/mainColor" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_margin="16dp" android:text="عنوان الماك المحدد :"/>
+            <TextView android:textSize="16sp" android:textStyle="bold" android:textColor="@color/mainColor" android:id="@+id/mactxt" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_margin="16dp"/>
+        </LinearLayout>
+        <LinearLayout android:scrollbarAlwaysDrawVerticalTrack="true" android:gravity="center_horizontal" android:orientation="vertical" android:id="@+id/whatsapp" android:scrollbars="vertical" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginTop="10dp">
+            <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/black" android:gravity="center" android:id="@+id/romve_from_binding" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="15dp" android:layout_marginRight="15dp" android:text="حذف وإلغاء الحظر" android:textDirection="rtl"/>
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.Toolbar xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:orientation="horizontal" android:background="@drawable/toolbar_style" android:layout_width="match_parent" android:layout_height="wrap_content">
+    <LinearLayout android:orientation="vertical" android:layout_width="wrap_content" android:layout_height="wrap_content">
+        <ImageView android:layout_gravity="end" android:id="@+id/icontoolbar" android:layout_width="20dp" android:layout_height="20dp" android:layout_marginLeft="20dp" android:layout_marginRight="20dp" android:src="@drawable/rubbish_bin" android:contentDescription="TODO"/>
+    </LinearLayout>
+    <TextView android:textSize="16sp" android:textStyle="bold" android:textColor="@color/white" android:layout_gravity="center" android:id="@+id/header_text_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="حذف الكروت المنتهية للهوتسبوت"/>
+</androidx.appcompat.widget.Toolbar>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:id="@+id/main_content" android:background="@color/gry" android:layout_width="match_parent" android:layout_height="match_parent" android:layoutDirection="rtl">
+    <androidx.viewpager2.widget.ViewPager2 android:id="@+id/viewpager1" android:background="@color/gry" android:layout_width="match_parent" android:layout_height="match_parent" android:layoutDirection="rtl" app:layout_behavior="@string/appbar_scrolling_view_behavior"/>
+    <com.google.android.material.appbar.AppBarLayout android:id="@+id/details_layout" android:visibility="visible" android:fitsSystemWindows="true" android:layout_width="match_parent" android:layout_height="wrap_content">
+        <com.google.android.material.appbar.CollapsingToolbarLayout android:background="@color/gry" android:layout_width="match_parent" android:layout_height="wrap_content" app:layout_scrollFlags="b">
+            <LinearLayout android:orientation="vertical" android:background="@color/gry" android:layout_width="match_parent" android:layout_height="wrap_content" app:layout_collapseMode="2">
+                <include android:id="@+id/tabb" layout="@layout/toolbar_home"/>
+            </LinearLayout>
+        </com.google.android.material.appbar.CollapsingToolbarLayout>
+        <com.google.android.material.tabs.TabLayout android:id="@+id/tablayout1" android:background="@color/gry" android:paddingTop="5dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="0dp" app:tabBackground="@color/gry" app:tabGravity="0" app:tabIndicatorAnimationDuration="500" app:tabIndicatorAnimationMode="1" app:tabIndicatorColor="#e46665" app:tabIndicatorHeight="4dp" app:tabMaxWidth="0dp" app:tabMode="0" app:tabSelectedTextColor="#306695" app:tabTextAppearance="@style/MyCustomTextAppearance" app:tabTextColor="#a9a9b0"/>
+    </com.google.android.material.appbar.AppBarLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

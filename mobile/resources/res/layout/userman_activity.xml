@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:orientation="vertical" android:id="@+id/invoices_layout" android:background="@drawable/rect_bg" android:layout_width="match_parent" android:layout_height="match_parent">
+    <LinearLayout android:orientation="horizontal" android:padding="4dp" android:layout_width="match_parent" android:layout_height="wrap_content">
+        <Spinner android:textSize="16sp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/page_item_count" android:padding="15dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="2dp" android:layout_marginTop="15dp" android:layout_marginRight="2dp" android:layout_marginBottom="8dp"/>
+        <TextView android:textSize="13sp" android:textStyle="bold" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:layout_marginBottom="8dp" android:text="كرت في الصفحة"/>
+        <Button android:textSize="15sp" android:textStyle="bold" android:textColor="@color/white" android:id="@+id/next_btn" android:background="@drawable/rect_blue" android:paddingTop="12dp" android:paddingBottom="11dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="1dp" android:layout_marginTop="8dp" android:layout_marginRight="1dp" android:layout_marginBottom="8dp" android:text="التالي"/>
+        <Button android:textSize="15sp" android:textStyle="bold" android:textColor="@color/white" android:id="@+id/pervos_btn" android:background="@drawable/rect_blue" android:paddingTop="12dp" android:paddingBottom="11dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="1dp" android:layout_marginTop="8dp" android:layout_marginRight="1dp" android:layout_marginBottom="8dp" android:text="السابق"/>
+    </LinearLayout>
+    <LinearLayout android:gravity="center" android:layout_gravity="center" android:orientation="horizontal" android:padding="4dp" android:layout_width="match_parent" android:layout_height="wrap_content">
+        <TextView android:textSize="15sp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/count_users" android:layout_width="wrap_content" android:layout_height="wrap_content"/>
+        <LinearLayout android:orientation="horizontal" android:id="@+id/search_btn" android:padding="10dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="30dp" android:layout_marginRight="60dp">
+            <ImageView android:id="@+id/countryImage" android:layout_width="20dp" android:layout_height="20dp" android:layout_centerVertical="true" android:layout_marginStart="10dp" app:srcCompat="@drawable/ic_search_black_24dp"/>
+            <TextView android:textSize="16sp" android:textStyle="bold" android:textColor="@color/black" android:layout_width="wrap_content" android:layout_height="match_parent" android:text="بحــث" android:layout_alignParentBottom="true" android:layout_marginStart="6dp" android:layout_toEndOf="@+id/countryImage"/>
+        </LinearLayout>
+    </LinearLayout>
+    <LinearLayout android:orientation="vertical" android:layout_width="wrap_content" android:layout_height="wrap_content">
+        <HorizontalScrollView android:padding="10dp" android:scrollbars="none|horizontal|vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
+            <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="match_parent">
+                <ScrollView android:scrollbars="none" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_weight="1">
+                    <TableLayout android:id="@+id/tableInvoices" android:padding="10dp" android:layout_width="match_parent" android:layout_height="match_parent" android:isScrollContainer="true"/>
+                </ScrollView>
+            </LinearLayout>
+        </HorizontalScrollView>
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,17 @@
+package defpackage;
+
+import android.view.View;
+import com.blogspot.yemeninfo4it.mumsmobile_app.activities.AddHostpotActivity;
+
+/* renamed from: r1  reason: default package */
+public final /* synthetic */ class r1 implements View.OnClickListener {
+    public final /* synthetic */ AddHostpotActivity a;
+
+    public /* synthetic */ r1(AddHostpotActivity addHostpotActivity) {
+        this.a = addHostpotActivity;
+    }
+
+    public final void onClick(View view) {
+        this.a.J0(view);
+    }
+}

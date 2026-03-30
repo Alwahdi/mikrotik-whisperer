@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:id="@+id/fragment_container" android:background="@drawable/rect_bg" android:focusableInTouchMode="true" android:layout_width="match_parent" android:layout_height="match_parent">
+    <LinearLayout android:gravity="center" android:orientation="vertical" android:id="@+id/table_test_container" android:paddingBottom="20dp" android:layout_width="match_parent" android:layout_height="wrap_content">
+        <LinearLayout android:gravity="center" android:layout_gravity="center" android:orientation="horizontal" android:id="@+id/search_field" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="15dp" android:weightSum="100">
+            <EditText android:id="@+id/query_string" android:background="@drawable/rect" android:padding="10dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minWidth="220dp" android:hint="بحث" android:inputType="textNoSuggestions" android:textAlignment="center"/>
+            <Spinner android:entries="@array/moods" android:id="@+id/mood_spinner" android:background="@android:color/transparent" android:visibility="gone" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="30"/>
+            <Spinner android:entries="@array/gender" android:id="@+id/gender_spinner" android:background="@android:color/transparent" android:visibility="gone" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="30"/>
+        </LinearLayout>
+        <LinearLayout android:gravity="center_vertical" android:orientation="horizontal" android:visibility="gone" android:layout_width="match_parent" android:layout_height="wrap_content" android:weightSum="100">
+            <ImageButton android:id="@+id/previous_button" android:layout_width="48dp" android:layout_height="48dp" app:srcCompat="@drawable/ic_previous"/>
+            <EditText android:id="@+id/page_number_text" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="20" android:inputType="number"/>
+            <ImageButton android:id="@+id/next_button" android:layout_width="48dp" android:layout_height="48dp" app:srcCompat="@drawable/ic_next"/>
+            <TextView android:id="@+id/table_details" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="50"/>
+            <Spinner android:id="@+id/items_per_page_spinner" android:background="@android:color/transparent" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_weight="30"/>
+        </LinearLayout>
+    </LinearLayout>
+    <com.evrencoskun.tableview.TableView android:id="@+id/tableview" android:scrollbars="none|horizontal|vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_below="@+id/table_test_container"/>
+</RelativeLayout>

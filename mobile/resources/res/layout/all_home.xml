@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:orientation="vertical" android:background="@color/gry" android:paddingTop="15sp" android:layout_width="match_parent" android:layout_height="wrap_content" android:layoutDirection="rtl">
+    <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp">
+        <TextView android:textColor="@color/mainColorDark" android:visibility="visible" android:layout_width="0dp" android:layout_height="wrap_content" android:text="@string/routert_name" android:layout_weight="1" android:textAlignment="center"/>
+        <TextView android:textColor="@color/mainColorDark" android:id="@+id/router_name" android:visibility="visible" android:layout_width="0dp" android:layout_height="wrap_content" android:text="00" android:layout_weight="1" android:textAlignment="center"/>
+    </LinearLayout>
+    <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp">
+        <TextView android:textColor="@color/mainColorDark" android:layout_width="0dp" android:layout_height="wrap_content" android:text="@string/run_uptim" android:layout_weight="1" android:textAlignment="center"/>
+        <TextView android:textColor="@color/mainColorDark" android:id="@+id/uptime_txt" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textAlignment="center"/>
+    </LinearLayout>
+    <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp">
+        <TextView android:textColor="@color/mainColorDark" android:layout_width="0dp" android:layout_height="wrap_content" android:text="مساحة الذاكره:" android:layout_weight="1" android:textAlignment="center"/>
+        <TextView android:textColor="@color/mainColorDark" android:id="@+id/used_memory" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textAlignment="center"/>
+    </LinearLayout>
+    <LinearLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp">
+        <TextView android:textColor="@color/mainColorDark" android:layout_width="0dp" android:layout_height="wrap_content" android:text="الذاكره الغير مستخدمة:" android:layout_weight="1" android:textAlignment="center"/>
+        <TextView android:textColor="@color/mainColorDark" android:id="@+id/unused_memory" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textAlignment="center"/>
+    </LinearLayout>
+</LinearLayout>

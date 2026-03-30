@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.appcompat.widget.Toolbar xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:orientation="horizontal" android:background="@drawable/toolbar_style" android:layout_width="match_parent" android:layout_height="wrap_content">
+    <androidx.appcompat.widget.AppCompatImageView android:layout_gravity="start" android:id="@+id/back_img" android:layout_width="18dp" android:layout_height="18dp" android:scaleType="fitXY" android:layout_marginStart="20sp" android:layout_marginEnd="20sp" app:srcCompat="@drawable/ic_left_arrow"/>
+    <TextView android:textSize="16sp" android:textStyle="bold" android:textColor="@color/white" android:layout_gravity="center" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="إدارة باقات يوزر مانجر"/>
+</androidx.appcompat.widget.Toolbar>

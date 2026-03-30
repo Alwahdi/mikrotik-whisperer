@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:aapt="http://schemas.android.com/aapt" android:id="@+id/listview_background_shape">
+    <stroke android:width="2dp" android:color="#fdfdfd"/>
+    <corners android:radius="1dp"/>
+    <solid android:color="#f1f1f1"/>
+    <gradient android:startColor="#f1f1f1" android:endColor="#fafafa" android:angle="45" android:centerColor="#faf8f8"/>
+</shape>

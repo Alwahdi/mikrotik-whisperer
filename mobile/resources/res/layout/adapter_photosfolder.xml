@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:orientation="vertical" android:layout_width="match_parent" android:layout_height="match_parent">
+    <androidx.cardview.widget.CardView android:layout_gravity="center" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_margin="3dp" app:cardBackgroundColor="@color/white" app:cardCornerRadius="5sp" app:cardElevation="4sp" app:contentPadding="2sp">
+        <LinearLayout android:orientation="vertical" android:layout_width="match_parent" android:layout_height="match_parent">
+            <ImageView android:layout_gravity="center" android:id="@+id/iv_image" android:layout_width="150sp" android:layout_height="150sp"/>
+            <TextView android:textSize="15dp" android:textStyle="bold" android:textColor="#000000" android:id="@+id/tv_folder" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="10dp"/>
+            <TextView android:textSize="15dp" android:textColor="#dfdfdf" android:id="@+id/tv_folder2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="10dp" android:layout_marginBottom="10dp"/>
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+    <RelativeLayout android:id="@+id/rl_select" android:layout_width="match_parent" android:layout_height="match_parent" android:alpha="0.5"/>
+</RelativeLayout>

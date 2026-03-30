@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:layout_width="match_parent" android:layout_height="match_parent" android:layoutDirection="rtl">
+    <LinearLayout android:orientation="vertical" android:id="@+id/mtool" android:layout_width="match_parent" android:layout_height="wrap_content">
+        <include layout="@layout/toolbar_adduser"/>
+        <LinearLayout android:gravity="center" android:layout_gravity="center" android:orientation="vertical" android:paddingTop="5dp" android:paddingBottom="10dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp">
+            <LinearLayout android:gravity="center" android:orientation="horizontal" android:padding="5dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="1sp" android:layoutDirection="rtl">
+                <RadioButton android:textSize="14sp" android:id="@+id/all_radio" android:visibility="gone" android:layout_width="0dp" android:layout_height="wrap_content" android:text="الكل" android:layout_weight="1"/>
+                <LinearLayout android:gravity="center" android:orientation="vertical" android:padding="2dp" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1">
+                    <RadioButton android:textSize="14sp" android:id="@+id/um_radio" android:layout_width="wrap_content" android:layout_height="wrap_content" android:checked="true" android:text="يوزرمانجر"/>
+                </LinearLayout>
+                <LinearLayout android:gravity="center" android:orientation="vertical" android:padding="2dp" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1">
+                    <RadioButton android:textSize="14sp" android:id="@+id/hots_radio" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="هوتسبوت"/>
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout android:gravity="center" android:orientation="horizontal" android:id="@+id/group_button_layout" android:layout_width="match_parent" android:layout_height="wrap_content" android:layoutDirection="rtl">
+                <LinearLayout android:gravity="center" android:orientation="vertical" android:padding="2dp" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1">
+                    <Button android:textSize="15sp" android:textStyle="bold" android:textColor="@color/white" android:id="@+id/add_slsPoint" android:background="@drawable/rect_blue" android:paddingLeft="10dp" android:paddingRight="10dp" android:layout_width="wrap_content" android:layout_height="39sp" android:layout_marginLeft="2dp" android:layout_marginTop="5dp" android:layout_marginRight="2dp" android:layout_marginBottom="6dp" android:text="إضافة"/>
+                </LinearLayout>
+                <LinearLayout android:gravity="center" android:orientation="vertical" android:padding="2dp" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1">
+                    <ImageView android:id="@+id/refresh_slsPoint" android:paddingLeft="10dp" android:paddingRight="10dp" android:layout_width="39dp" android:layout_height="39dp" android:layout_marginLeft="5dp" android:layout_marginTop="5dp" android:layout_marginRight="5dp" android:layout_marginBottom="6dp" android:src="@drawable/reload_arrow"/>
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout android:gravity="center" android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView android:textSize="13.5sp" android:textStyle="bold" android:textColor="@color/mainColor" android:layout_gravity="center" android:id="@+id/card_count" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="1dp" android:layout_marginBottom="1dp"/>
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+    <HorizontalScrollView android:scrollbars="none|horizontal|vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="5dp" android:layout_below="@+id/mtool" android:layout_marginStart="5dp">
+        <LinearLayout android:orientation="horizontal" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layoutDirection="rtl">
+            <ListView android:id="@+id/slsPoint_ListView" android:scrollbars="none|horizontal|vertical" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_below="@+id/mySearchView" android:layoutDirection="rtl"/>
+        </LinearLayout>
+    </HorizontalScrollView>
+</RelativeLayout>

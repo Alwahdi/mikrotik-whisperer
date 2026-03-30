@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <array name="activelistoption">
+        <item>طرد المستخدم</item>
+        <item>حظر المستخدم</item>
+    </array>
+    <array name="bindinglistoption">
+        <item>حذف وإلغاء الحظر</item>
+    </array>
+    <array name="details_tab">
+        <item>معلومات الراوتر</item>
+        <item>قائمة الحظر</item>
+        <item>اجهزة البث</item>
+        <item>المستخدمين النشطين</item>
+        <item>القائمة</item>
+    </array>
+    <array name="gender">
+        <item />
+        <item>Male</item>
+        <item>Female</item>
+    </array>
+    <array name="items_per_page">
+        <item>10</item>
+        <item>20</item>
+        <item>25</item>
+        <item>50</item>
+        <item>All</item>
+    </array>
+    <array name="moods">
+        <item />
+        <item>Happy</item>
+        <item>Sad</item>
+    </array>
+    <array name="selectoption">
+        <item>حذف الكرت</item>
+        <item>اضافة باقة للكرت</item>
+        <item>عرض الجلسات</item>
+        <item>تعطيل الكرت</item>
+        <item>تفعيل الكرت</item>
+    </array>
+    <array name="selectoptionhotspot">
+        <item>حذف الكرت</item>
+        <item>تجديد الكرت</item>
+        <item>تعطيل الكرت</item>
+        <item>تفعيل الكرت</item>
+    </array>
+</resources>

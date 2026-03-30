@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:paddingBottom="25dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:layoutDirection="rtl">
+    <LinearLayout android:scrollbarAlwaysDrawVerticalTrack="true" android:gravity="center_horizontal" android:orientation="vertical" android:scrollbars="vertical" android:layout_width="match_parent" android:layout_height="match_parent">
+        <TextView android:textSize="16sp" android:textStyle="bold" android:textColor="@color/mainColor" android:id="@+id/addtonametxt" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_margin="16dp" android:text="تطوير م/عدي دماج"/>
+        <TextView android:textSize="15sp" android:textStyle="bold" android:textColor="@color/mainColorDark" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_margin="16dp" android:text="للتواصل"/>
+        <LinearLayout android:scrollbarAlwaysDrawVerticalTrack="true" android:gravity="center_horizontal" android:orientation="horizontal" android:id="@+id/whatsapp" android:scrollbars="vertical" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginTop="20dp">
+            <ImageView android:textStyle="bold" android:id="@+id/whatsappimg" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginLeft="10dp" android:layout_marginRight="10dp" android:src="@drawable/whatsapp_logo" android:layout_weight="1"/>
+            <TextView android:textSize="14sp" android:textStyle="bold" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginLeft="15dp" android:layout_marginRight="15dp" android:text="WhatsApp" android:layout_weight="1" android:textDirection="rtl"/>
+        </LinearLayout>
+        <LinearLayout android:scrollbarAlwaysDrawVerticalTrack="true" android:gravity="center_horizontal" android:orientation="horizontal" android:id="@+id/facebook" android:scrollbars="vertical" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginTop="20dp">
+            <ImageView android:textStyle="bold" android:id="@+id/facebookimg" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginLeft="10dp" android:layout_marginRight="10dp" android:layout_weight="1" app:srcCompat="@drawable/ic_facebook"/>
+            <TextView android:textSize="14sp" android:textStyle="bold" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginLeft="15dp" android:layout_marginRight="15dp" android:text="Odai Dammag" android:layout_weight="1" android:textDirection="rtl"/>
+        </LinearLayout>
+        <LinearLayout android:scrollbarAlwaysDrawVerticalTrack="true" android:gravity="center_horizontal" android:orientation="horizontal" android:id="@+id/facebook2" android:scrollbars="vertical" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginTop="20dp">
+            <ImageView android:textStyle="bold" android:id="@+id/facebookimg2" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginLeft="10dp" android:layout_marginRight="10dp" android:layout_weight="1" app:srcCompat="@drawable/ic_facebook"/>
+            <TextView android:textSize="14sp" android:textStyle="bold" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginLeft="15dp" android:layout_marginRight="15dp" android:text="YemenInfo 4IT" android:layout_weight="1" android:textDirection="rtl"/>
+        </LinearLayout>
+        <LinearLayout android:scrollbarAlwaysDrawVerticalTrack="true" android:gravity="center_horizontal" android:orientation="horizontal" android:id="@+id/mobile_btn" android:scrollbars="vertical" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginTop="20dp">
+            <ImageView android:textStyle="bold" android:layout_width="0dp" android:layout_height="30dp" android:layout_marginLeft="10dp" android:layout_marginRight="10dp" android:src="@drawable/phone_icon" android:layout_weight="1"/>
+            <TextView android:textSize="14sp" android:textStyle="bold" android:paddingTop="3dp" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginLeft="15dp" android:layout_marginRight="15dp" android:text="+967733474886" android:layout_weight="1" android:textDirection="rtl"/>
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

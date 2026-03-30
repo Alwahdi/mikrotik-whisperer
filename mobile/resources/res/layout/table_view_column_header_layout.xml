@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:orientation="vertical" android:id="@+id/column_header_container" android:background="@color/cell_background_color" android:layout_width="wrap_content" android:layout_height="@dimen/cell_height">
+    <FrameLayout android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="match_parent">
+        <LinearLayout android:layout_gravity="center" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_marginStart="10dp" android:layout_marginEnd="10dp">
+            <TextView android:textSize="14sp" android:textColor="@color/mainColor" android:gravity="center" android:layout_gravity="center" android:id="@+id/column_header_textView" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="4"/>
+            <ImageButton android:layout_gravity="right|center_vertical|center_horizontal|center|end" android:id="@+id/column_header_sortButton" android:background="@android:color/transparent" android:paddingRight="-5dp" android:visibility="gone" android:layout_width="15dp" android:layout_height="15dp" android:layout_marginLeft="4dp" android:scaleType="fitXY" android:contentDescription="TODO" app:srcCompat="@drawable/ic_down"/>
+        </LinearLayout>
+        <View android:layout_gravity="bottom" android:background="@color/header_line_color" android:layout_width="match_parent" android:layout_height="1px"/>
+    </FrameLayout>
+</LinearLayout>

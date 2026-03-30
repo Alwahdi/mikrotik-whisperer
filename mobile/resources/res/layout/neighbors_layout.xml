@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:id="@+id/fragment_container" android:background="@color/gry" android:focusableInTouchMode="true" android:layout_width="match_parent" android:layout_height="match_parent" android:layoutDirection="rtl">
+    <androidx.core.widget.NestedScrollView android:id="@+id/scroll" android:layout_width="match_parent" android:layout_height="match_parent" app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content">
+            <LinearLayout android:orientation="vertical" android:fitsSystemWindows="true" android:layout_width="match_parent" android:layout_height="match_parent">
+                <LinearLayout android:orientation="vertical" android:visibility="visible" android:layout_width="match_parent" android:layout_height="wrap_content">
+                    <LinearLayout android:gravity="center" android:layout_gravity="center" android:orientation="horizontal" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginBottom="5dp">
+                        <Button android:textSize="14.5sp" android:textStyle="bold" android:textColor="#ffffff" android:id="@+id/neighborbtn" android:background="@drawable/loginbutton_selector" android:paddingLeft="40dp" android:paddingRight="40dp" android:layout_width="wrap_content" android:layout_height="39dp" android:layout_marginTop="5dp" android:layout_marginBottom="5dp" android:text="تحميل" android:textAllCaps="false"/>
+                        <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/mainColor" android:id="@+id/count_nig" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="20dp" android:layout_marginTop="5dp" android:layout_marginRight="20dp" android:layout_marginBottom="5dp"/>
+                    </LinearLayout>
+                    <LinearLayout android:gravity="center" android:layout_gravity="center" android:orientation="vertical" android:id="@+id/noresults" android:background="#e7e7e7" android:visibility="gone" android:layout_width="match_parent" android:layout_height="match_parent">
+                        <TextView android:textSize="22dp" android:textStyle="bold" android:textColor="@color/black" android:padding="10dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="50dp" android:minWidth="80dp" android:text="لا يوجد نتائج"/>
+                    </LinearLayout>
+                </LinearLayout>
+                <com.blogspot.yemeninfo4it.mumsmobile_app.MyScrollView android:id="@+id/scrollview" android:layout_width="match_parent" android:layout_height="wrap_content">
+                    <LinearLayout android:orientation="vertical" android:visibility="visible" android:layout_width="match_parent" android:layout_height="wrap_content">
+                        <LinearLayout android:orientation="vertical" android:id="@+id/main_layout" android:visibility="visible" android:layout_width="match_parent" android:layout_height="wrap_content">
+                            <androidx.recyclerview.widget.RecyclerView android:scrollbarStyle="outsideOverlay" android:id="@+id/recycler_neighbor" android:paddingBottom="5dp" android:visibility="gone" android:scrollbars="none|horizontal|vertical" android:clickable="true" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="2dp" android:layout_marginRight="2dp" android:minHeight="250dp" android:nestedScrollingEnabled="true" app:reverseLayout="true"/>
+                            <com.evrencoskun.tableview.TableView android:layout_gravity="center" android:id="@+id/tableview" android:layout_width="wrap_content" android:layout_height="match_parent" app:row_header_width="55sp" app:selected_color="@color/colorPrimaryDark" app:shadow_color="#eee" app:unselected_color="@color/white"/>
+                        </LinearLayout>
+                    </LinearLayout>
+                </com.blogspot.yemeninfo4it.mumsmobile_app.MyScrollView>
+            </LinearLayout>
+        </RelativeLayout>
+    </androidx.core.widget.NestedScrollView>
+</RelativeLayout>

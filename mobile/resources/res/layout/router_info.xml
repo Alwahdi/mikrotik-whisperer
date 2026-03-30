@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:orientation="vertical" android:background="@color/gry" android:layout_width="match_parent" android:layout_height="wrap_content" android:layoutDirection="rtl">
+    <androidx.recyclerview.widget.RecyclerView android:scrollbarStyle="outsideOverlay" android:id="@+id/recycler5" android:paddingBottom="5dp" android:scrollbars="none|horizontal|vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="2dp" android:layout_marginTop="5dp" android:layout_marginRight="2dp" android:minHeight="250dp"/>
+</LinearLayout>

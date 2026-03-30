@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:background="#ffffff" android:layout_width="match_parent" android:layout_height="match_parent" android:layoutDirection="rtl">
+    <LinearLayout android:orientation="vertical" android:paddingBottom="10sp" android:layout_width="match_parent" android:layout_height="wrap_content">
+        <LinearLayout android:gravity="center" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content">
+            <TextView android:textSize="16sp" android:textStyle="bold" android:textColor="@color/black" android:gravity="center" android:layout_gravity="center" android:id="@+id/refresh_img" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_margin="10sp" android:text="إعدادات حجم ولون الخط"/>
+        </LinearLayout>
+        <TextView android:textSize="15sp" android:textStyle="bold" android:textColor="@color/black" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="2dp" android:text="إسم المستخدم" android:textAlignment="center"/>
+        <LinearLayout android:gravity="center" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="25sp" android:layout_marginRight="25sp">
+            <LinearLayout android:layout_gravity="center" android:orientation="vertical" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="5dp">
+                <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/black" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_margin="3sp" android:layout_marginLeft="3dp" android:layout_marginRight="3dp" android:text="حجم الخط" android:textAlignment="center"/>
+                <LinearLayout android:gravity="center" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:layout_marginStart="2dp" android:layout_marginEnd="5dp">
+                    <ImageView android:id="@+id/plus_u" android:layout_width="24dp" android:layout_height="22dp" android:layout_marginLeft="7dp" android:layout_marginRight="7dp" android:src="@drawable/plus_cart" android:scaleType="fitXY"/>
+                    <TextView android:textStyle="bold" android:textColor="@color/black" android:id="@+id/font_size_number_u" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="10"/>
+                    <ImageView android:id="@+id/menus_u" android:layout_width="24dp" android:layout_height="22dp" android:layout_marginLeft="7dp" android:layout_marginRight="7dp" android:src="@drawable/minus_cart" android:scaleType="fitXY"/>
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout android:layout_gravity="center" android:orientation="vertical" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="5dp">
+                <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/black" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_margin="3sp" android:layout_marginLeft="3dp" android:layout_marginRight="3dp" android:text="لون الخط" android:textAlignment="center"/>
+                <Spinner android:textStyle="bold" android:textColor="@color/black" android:id="@+id/color_type_u" android:background="@drawable/rect" android:padding="2dp" android:layout_width="match_parent" android:layout_height="35dp" android:layout_marginStart="3dp" android:layout_marginEnd="3dp"/>
+            </LinearLayout>
+        </LinearLayout>
+        <TextView android:textSize="15sp" android:textStyle="bold" android:textColor="@color/black" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="كلمة المرور" android:textAlignment="center"/>
+        <LinearLayout android:gravity="center" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="25sp" android:layout_marginRight="25sp">
+            <LinearLayout android:layout_gravity="center" android:orientation="vertical" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="5dp">
+                <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/black" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_margin="3sp" android:layout_marginLeft="3dp" android:layout_marginRight="3dp" android:text="حجم الخط" android:textAlignment="center"/>
+                <LinearLayout android:gravity="center" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:layout_marginStart="2dp" android:layout_marginEnd="5dp">
+                    <ImageView android:id="@+id/plus_p" android:layout_width="24dp" android:layout_height="25dp" android:layout_marginLeft="7dp" android:layout_marginRight="7dp" android:src="@drawable/plus_cart" android:scaleType="fitXY"/>
+                    <TextView android:textStyle="bold" android:textColor="@color/black" android:id="@+id/font_size_number_p" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="10"/>
+                    <ImageView android:id="@+id/menus_p" android:layout_width="24dp" android:layout_height="22dp" android:layout_marginLeft="7dp" android:layout_marginRight="7dp" android:src="@drawable/minus_cart" android:scaleType="fitXY"/>
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout android:layout_gravity="center" android:orientation="vertical" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="5dp">
+                <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/black" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_margin="3sp" android:layout_marginLeft="3dp" android:layout_marginRight="3dp" android:text="لون الخط" android:textAlignment="center"/>
+                <Spinner android:textStyle="bold" android:textColor="@color/black" android:id="@+id/color_type_p" android:background="@drawable/rect" android:padding="2dp" android:layout_width="match_parent" android:layout_height="35dp" android:layout_marginStart="3dp" android:layout_marginEnd="3dp"/>
+            </LinearLayout>
+        </LinearLayout>
+        <TextView android:textSize="15sp" android:textStyle="bold" android:textColor="@color/black" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="نقطة البيع" android:textAlignment="center"/>
+        <LinearLayout android:gravity="center" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginLeft="25sp" android:layout_marginRight="25sp">
+            <LinearLayout android:layout_gravity="center" android:orientation="vertical" android:layout_width="0dp" android:layout_height="match_parent" android:layout_marginTop="3dp" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="5dp">
+                <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/black" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_margin="3sp" android:layout_marginLeft="3dp" android:layout_marginRight="3dp" android:text="حجم الخط" android:textAlignment="center"/>
+                <LinearLayout android:gravity="center" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:layout_marginEnd="5dp">
+                    <ImageView android:id="@+id/plus_s" android:layout_width="24dp" android:layout_height="22dp" android:layout_marginLeft="7dp" android:layout_marginRight="7dp" android:src="@drawable/plus_cart" android:scaleType="fitXY"/>
+                    <TextView android:textStyle="bold" android:textColor="@color/black" android:id="@+id/font_size_number_s" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="10"/>
+                    <ImageView android:id="@+id/menus_s" android:layout_width="24dp" android:layout_height="24dp" android:layout_marginLeft="7dp" android:layout_marginRight="7dp" android:src="@drawable/minus_cart" android:scaleType="fitXY"/>
+                </LinearLayout>
+            </LinearLayout>
+            <LinearLayout android:layout_gravity="center" android:orientation="vertical" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="2dp" android:layout_marginEnd="5dp">
+                <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/black" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_margin="3sp" android:layout_marginLeft="3dp" android:layout_marginRight="3dp" android:text="لون الخط" android:textAlignment="center"/>
+                <Spinner android:textStyle="bold" android:textColor="@color/black" android:id="@+id/color_type_s" android:background="@drawable/rect" android:padding="2dp" android:layout_width="match_parent" android:layout_height="35dp" android:layout_marginStart="3dp" android:layout_marginEnd="3dp"/>
+            </LinearLayout>
+        </LinearLayout>
+        <TextView android:textSize="14sp" android:textStyle="bold" android:textColor="@color/white" android:gravity="center" android:layout_gravity="center" android:id="@+id/submit_btn" android:background="@drawable/rect_blue" android:padding="8dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_margin="10sp" android:minWidth="100sp" android:text="موافق"/>
+    </LinearLayout>
+</RelativeLayout>

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:id="@+id/fragment_container" android:background="@color/gry" android:focusableInTouchMode="true" android:layout_width="match_parent" android:layout_height="match_parent">
+    <androidx.core.widget.NestedScrollView android:id="@+id/scroll" android:layout_width="match_parent" android:layout_height="match_parent" app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content">
+            <LinearLayout android:orientation="vertical" android:fitsSystemWindows="true" android:layout_width="match_parent" android:layout_height="match_parent">
+                <LinearLayout android:gravity="center" android:orientation="vertical" android:id="@+id/table_test_container2" android:paddingBottom="20dp" android:layout_width="match_parent" android:layout_height="wrap_content">
+                    <com.blogspot.yemeninfo4it.mumsmobile_app.MyHorizScrollView android:scrollbarTrackHorizontal="@color/mainColor" android:scrollbarStyle="insideInset" android:gravity="center" android:layout_gravity="center" android:scrollbars="none|horizontal|vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
+                        <LinearLayout android:gravity="center" android:layout_gravity="center" android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content">
+                            <LinearLayout android:gravity="center" android:layout_gravity="center" android:orientation="horizontal" android:id="@+id/search_field2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="15dp" android:weightSum="100">
+                                <Button android:textSize="15.5sp" android:textStyle="bold" android:textColor="#ffffff" android:id="@+id/activebtn" android:background="@drawable/rect_blue" android:paddingLeft="48dp" android:paddingRight="48dp" android:layout_width="wrap_content" android:layout_height="41dp" android:layout_marginTop="5dp" android:layout_marginBottom="10dp" android:text="تحميل" android:textAllCaps="false"/>
+                                <Button android:textSize="16.5sp" android:textStyle="bold" android:textColor="#ffffff" android:id="@+id/showbtn" android:background="@drawable/rect_blue" android:paddingLeft="28dp" android:paddingRight="28dp" android:visibility="gone" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="5dp" android:layout_marginBottom="5dp" android:text="إظهار" android:textAllCaps="false"/>
+                                <Button android:textSize="16.5sp" android:textStyle="bold" android:textColor="#ffffff" android:id="@+id/dubl" android:background="@drawable/rect_blue" android:paddingLeft="20dp" android:paddingRight="20dp" android:visibility="gone" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="5dp" android:layout_marginBottom="5dp" android:text="حذف التكرار" android:textAllCaps="false"/>
+                                <TextView android:textSize="15dp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/sum" android:padding="10dp" android:visibility="gone" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minWidth="80dp" android:text="المجموع"/>
+                                <TextView android:textSize="15dp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/activeacount" android:padding="10dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minWidth="80dp" android:text="العدد"/>
+                            </LinearLayout>
+                            <TextView android:textSize="13dp" android:textStyle="bold" android:textColor="@color/colorPrimaryDark" android:padding="10dp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minWidth="80dp" android:text="قم بالضغط باستمرار على السجل الذي تريده"/>
+                        </LinearLayout>
+                    </com.blogspot.yemeninfo4it.mumsmobile_app.MyHorizScrollView>
+                </LinearLayout>
+                <LinearLayout android:orientation="vertical" android:id="@+id/table_test_container" android:visibility="gone" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_below="@+id/table_test_container2">
+                    <LinearLayout android:gravity="center_vertical" android:orientation="horizontal" android:id="@+id/search_field" android:layout_width="match_parent" android:layout_height="wrap_content" android:weightSum="100">
+                        <EditText android:id="@+id/query_string" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="40" android:inputType="textNoSuggestions"/>
+                        <Spinner android:entries="@array/moods" android:id="@+id/mood_spinner" android:background="@android:color/transparent" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="30"/>
+                        <Spinner android:entries="@array/gender" android:id="@+id/gender_spinner" android:background="@android:color/transparent" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="30"/>
+                    </LinearLayout>
+                    <LinearLayout android:gravity="center_vertical" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="wrap_content" android:weightSum="100">
+                        <ImageButton android:id="@+id/previous_button" android:layout_width="48dp" android:layout_height="48dp" app:srcCompat="@drawable/ic_previous"/>
+                        <EditText android:id="@+id/page_number_text" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="20" android:inputType="number"/>
+                        <ImageButton android:id="@+id/next_button" android:layout_width="48dp" android:layout_height="48dp" app:srcCompat="@drawable/ic_next"/>
+                        <TextView android:id="@+id/table_details" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="50"/>
+                        <Spinner android:entries="@array/items_per_page" android:id="@+id/items_per_page_spinner" android:background="@android:color/transparent" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="30"/>
+                    </LinearLayout>
+                </LinearLayout>
+                <LinearLayout android:gravity="center" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_below="@+id/table_test_container">
+                    <com.evrencoskun.tableview.TableView android:layout_gravity="center" android:id="@+id/tableview" android:layout_width="match_parent" android:layout_height="match_parent" android:layout_margin="0dp" app:selected_color="@color/colorPrimaryDark" app:separator_color="@color/gray" app:shadow_color="#eee" app:show_horizontal_separator="true" app:unselected_color="@color/white"/>
+                </LinearLayout>
+                <androidx.recyclerview.widget.RecyclerView android:scrollbarStyle="outsideOverlay" android:id="@+id/recycleractive" android:paddingBottom="5dp" android:visibility="gone" android:scrollbars="none|horizontal|vertical" android:clickable="true" android:layout_width="match_parent" android:layout_height="270dp" android:layout_marginLeft="2dp" android:layout_marginRight="2dp" android:minHeight="250dp" android:nestedScrollingEnabled="true" app:reverseLayout="true"/>
+            </LinearLayout>
+        </RelativeLayout>
+    </androidx.core.widget.NestedScrollView>
+</RelativeLayout>

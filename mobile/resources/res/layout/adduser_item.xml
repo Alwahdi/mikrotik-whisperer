@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:orientation="vertical" android:layout_width="match_parent" android:layout_height="wrap_content" android:layoutDirection="rtl">
+    <LinearLayout android:orientation="horizontal" android:id="@+id/mBackground" android:layout_width="wrap_content" android:layout_height="wrap_content">
+        <CheckBox android:textStyle="bold" android:id="@+id/chk_selected" android:padding="5dp" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"/>
+        <TextView android:textSize="13.5sp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/username" android:padding="10dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:minWidth="80dp" android:text="اسم الباقة"/>
+        <TextView android:textSize="13.5sp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/pass" android:padding="10dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:minWidth="80dp" android:text="اسم الباقة"/>
+        <TextView android:textSize="13.5sp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/profname" android:padding="10dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:minWidth="80dp" android:text="اسم الباقة" android:textAlignment="center"/>
+        <TextView android:textSize="13sp" android:textStyle="bold" android:textColor="@color/black" android:id="@+id/imgstatus" android:padding="10dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:minWidth="85dp" android:text="لم يتم" android:textAlignment="center"/>
+        <ImageButton android:layout_gravity="center" android:id="@+id/btn_delete_unit" android:background="@null" android:padding="10dp" android:layout_width="match_parent" android:layout_height="wrap_content" android:minWidth="80dp" app:srcCompat="@drawable/ic_close"/>
+    </LinearLayout>
+</LinearLayout>

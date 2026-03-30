@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android" xmlns:app="http://schemas.android.com/apk/res-auto" xmlns:lgrupo="http://schemas.android.com/apk/lib/com.blogspot.yemeninfo4it.mumsmobile_app" xmlns:aapt="http://schemas.android.com/aapt" android:background="@drawable/notification_bg" android:layout_width="match_parent" android:layout_height="wrap_content" android:layoutDirection="rtl">
+    <RelativeLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_centerVertical="true" android:layout_marginStart="60dp">
+        <TextView android:textSize="15sp" android:textColor="@color/colorPrimary" android:id="@+id/title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/active_user_count" android:layout_marginStart="5sp" android:layout_alignParentStart="true"/>
+        <TextView android:textSize="13sp" android:textColor="@color/black" android:id="@+id/content_txt" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:text="0" android:layout_below="@+id/title" android:layout_marginStart="10sp" android:layout_alignParentStart="true"/>
+    </RelativeLayout>
+    <ImageView android:layout_width="57dp" android:layout_height="43dp" android:layout_marginTop="5dp" android:layout_marginBottom="5dp" android:src="@drawable/logonew" android:scaleType="fitXY" android:contentDescription="المتصلين" android:layout_marginStart="3dp" android:layout_alignParentStart="true"/>
+</RelativeLayout>
