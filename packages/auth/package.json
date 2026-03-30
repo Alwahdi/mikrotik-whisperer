@@ -15,7 +15,7 @@
   "dependencies": {
     "@repo/database": "workspace:*",
     "@supabase/ssr": "^0.9.0",
-    "@supabase/supabase-js": "^2.98.0"
+    "@supabase/supabase-js": "^2.100.1"
   },
   "peerDependencies": {
     "next": "^16.2.1",
@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
-    "@types/react": "^18.3.23",
+    "@types/react": "^19.2.14",
     "typescript": "^5.8.3"
   }
 }
