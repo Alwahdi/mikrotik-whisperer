@@ -423,9 +423,11 @@ export function useUserManagerAction() {
             await callMikrotikApi("/user-manager/user/create-and-activate-profile", {
               args: [`=numbers=${username}`, `=profile=${profile}`, `=customer=${customer}`],
             });
-          } catch {
-            // Silently handle - profile activation may fail on some versions
-            // The edge function has extensive fallback logic for this
+          } catch (err: unknown) {
+            // Profile activation may fail on some RouterOS versions;
+            // the edge function has extensive v6/v7 fallback logic for this.
+            const msg = err instanceof Error ? err.message : "unknown";
+            console.warn("[user-manager] create-and-activate-profile fallback:", msg);
           }
         }
 
@@ -675,15 +677,11 @@ export function useUserManagerBatchAdd() {
             const addMsg = typeof errs[addIdx] === "string" ? errs[addIdx].trim() : "";
             const activateMsg = typeof errs[activateIdx] === "string" ? errs[activateIdx].trim() : "";
             // User creation succeeded if add succeeded or was duplicate
-            if ((!addMsg || isDuplicate(addMsg)) && !activateMsg) {
+            // Activation failure is non-fatal (edge function has fallback logic)
+            if (!addMsg || isDuplicate(addMsg)) {
               succeeded++;
             } else {
-              const errMsg = addMsg || activateMsg || "";
-              if (isDuplicate(errMsg)) {
-                succeeded++;
-              } else {
-                errors.push({ username: chunk[j].username, error: errMsg });
-              }
+              errors.push({ username: chunk[j].username, error: addMsg || activateMsg });
             }
           }
         } catch (err: any) {
