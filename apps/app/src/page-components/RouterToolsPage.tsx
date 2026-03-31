@@ -17,7 +17,6 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/design-system/components/ui/tabs";
 import { Button } from "@repo/design-system/components/ui/button";
-import { Input } from "@repo/design-system/components/ui/input";
 import { Skeleton } from "@repo/design-system/components/ui/skeleton";
 import { Card, CardContent } from "@repo/design-system/components/ui/card";
 import { Badge } from "@repo/design-system/components/ui/badge";
@@ -73,8 +72,8 @@ const AUTO_EXPIRY_SCRIPT_SOURCE = `:local date [/system clock get date]
   }
 }`;
 
-// On-login script for hotspot profile (stamps first login date)
-const ON_LOGIN_SCRIPT = `{:local date [/system clock get date];:if ([/ip hotspot user get $user comment]="") do={[/ip hotspot user set $user comment="mums-$date"]}}`;
+// On-login script for hotspot profile (stamps first login date) — used by auto-expiry setup
+export const ON_LOGIN_SCRIPT = `{:local date [/system clock get date];:if ([/ip hotspot user get $user comment]="") do={[/ip hotspot user set $user comment="mums-$date"]}}`;
 
 export default function RouterToolsPage() {
   const { data: neighbors, isLoading: loadingNeighbors } = useNeighbors();
