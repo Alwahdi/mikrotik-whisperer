@@ -9,6 +9,7 @@ interface PrefetchStep {
   command: string;
   proplist?: string;
   timeoutMs?: number;
+  args?: string[];
 }
 
 type RouterConfig = NonNullable<ReturnType<typeof getActiveRouter>>;
@@ -50,7 +51,11 @@ function processResult(key: string, data: any): any {
 }
 
 async function invokeStep(config: RouterConfig, step: PrefetchStep) {
-  const args = step.proplist ? [`=.proplist=${step.proplist}`] : [];
+  const args = step.args
+    ? [...step.args]
+    : step.proplist
+      ? [`=.proplist=${step.proplist}`]
+      : [];
   const timeoutMs = step.timeoutMs ?? 15000;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -70,6 +75,53 @@ async function invokeStep(config: RouterConfig, step: PrefetchStep) {
     throw err;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+// Generate a backup timestamp like the mobile app: MUMS-dd-MM-yyyy_HH-mm-ss
+function getBackupTimestamp(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `MUMS-${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+}
+
+// Run backup operations during login (blocks transition to dashboard)
+// Mobile does: /tool/user-manager/database/save and /export
+async function runLoginBackups(
+  config: RouterConfig,
+  onStep: (label: string) => void,
+): Promise<void> {
+  const timestamp = getBackupTimestamp();
+
+  // Step 1: User Manager database backup
+  // Mobile: /tool/user-manager/database/save name='MUMS-dd-MM-yyyy HH:mm:ss'
+  // v7: /user-manager/database/save  |  v6: /tool/user-manager/database/save
+  onStep("نسخ احتياطي لقاعدة بيانات يوزر مانجر...");
+  try {
+    await invokeStep(config, {
+      label: "نسخ قاعدة بيانات يوزر مانجر",
+      key: "um-db-save",
+      command: "/user-manager/database/save",
+      args: [`=name=${timestamp}`],
+      timeoutMs: 20000,
+    });
+  } catch {
+    // User Manager may not be installed; don't block login
+  }
+
+  // Step 2: Router configuration export
+  // Mobile: /export file='<filename>'
+  onStep("نسخ احتياطي لإعدادات الراوتر...");
+  try {
+    await invokeStep(config, {
+      label: "نسخ إعدادات الراوتر",
+      key: "config-export",
+      command: "/export",
+      args: [`=file=${timestamp}`],
+      timeoutMs: 25000,
+    });
+  } catch {
+    // Export may fail on some configurations; don't block login
   }
 }
 
@@ -126,7 +178,7 @@ export function useRouterPrefetch() {
 
     try {
       pulseTimer = setInterval(() => {
-        setProgress((prev) => (prev < 55 ? prev + 3 : prev));
+        setProgress((prev: number) => (prev < 40 ? prev + 3 : prev));
       }, 180);
 
       const criticalResults = await Promise.allSettled(
@@ -156,6 +208,16 @@ export function useRouterPrefetch() {
       if (successCount === 0) {
         throw new Error("تعذر الحصول على أي بيانات أساسية من الراوتر");
       }
+
+      // ─── Backup phase: runs BEFORE dashboard access ───────────
+      // Mobile app creates backups on every login:
+      // 1. User Manager database save
+      // 2. Router configuration export
+      setProgress(50);
+      await runLoginBackups(config as RouterConfig, (label) => {
+        setCurrentStep(label);
+        setProgress((prev: number) => Math.min(prev + 10, 80));
+      });
 
       setProgress(85);
       setCurrentStep("تم الدخول — استكمال باقي البيانات بالخلفية...");

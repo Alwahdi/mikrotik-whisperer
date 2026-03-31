@@ -209,7 +209,9 @@ function getRestMethod(command: string): string {
   if (command.endsWith("/set")) return "PATCH";
   if (command.endsWith("/remove")) return "DELETE";
   if (command.endsWith("/disable") || command.endsWith("/enable") ||
-      command.endsWith("/reset-counters") || command.endsWith("/create-and-activate-profile")) return "POST";
+      command.endsWith("/reset-counters") || command.endsWith("/create-and-activate-profile") ||
+      command.endsWith("/save") || command.endsWith("/rebuild") || command.endsWith("/optimize-db") ||
+      command === "/export" || command === "/system/reboot") return "POST";
   return "GET";
 }
 
@@ -388,7 +390,9 @@ function isCompatibilityError(message: string): boolean {
 function isWriteCommand(command: string): boolean {
   return command.endsWith("/add") || command.endsWith("/set") || command.endsWith("/remove") ||
     command.endsWith("/disable") || command.endsWith("/enable") || command.endsWith("/reset-counters") ||
-    command.endsWith("/create-and-activate-profile");
+    command.endsWith("/create-and-activate-profile") ||
+    command.endsWith("/save") || command.endsWith("/rebuild") || command.endsWith("/optimize-db") ||
+    command === "/export" || command === "/system/reboot";
 }
 
 function isUserManagerUserWriteCommand(command: string): boolean {
