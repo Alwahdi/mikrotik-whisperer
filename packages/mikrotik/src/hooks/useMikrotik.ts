@@ -645,9 +645,8 @@ export function useUserManagerBatchAdd() {
       };
 
       const processChunk = async (chunk: BatchAddUser[]) => {
-        // Mobile app pattern: TWO commands per user
-        // Step 1: /user-manager/user/add username=X password=Y customer=admin
-        // Step 2: /user-manager/user/create-and-activate-profile numbers=X profile=P customer=admin
+        // Mobile app pattern: TWO commands per user (add + activate-profile)
+        const COMMANDS_PER_USER = 2;
         const commands = chunk.flatMap((u) => [
           {
             command: "/user-manager/user/add",
@@ -670,10 +669,9 @@ export function useUserManagerBatchAdd() {
         try {
           const result = await callMikrotikAction("batch", { commands });
           const errs = Array.isArray(result?.errors) ? result.errors : [];
-          // Each user produces 2 commands; check the add result (even index)
           for (let j = 0; j < chunk.length; j++) {
-            const addIdx = j * 2;
-            const activateIdx = j * 2 + 1;
+            const addIdx = j * COMMANDS_PER_USER;
+            const activateIdx = j * COMMANDS_PER_USER + 1;
             const addMsg = typeof errs[addIdx] === "string" ? errs[addIdx].trim() : "";
             const activateMsg = typeof errs[activateIdx] === "string" ? errs[activateIdx].trim() : "";
             // User creation succeeded if add succeeded or was duplicate

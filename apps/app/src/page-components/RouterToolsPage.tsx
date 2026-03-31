@@ -72,8 +72,7 @@ const AUTO_EXPIRY_SCRIPT_SOURCE = `:local date [/system clock get date]
   }
 }`;
 
-// On-login script for hotspot profile (stamps first login date) — used by auto-expiry setup
-export const ON_LOGIN_SCRIPT = `{:local date [/system clock get date];:if ([/ip hotspot user get $user comment]="") do={[/ip hotspot user set $user comment="mums-$date"]}}`;
+// ON_LOGIN_SCRIPT imported from @repo/mikrotik — used by auto-expiry setup via hotspot profile
 
 export default function RouterToolsPage() {
   const { data: neighbors, isLoading: loadingNeighbors } = useNeighbors();

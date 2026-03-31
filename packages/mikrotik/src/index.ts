@@ -19,7 +19,7 @@ export { getActiveRouter, setActiveRouter, clearActiveRouter, getDefaultPort, ge
 export type { ActiveRouter, ConnectionMode, ConnectionProtocol } from './lib/config'
 export { addConnectionDebug, getConnectionDebugEntries, clearConnectionDebugEntries, subscribeConnectionDebug } from './lib/connectionDebug'
 export type { ConnectionDebugEntry, ConnectionDebugStatus } from './lib/connectionDebug'
-export { getBackupTimestamp } from './lib/utils'
+export { getBackupTimestamp, ON_LOGIN_SCRIPT } from './lib/utils'
 
 // Stores
 export { getJobs, subscribe as subscribeJobs, addJob, updateJob, removeJob, clearFinished, addJobLog, restoreJobs, upsertRemoteJob, setSyncCallbacks } from './stores/backgroundJobStore'

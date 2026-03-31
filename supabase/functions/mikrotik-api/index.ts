@@ -214,7 +214,12 @@ function getRestMethod(command: string): string {
   if (command.endsWith("/add")) return "PUT";
   if (command.endsWith("/set")) return "PATCH";
   if (command.endsWith("/remove")) return "DELETE";
-  const isPost = [...POST_COMMAND_SUFFIXES].some(s => command.endsWith(s)) || POST_EXACT_COMMANDS.has(command);
+  let isPost = POST_EXACT_COMMANDS.has(command);
+  if (!isPost) {
+    for (const s of POST_COMMAND_SUFFIXES) {
+      if (command.endsWith(s)) { isPost = true; break; }
+    }
+  }
   if (isPost) return "POST";
   return "GET";
 }
@@ -398,7 +403,11 @@ const WRITE_COMMAND_SUFFIXES = new Set([
 const WRITE_EXACT_COMMANDS = new Set(["/export", "/system/reboot"]);
 
 function isWriteCommand(command: string): boolean {
-  return [...WRITE_COMMAND_SUFFIXES].some(s => command.endsWith(s)) || WRITE_EXACT_COMMANDS.has(command);
+  if (WRITE_EXACT_COMMANDS.has(command)) return true;
+  for (const s of WRITE_COMMAND_SUFFIXES) {
+    if (command.endsWith(s)) return true;
+  }
+  return false;
 }
 
 function isUserManagerUserWriteCommand(command: string): boolean {
