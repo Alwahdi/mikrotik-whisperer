@@ -82,7 +82,9 @@ async function invokeStep(config: RouterConfig, step: PrefetchStep) {
 function getBackupTimestamp(): string {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `MUMS-${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+  const date = `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}`;
+  const time = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+  return `MUMS-${date}_${time}`;
 }
 
 // Run backup operations during login (blocks transition to dashboard)
@@ -94,7 +96,7 @@ async function runLoginBackups(
   const timestamp = getBackupTimestamp();
 
   // Step 1: User Manager database backup
-  // Mobile: /tool/user-manager/database/save name='MUMS-dd-MM-yyyy HH:mm:ss'
+  // Mobile: /tool/user-manager/database/save name='MUMS-dd-MM-yyyy_HH-mm-ss'
   // v7: /user-manager/database/save  |  v6: /tool/user-manager/database/save
   onStep("نسخ احتياطي لقاعدة بيانات يوزر مانجر...");
   try {
