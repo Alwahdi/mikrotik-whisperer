@@ -137,9 +137,12 @@ export async function invokeMikrotik(body: MikrotikInvokeBody, signal?: AbortSig
   // Try server-side API route first (faster), fall back to direct Supabase client
   try {
     return await invokeViaServer(normalizedBody, signal);
-  } catch {
-    // If the API route is unavailable (e.g. dev mode, network issue),
-    // fall back to the direct Supabase Edge Function call
+  } catch (serverErr) {
+    // Log the server-route failure for debugging, then fall back
+    if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
+      // eslint-disable-next-line no-console
+      console.debug("[invokeMikrotik] server route failed, falling back to cloud:", serverErr);
+    }
     return await invokeCloud(normalizedBody, signal);
   }
 }
