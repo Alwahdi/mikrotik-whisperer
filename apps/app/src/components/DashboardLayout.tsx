@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Wifi, Users, Settings,
   Router, Moon, Sun, LogOut, Activity, CreditCard,
-  Database, Shield, HeartPulse,
+  Database, Shield, HeartPulse, Wrench,
 } from "lucide-react";
 import { getActiveRouter } from "@repo/mikrotik";
 import { useAuth } from "@repo/auth";
@@ -54,6 +54,7 @@ const mainNavItems: NavItem[] = [
 ];
 
 const adminNavItems: NavItem[] = [
+  { path: "/tools", icon: Wrench, label: "أدوات RouterOS", roles: ["admin"] },
   { path: "/backups", icon: Database, label: "النسخ الاحتياطي", roles: ["admin"] },
   { path: "/admin/users", icon: Shield, label: "إدارة المستخدمين", roles: ["admin"] },
   { path: "/settings", icon: Settings, label: "الإعدادات", roles: ["admin"] },
