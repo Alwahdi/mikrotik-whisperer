@@ -208,6 +208,8 @@ function getRestMethod(command: string): string {
   if (command.endsWith("/add")) return "PUT";
   if (command.endsWith("/set")) return "PATCH";
   if (command.endsWith("/remove")) return "DELETE";
+  if (command.endsWith("/disable") || command.endsWith("/enable") ||
+      command.endsWith("/reset-counters") || command.endsWith("/create-and-activate-profile")) return "POST";
   return "GET";
 }
 
@@ -384,11 +386,13 @@ function isCompatibilityError(message: string): boolean {
 }
 
 function isWriteCommand(command: string): boolean {
-  return command.endsWith("/add") || command.endsWith("/set") || command.endsWith("/remove");
+  return command.endsWith("/add") || command.endsWith("/set") || command.endsWith("/remove") ||
+    command.endsWith("/disable") || command.endsWith("/enable") || command.endsWith("/reset-counters") ||
+    command.endsWith("/create-and-activate-profile");
 }
 
 function isUserManagerUserWriteCommand(command: string): boolean {
-  return /(?:\/tool)?\/user-manager\/user\/(add|set|remove)$/.test(command);
+  return /(?:\/tool)?\/user-manager\/user\/(add|set|remove|disable|enable|create-and-activate-profile)$/.test(command);
 }
 
 function isAlreadyExistsError(message: string): boolean {

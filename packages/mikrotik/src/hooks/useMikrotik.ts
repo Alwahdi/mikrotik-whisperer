@@ -172,29 +172,42 @@ export function useHotspotAllUsers() {
 }
 
 // ─── Hotspot Mutations ─────────────────────
+// Mobile uses dedicated /ip/hotspot/user/disable and /enable with numbers= parameter
+// NOT /ip/hotspot/user/set + disabled=true/false
 export function useHotspotUserAction() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ action, id, data }: { action: string; id?: string; data?: Record<string, any> }) => {
-      const args: string[] = [];
-      if (id) args.push(`=.id=${id}`);
-      if (data) {
-        for (const [k, v] of Object.entries(data)) args.push(`=${k}=${v}`);
-      }
-      
       const endpointMap: Record<string, string> = {
-        disable: "/ip/hotspot/user/set",
-        enable: "/ip/hotspot/user/set",
+        disable: "/ip/hotspot/user/disable",
+        enable: "/ip/hotspot/user/enable",
         remove: "/ip/hotspot/user/remove",
         add: "/ip/hotspot/user/add",
         kick: "/ip/hotspot/active/remove",
+        "reset-counters": "/ip/hotspot/user/reset-counters",
+        set: "/ip/hotspot/user/set",
       };
-      
-      const finalArgs = [...args];
-      if (action === "disable") finalArgs.push("=disabled=true");
-      if (action === "enable") finalArgs.push("=disabled=false");
-      
-      return callMikrotikApi(endpointMap[action] || `/ip/hotspot/user/${action}`, { args: finalArgs });
+
+      const args: string[] = [];
+
+      if (action === "disable" || action === "enable" || action === "reset-counters") {
+        // Mobile pattern: /ip/hotspot/user/disable numbers=<id>
+        if (id) args.push(`=numbers=${id}`);
+      } else if (action === "remove") {
+        // Mobile pattern: /ip/hotspot/user/remove .id=<id>
+        if (id) args.push(`=.id=${id}`);
+      } else if (action === "kick") {
+        // Mobile pattern: /ip/hotspot/active/remove .id=<id>
+        if (id) args.push(`=.id=${id}`);
+      } else {
+        // add / set — pass .id and all data fields
+        if (id) args.push(`=.id=${id}`);
+        if (data) {
+          for (const [k, v] of Object.entries(data)) args.push(`=${k}=${v}`);
+        }
+      }
+
+      return callMikrotikApi(endpointMap[action] || `/ip/hotspot/user/${action}`, { args });
     },
     onSuccess: () => {
       const routerKey = getRouterKey();
@@ -368,28 +381,38 @@ export function useUserManagerSessions(options?: { enabled?: boolean }) {
 }
 
 // ─── User Manager Mutations ────────────────
+// Mobile uses dedicated /user-manager/user/disable and /enable with numbers= parameter
+// v7: /tool/user-manager/user/disable numbers=<username>
+// v6: /user-manager/user/disable numbers=<username>
+// NOT /user-manager/user/set + disabled=true/false
 export function useUserManagerAction() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ action, id, data }: { action: string; id?: string; data?: Record<string, any> }) => {
-      const args: string[] = [];
-      if (id) args.push(`=.id=${id}`);
-      if (data) {
-        for (const [k, v] of Object.entries(data)) args.push(`=${k}=${v}`);
-      }
-
       const endpointMap: Record<string, string> = {
-        disable: "/user-manager/user/set",
-        enable: "/user-manager/user/set",
+        disable: "/user-manager/user/disable",
+        enable: "/user-manager/user/enable",
         remove: "/user-manager/user/remove",
         add: "/user-manager/user/add",
       };
 
-      const finalArgs = [...args];
-      if (action === "disable") finalArgs.push("=disabled=true");
-      if (action === "enable") finalArgs.push("=disabled=false");
+      const args: string[] = [];
 
-      return callMikrotikApi(endpointMap[action] || `/user-manager/user/${action}`, { args: finalArgs });
+      if (action === "disable" || action === "enable") {
+        // Mobile pattern: /user-manager/user/disable numbers=<id>
+        if (id) args.push(`=numbers=${id}`);
+      } else if (action === "remove") {
+        // Mobile pattern: /user-manager/user/remove .id=<id>
+        if (id) args.push(`=.id=${id}`);
+      } else {
+        // add — pass all data fields
+        if (id) args.push(`=.id=${id}`);
+        if (data) {
+          for (const [k, v] of Object.entries(data)) args.push(`=${k}=${v}`);
+        }
+      }
+
+      return callMikrotikApi(endpointMap[action] || `/user-manager/user/${action}`, { args });
     },
     onMutate: async ({ action, id, data }) => {
       const routerKey = getRouterKey();
@@ -490,6 +513,8 @@ export function useUserManagerAction() {
 }
 
 // ─── User Manager Profiles Mutations ────────────────
+// Mobile v7: /tool/user-manager/profile/add name=X name-for-users=X starts-at='logon' price=X validity=X owner=X
+// Mobile v6: /user-manager/profile/add name=X name-for-users=X starts-when='first-auth' price=X validity=X
 export function useUserManagerProfileAction() {
   const qc = useQueryClient();
   return useMutation({
@@ -499,6 +524,19 @@ export function useUserManagerProfileAction() {
       if (data) {
         for (const [k, v] of Object.entries(data)) {
           if (v !== undefined && v !== null && `${v}` !== "") args.push(`=${k}=${v}`);
+        }
+      }
+
+      // For profile creation, ensure critical parameters are included
+      // Mobile app always sends starts-at='logon' (v7) / starts-when='first-auth' (v6)
+      if (action === "add") {
+        const hasStartsAt = args.some(a => a.startsWith("=starts-at=") || a.startsWith("=starts-when="));
+        if (!hasStartsAt) {
+          args.push("=starts-at=logon");
+        }
+        const hasNameForUsers = args.some(a => a.startsWith("=name-for-users="));
+        if (!hasNameForUsers && data?.name) {
+          args.push(`=name-for-users=${data.name}`);
         }
       }
 
