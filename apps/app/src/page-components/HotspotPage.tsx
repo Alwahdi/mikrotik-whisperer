@@ -4,11 +4,13 @@ import { useState, useMemo } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import {
   useHotspotUsers, useHotspotAllUsers, useHotspotProfiles, useHotspotUserAction,
+  useIPBindings, useIPBindingAction, useHotspotServers,
 } from "@repo/mikrotik";
 import {
   Wifi, RefreshCw, Users, Search,
   MoreHorizontal, UserPlus, Ban, Trash2, CheckCircle,
   XCircle, Eye, LogOut, Home, ChevronLeft, ChevronRight,
+  Shield, Server,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/design-system/components/ui/tabs";
@@ -46,8 +48,11 @@ export default function HotspotPage() {
   const { data: activeUsers, isLoading: loadingActive } = useHotspotUsers();
   const { data: allUsers, isLoading: loadingAll } = useHotspotAllUsers();
   const { data: profiles } = useHotspotProfiles();
+  const { data: ipBindings, isLoading: loadingBindings } = useIPBindings();
+  const { data: hotspotServers } = useHotspotServers();
   const queryClient = useQueryClient();
   const action = useHotspotUserAction();
+  const bindingAction = useIPBindingAction();
 
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -56,14 +61,18 @@ export default function HotspotPage() {
   const [newUser, setNewUser] = useState({ name: "", password: "", profile: "default" });
   const [activePage, setActivePage] = useState(1);
   const [usersPage, setUsersPage] = useState(1);
+  const [bindingPage, setBindingPage] = useState(1);
+  const [newBinding, setNewBinding] = useState({ "mac-address": "", type: "blocked", server: "all" });
 
   const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["mikrotik", "hotspot"] });
+    queryClient.invalidateQueries({ queryKey: ["mikrotik"] });
     toast.success("جاري تحديث البيانات...");
   };
 
   const allUsersList = useMemo(() => Array.isArray(allUsers) ? allUsers : [], [allUsers]);
   const activeList = useMemo(() => Array.isArray(activeUsers) ? activeUsers : [], [activeUsers]);
+  const bindingsList = useMemo(() => Array.isArray(ipBindings) ? ipBindings : [], [ipBindings]);
+  const serversList = useMemo(() => Array.isArray(hotspotServers) ? hotspotServers : [], [hotspotServers]);
 
   const filteredAll = useMemo(() => {
     if (!search) return allUsersList;
@@ -83,8 +92,10 @@ export default function HotspotPage() {
 
   const activeTotalPages = Math.max(1, Math.ceil(filteredActive.length / PAGE_SIZE));
   const usersTotalPages = Math.max(1, Math.ceil(filteredAll.length / PAGE_SIZE));
+  const bindingTotalPages = Math.max(1, Math.ceil(bindingsList.length / PAGE_SIZE));
   const paginatedActive = filteredActive.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
   const paginatedAll = filteredAll.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE);
+  const paginatedBindings = bindingsList.slice((bindingPage - 1) * PAGE_SIZE, bindingPage * PAGE_SIZE);
 
   const handleAction = (userAction: string, user: any) => {
     const id = user[".id"] || user.id;
@@ -112,6 +123,26 @@ export default function HotspotPage() {
     setSearch(val);
     setActivePage(1);
     setUsersPage(1);
+  };
+
+  const handleBlockMAC = (mac: string) => {
+    if (!mac) { toast.error("عنوان MAC مطلوب"); return; }
+    bindingAction.mutate({
+      action: "add",
+      data: { type: "blocked", server: "all", "mac-address": mac },
+    });
+  };
+
+  const handleAddBinding = () => {
+    if (!newBinding["mac-address"]) { toast.error("عنوان MAC مطلوب"); return; }
+    bindingAction.mutate({
+      action: "add",
+      data: newBinding,
+    }, { onSuccess: () => setNewBinding({ "mac-address": "", type: "blocked", server: "all" }) });
+  };
+
+  const handleRemoveBinding = (id: string) => {
+    bindingAction.mutate({ action: "remove", id });
   };
 
   return (
@@ -187,6 +218,8 @@ export default function HotspotPage() {
           <TabsTrigger value="active" className="text-xs">المتصلين {!loadingActive && `(${activeList.length})`}</TabsTrigger>
           <TabsTrigger value="users" className="text-xs">المستخدمين {!loadingAll && `(${allUsersList.length})`}</TabsTrigger>
           <TabsTrigger value="profiles" className="text-xs">البروفايلات</TabsTrigger>
+          <TabsTrigger value="bindings" className="text-xs"><Shield className="h-3 w-3 ml-1" />حظر MAC {!loadingBindings && `(${bindingsList.length})`}</TabsTrigger>
+          <TabsTrigger value="servers" className="text-xs"><Server className="h-3 w-3 ml-1" />الخوادم</TabsTrigger>
         </TabsList>
 
         {/* Active Users */}
@@ -231,9 +264,16 @@ export default function HotspotPage() {
                         <TableCell className="text-xs font-mono">{formatBytes(user["bytes-in"])}</TableCell>
                         <TableCell className="text-xs font-mono">{formatBytes(user["bytes-out"])}</TableCell>
                         <TableCell className="text-center">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => handleAction("kick", user)} title="فصل">
-                            <LogOut className="h-3.5 w-3.5" />
-                          </Button>
+                          <div className="flex items-center gap-0.5 justify-center">
+                            <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => handleAction("kick", user)} title="فصل">
+                              <LogOut className="h-3.5 w-3.5" />
+                            </Button>
+                            {user["mac-address"] && (
+                              <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-orange-600" onClick={() => handleBlockMAC(user["mac-address"])} title="حظر MAC">
+                                <Shield className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -316,6 +356,14 @@ export default function HotspotPage() {
                                 <DropdownMenuItem onClick={() => setDeleteTarget(user)} className="text-destructive">
                                   <Trash2 className="h-3.5 w-3.5 ml-2" /> حذف
                                 </DropdownMenuItem>
+                                {user["mac-address"] && (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => handleBlockMAC(user["mac-address"])} className="text-orange-600">
+                                      <Shield className="h-3.5 w-3.5 ml-2" /> حظر MAC
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
@@ -350,6 +398,103 @@ export default function HotspotPage() {
             {(!Array.isArray(profiles) || profiles.length === 0) && (
               <div className="col-span-full text-center py-10">
                 <p className="text-muted-foreground text-sm">لا توجد بروفايلات</p>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* IP Bindings (MAC Blocking) - Mobile: /ip/hotspot/ip-binding */}
+        <TabsContent value="bindings">
+          <div className="flex items-center gap-2 mb-3">
+            <Input
+              placeholder="عنوان MAC..."
+              value={newBinding["mac-address"]}
+              onChange={(e) => setNewBinding(p => ({ ...p, "mac-address": e.target.value }))}
+              className="text-sm flex-1"
+              dir="ltr"
+            />
+            <select
+              value={newBinding.type}
+              onChange={(e) => setNewBinding(p => ({ ...p, type: e.target.value }))}
+              className="text-xs border rounded px-2 py-2 bg-background text-foreground"
+            >
+              <option value="blocked">حظر</option>
+              <option value="bypassed">تجاوز</option>
+              <option value="regular">عادي</option>
+            </select>
+            <Button size="sm" onClick={handleAddBinding} disabled={bindingAction.isPending}>
+              <Ban className="h-3.5 w-3.5 ml-1" />إضافة
+            </Button>
+          </div>
+          <Card className="overflow-hidden">
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right text-xs">MAC</TableHead>
+                    <TableHead className="text-right text-xs">IP</TableHead>
+                    <TableHead className="text-right text-xs">الخادم</TableHead>
+                    <TableHead className="text-right text-xs">النوع</TableHead>
+                    <TableHead className="text-right text-xs w-[60px]"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loadingBindings ? Array.from({ length: 3 }).map((_, i) => (
+                    <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-6 w-full" /></TableCell></TableRow>
+                  )) : paginatedBindings.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground text-xs py-6">لا يوجد ربط IP</TableCell></TableRow>
+                  ) : paginatedBindings.map((b: any, i: number) => (
+                    <TableRow key={i}>
+                      <TableCell className="font-mono text-xs" dir="ltr">{b["mac-address"] || "—"}</TableCell>
+                      <TableCell className="font-mono text-xs" dir="ltr">{b.address || "—"}</TableCell>
+                      <TableCell className="text-xs">{b.server || "all"}</TableCell>
+                      <TableCell>
+                        <Badge variant={b.type === "blocked" ? "destructive" : b.type === "bypassed" ? "secondary" : "outline"} className="text-[10px]">
+                          {b.type === "blocked" ? "محظور" : b.type === "bypassed" ? "متجاوز" : b.type || "عادي"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveBinding(b[".id"] || b.id)}>
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {bindingsList.length > PAGE_SIZE && (
+                <PaginationBar page={bindingPage} totalPages={bindingTotalPages} onPageChange={setBindingPage} total={bindingsList.length} />
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Hotspot Servers - Mobile: /ip/hotspot/print */}
+        <TabsContent value="servers">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {serversList.map((srv: any, i: number) => (
+              <Card key={i} className="hover:border-foreground/10 transition-colors">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Server className="h-4 w-4 text-primary" />
+                    <h3 className="font-semibold text-foreground text-sm">{srv.name || "—"}</h3>
+                    {srv.disabled === "true" ? (
+                      <Badge variant="destructive" className="text-[10px] mr-auto">معطل</Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-[10px] mr-auto">نشط</Badge>
+                    )}
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    {srv.interface && <InfoRow label="الواجهة" value={srv.interface} />}
+                    {srv["address-pool"] && <InfoRow label="نطاق IP" value={srv["address-pool"]} />}
+                    {srv.profile && <InfoRow label="البروفايل" value={srv.profile} />}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            {serversList.length === 0 && (
+              <div className="col-span-full text-center py-10">
+                <p className="text-muted-foreground text-sm">لا توجد خوادم هوتسبوت</p>
               </div>
             )}
           </div>
