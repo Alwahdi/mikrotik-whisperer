@@ -11,6 +11,11 @@ import {
   useUserManagerCount,
   useUserManagerSearchUsers,
   useUserManagerBatchAdd,
+  useUserManagerPayments,
+  useUserManagerLimitations,
+  useUserManagerLimitationAction,
+  useUserManagerCustomers,
+  useDatabaseAction,
   type BatchAddUser,
 } from "@repo/mikrotik";
 import {
@@ -18,7 +23,7 @@ import {
   UserCheck, UserX, Search, MoreHorizontal, UserPlus,
   Ban, Trash2, CheckCircle, XCircle, Eye, ChevronLeft, ChevronRight,
   Home, PackagePlus, PencilLine, AlertCircle, CheckSquare, Square, Loader2,
-  Upload, FileText,
+  Upload, FileText, DollarSign, Shield, Database, UserCog,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@repo/design-system/components/ui/tabs";
@@ -45,12 +50,12 @@ import {
 } from "@repo/design-system/components/ui/breadcrumb";
 import Link from "next/link";
 import { toast } from "sonner";
-import { getActiveRouter } from "@repo/mikrotik";
+import { getActiveRouter, getBackupTimestamp } from "@repo/mikrotik";
 
 const PAGE_SIZE = 20;
 
 export default function UserManagerPage() {
-  const [activeTab, setActiveTab] = useState<"users" | "profiles" | "sessions">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "profiles" | "sessions" | "payments" | "limitations" | "customers">("users");
   const [loadAllUsers, setLoadAllUsers] = useState(false);
   const [fullLoadProgress, setFullLoadProgress] = useState(0);
   const [fullLoadStage, setFullLoadStage] = useState<"idle" | "starting" | "loading" | "done">("idle");
@@ -69,6 +74,11 @@ export default function UserManagerPage() {
   const action = useUserManagerAction();
   const profileAction = useUserManagerProfileAction();
   const batchAdd = useUserManagerBatchAdd();
+  const { data: payments, isLoading: loadingPayments } = useUserManagerPayments({ enabled: activeTab === "payments" });
+  const { data: limitations, isLoading: loadingLimitations } = useUserManagerLimitations({ enabled: activeTab === "limitations" });
+  const limitationAction = useUserManagerLimitationAction();
+  const { data: customers, isLoading: loadingCustomers } = useUserManagerCustomers({ enabled: activeTab === "customers" });
+  const dbAction = useDatabaseAction();
 
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<any>(null);
@@ -320,7 +330,8 @@ export default function UserManagerPage() {
       toast.error("اسم المستخدم وكلمة المرور مطلوبان");
       return;
     }
-    const data: Record<string, any> = { username: newUser.name, password: newUser.password, owner: "admin" };
+    // Mobile pattern: username, password, customer=admin, group/profile sent separately via create-and-activate-profile
+    const data: Record<string, any> = { username: newUser.name, password: newUser.password, customer: "admin" };
     if (newUser.profile) data.group = newUser.profile;
     action.mutate({ action: "add", data }, {
       onSuccess: () => {
@@ -620,8 +631,8 @@ export default function UserManagerPage() {
         </div>
       )}
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "users" | "profiles" | "sessions")} dir="rtl">
-        <TabsList className="bg-muted mb-3 w-full justify-start">
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} dir="rtl">
+        <TabsList className="bg-muted mb-3 w-full justify-start flex-wrap">
           <TabsTrigger value="users" className="text-xs">
             المستخدمين {!loadingCount && !loadingUsers && `(${totalCount})`}
           </TabsTrigger>
@@ -630,6 +641,15 @@ export default function UserManagerPage() {
           </TabsTrigger>
           <TabsTrigger value="sessions" className="text-xs">
             الجلسات {!loadingSessions && `(${allSessions.length})`}
+          </TabsTrigger>
+          <TabsTrigger value="payments" className="text-xs">
+            <DollarSign className="h-3 w-3 ml-1" />المدفوعات
+          </TabsTrigger>
+          <TabsTrigger value="limitations" className="text-xs">
+            <Shield className="h-3 w-3 ml-1" />القيود
+          </TabsTrigger>
+          <TabsTrigger value="customers" className="text-xs">
+            <UserCog className="h-3 w-3 ml-1" />العملاء
           </TabsTrigger>
         </TabsList>
 
@@ -864,7 +884,143 @@ export default function UserManagerPage() {
             )}
           </div>
         </TabsContent>
+
+        {/* Payments Tab - Mobile: /user-manager/payment/print */}
+        <TabsContent value="payments">
+          <div className="rounded-md border border-border overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="p-2.5 text-right text-xs font-medium text-muted-foreground">المستخدم</th>
+                  <th className="p-2.5 text-right text-xs font-medium text-muted-foreground">الباقة</th>
+                  <th className="p-2.5 text-right text-xs font-medium text-muted-foreground">السعر</th>
+                  <th className="p-2.5 text-right text-xs font-medium text-muted-foreground hidden sm:table-cell">الطريقة</th>
+                  <th className="p-2.5 text-right text-xs font-medium text-muted-foreground hidden sm:table-cell">التاريخ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingPayments ? Array.from({ length: 3 }).map((_, i) => (
+                  <tr key={i}><td colSpan={5} className="p-2.5"><Skeleton className="h-5 w-full" /></td></tr>
+                )) : (!Array.isArray(payments) || payments.length === 0) ? (
+                  <tr><td colSpan={5} className="text-center text-muted-foreground text-xs py-8">لا توجد مدفوعات</td></tr>
+                ) : payments.map((p: any, i: number) => (
+                  <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                    <td className="p-2.5 font-medium text-foreground text-sm">{p.user || "—"}</td>
+                    <td className="p-2.5 text-muted-foreground text-xs">{p.profile || "—"}</td>
+                    <td className="p-2.5 text-foreground text-sm font-mono">{p.price || "—"}</td>
+                    <td className="p-2.5 text-muted-foreground text-xs hidden sm:table-cell">{p.method || "—"}</td>
+                    <td className="p-2.5 text-muted-foreground text-xs font-mono hidden sm:table-cell">{p.ts || p["transaction-id"] || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </TabsContent>
+
+        {/* Limitations Tab - Mobile: /user-manager/limitation */}
+        <TabsContent value="limitations">
+          <div className="rounded-md border border-border overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="p-2.5 text-right text-xs font-medium text-muted-foreground">الاسم</th>
+                  <th className="p-2.5 text-right text-xs font-medium text-muted-foreground">سرعة التنزيل</th>
+                  <th className="p-2.5 text-right text-xs font-medium text-muted-foreground">سرعة الرفع</th>
+                  <th className="p-2.5 text-right text-xs font-medium text-muted-foreground hidden sm:table-cell">حد النقل</th>
+                  <th className="p-2.5 text-right text-xs font-medium text-muted-foreground hidden sm:table-cell">حد الوقت</th>
+                  <th className="p-2.5 text-right text-xs font-medium text-muted-foreground w-[60px]"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingLimitations ? Array.from({ length: 3 }).map((_, i) => (
+                  <tr key={i}><td colSpan={6} className="p-2.5"><Skeleton className="h-5 w-full" /></td></tr>
+                )) : (!Array.isArray(limitations) || limitations.length === 0) ? (
+                  <tr><td colSpan={6} className="text-center text-muted-foreground text-xs py-8">لا توجد قيود</td></tr>
+                ) : limitations.map((l: any, i: number) => (
+                  <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                    <td className="p-2.5 font-medium text-foreground text-sm">{l.name || "—"}</td>
+                    <td className="p-2.5 text-foreground text-xs font-mono">{l["rate-limit-rx"] || l["download-limit"] || "—"}</td>
+                    <td className="p-2.5 text-foreground text-xs font-mono">{l["rate-limit-tx"] || l["upload-limit"] || "—"}</td>
+                    <td className="p-2.5 text-muted-foreground text-xs font-mono hidden sm:table-cell">{l["transfer-limit"] || "—"}</td>
+                    <td className="p-2.5 text-muted-foreground text-xs font-mono hidden sm:table-cell">{l["uptime-limit"] || "—"}</td>
+                    <td className="p-2.5">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => limitationAction.mutate({ action: "remove", id: l[".id"] || l.id })}>
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </TabsContent>
+
+        {/* Customers Tab - Mobile: /user-manager/customer/print */}
+        <TabsContent value="customers">
+          <div className="rounded-md border border-border overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="p-2.5 text-right text-xs font-medium text-muted-foreground">تسجيل الدخول</th>
+                  <th className="p-2.5 text-right text-xs font-medium text-muted-foreground">الصلاحيات</th>
+                  <th className="p-2.5 text-right text-xs font-medium text-muted-foreground hidden sm:table-cell">الأب</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingCustomers ? Array.from({ length: 3 }).map((_, i) => (
+                  <tr key={i}><td colSpan={3} className="p-2.5"><Skeleton className="h-5 w-full" /></td></tr>
+                )) : (!Array.isArray(customers) || customers.length === 0) ? (
+                  <tr><td colSpan={3} className="text-center text-muted-foreground text-xs py-8">لا يوجد عملاء</td></tr>
+                ) : customers.map((c: any, i: number) => (
+                  <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                    <td className="p-2.5 font-medium text-foreground text-sm">{c.login || "—"}</td>
+                    <td className="p-2.5 text-muted-foreground text-xs">{c.permissions || "—"}</td>
+                    <td className="p-2.5 text-muted-foreground text-xs hidden sm:table-cell">{c.parent || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </TabsContent>
       </Tabs>
+
+      {/* Database Maintenance - Mobile: /user-manager/database/save & /rebuild */}
+      <div className="mt-6 border border-border rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Database className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold text-foreground">صيانة قاعدة البيانات</h3>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={dbAction.isPending}
+            onClick={() => {
+              const name = getBackupTimestamp();
+              dbAction.mutate({ action: "save", name });
+            }}
+          >
+            {dbAction.isPending ? <Loader2 className="h-3.5 w-3.5 ml-1 animate-spin" /> : <Database className="h-3.5 w-3.5 ml-1" />}
+            حفظ قاعدة البيانات
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={dbAction.isPending}
+            onClick={() => dbAction.mutate({ action: "rebuild" })}
+          >
+            إعادة بناء
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={dbAction.isPending}
+            onClick={() => dbAction.mutate({ action: "optimize-db" })}
+          >
+            تحسين
+          </Button>
+        </div>
+      </div>
 
       {/* Add User Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>

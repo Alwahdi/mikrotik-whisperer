@@ -3,7 +3,7 @@ export type ConnectionDebugStatus = "ok" | "error";
 export interface ConnectionDebugEntry {
   id: string;
   ts: number;
-  route: "cloud";
+  route: "cloud" | "server";
   host?: string;
   mode?: string;
   protocol?: string;

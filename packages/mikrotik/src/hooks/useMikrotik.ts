@@ -172,29 +172,42 @@ export function useHotspotAllUsers() {
 }
 
 // ─── Hotspot Mutations ─────────────────────
+// Mobile uses dedicated /ip/hotspot/user/disable and /enable with numbers= parameter
+// NOT /ip/hotspot/user/set + disabled=true/false
 export function useHotspotUserAction() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ action, id, data }: { action: string; id?: string; data?: Record<string, any> }) => {
-      const args: string[] = [];
-      if (id) args.push(`=.id=${id}`);
-      if (data) {
-        for (const [k, v] of Object.entries(data)) args.push(`=${k}=${v}`);
-      }
-      
       const endpointMap: Record<string, string> = {
-        disable: "/ip/hotspot/user/set",
-        enable: "/ip/hotspot/user/set",
+        disable: "/ip/hotspot/user/disable",
+        enable: "/ip/hotspot/user/enable",
         remove: "/ip/hotspot/user/remove",
         add: "/ip/hotspot/user/add",
         kick: "/ip/hotspot/active/remove",
+        "reset-counters": "/ip/hotspot/user/reset-counters",
+        set: "/ip/hotspot/user/set",
       };
-      
-      const finalArgs = [...args];
-      if (action === "disable") finalArgs.push("=disabled=true");
-      if (action === "enable") finalArgs.push("=disabled=false");
-      
-      return callMikrotikApi(endpointMap[action] || `/ip/hotspot/user/${action}`, { args: finalArgs });
+
+      const args: string[] = [];
+
+      if (action === "disable" || action === "enable" || action === "reset-counters") {
+        // Mobile pattern: /ip/hotspot/user/disable numbers=<id>
+        if (id) args.push(`=numbers=${id}`);
+      } else if (action === "remove") {
+        // Mobile pattern: /ip/hotspot/user/remove .id=<id>
+        if (id) args.push(`=.id=${id}`);
+      } else if (action === "kick") {
+        // Mobile pattern: /ip/hotspot/active/remove .id=<id>
+        if (id) args.push(`=.id=${id}`);
+      } else {
+        // add / set — pass .id and all data fields
+        if (id) args.push(`=.id=${id}`);
+        if (data) {
+          for (const [k, v] of Object.entries(data)) args.push(`=${k}=${v}`);
+        }
+      }
+
+      return callMikrotikApi(endpointMap[action] || `/ip/hotspot/user/${action}`, { args });
     },
     onSuccess: () => {
       const routerKey = getRouterKey();
@@ -368,28 +381,66 @@ export function useUserManagerSessions(options?: { enabled?: boolean }) {
 }
 
 // ─── User Manager Mutations ────────────────
+// Mobile uses dedicated /user-manager/user/disable and /enable with numbers= parameter
+// v7: /tool/user-manager/user/disable numbers=<username>
+// v6: /user-manager/user/disable numbers=<username>
+// NOT /user-manager/user/set + disabled=true/false
 export function useUserManagerAction() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ action, id, data }: { action: string; id?: string; data?: Record<string, any> }) => {
-      const args: string[] = [];
-      if (id) args.push(`=.id=${id}`);
-      if (data) {
-        for (const [k, v] of Object.entries(data)) args.push(`=${k}=${v}`);
-      }
-
       const endpointMap: Record<string, string> = {
-        disable: "/user-manager/user/set",
-        enable: "/user-manager/user/set",
+        disable: "/user-manager/user/disable",
+        enable: "/user-manager/user/enable",
         remove: "/user-manager/user/remove",
         add: "/user-manager/user/add",
       };
 
-      const finalArgs = [...args];
-      if (action === "disable") finalArgs.push("=disabled=true");
-      if (action === "enable") finalArgs.push("=disabled=false");
+      const args: string[] = [];
 
-      return callMikrotikApi(endpointMap[action] || `/user-manager/user/${action}`, { args: finalArgs });
+      if (action === "disable" || action === "enable") {
+        // Mobile pattern: /user-manager/user/disable numbers=<id>
+        if (id) args.push(`=numbers=${id}`);
+      } else if (action === "remove") {
+        // Mobile pattern: /user-manager/user/remove .id=<id>
+        if (id) args.push(`=.id=${id}`);
+      } else if (action === "add" && data) {
+        // Mobile app two-step pattern for user creation:
+        // Step 1: /user-manager/user/add username=X password=Y customer=admin
+        // Step 2: /user-manager/user/create-and-activate-profile numbers=X profile=P customer=admin
+        const username = data.username || data.name || "";
+        const password = data.password || "";
+        const profile = data.group || data.profile || "";
+        const customer = data.customer || data.owner || "admin";
+
+        // Step 1: Create the user (without group — mobile doesn't use group here)
+        const addArgs = [`=username=${username}`, `=password=${password}`, `=customer=${customer}`];
+        const addResult = await callMikrotikApi("/user-manager/user/add", { args: addArgs });
+
+        // Step 2: Activate profile on the user (matching mobile exactly)
+        if (profile) {
+          try {
+            await callMikrotikApi("/user-manager/user/create-and-activate-profile", {
+              args: [`=numbers=${username}`, `=profile=${profile}`, `=customer=${customer}`],
+            });
+          } catch (err: unknown) {
+            // Profile activation may fail on some RouterOS versions;
+            // the edge function has extensive v6/v7 fallback logic for this.
+            const msg = err instanceof Error ? err.message : "unknown";
+            console.warn("[user-manager] create-and-activate-profile fallback:", msg);
+          }
+        }
+
+        return addResult;
+      } else {
+        // Other actions — pass all data fields
+        if (id) args.push(`=.id=${id}`);
+        if (data) {
+          for (const [k, v] of Object.entries(data)) args.push(`=${k}=${v}`);
+        }
+      }
+
+      return callMikrotikApi(endpointMap[action] || `/user-manager/user/${action}`, { args });
     },
     onMutate: async ({ action, id, data }) => {
       const routerKey = getRouterKey();
@@ -490,6 +541,8 @@ export function useUserManagerAction() {
 }
 
 // ─── User Manager Profiles Mutations ────────────────
+// Mobile v7: /tool/user-manager/profile/add name=X name-for-users=X starts-at='logon' price=X validity=X owner=X
+// Mobile v6: /user-manager/profile/add name=X name-for-users=X starts-when='first-auth' price=X validity=X
 export function useUserManagerProfileAction() {
   const qc = useQueryClient();
   return useMutation({
@@ -499,6 +552,19 @@ export function useUserManagerProfileAction() {
       if (data) {
         for (const [k, v] of Object.entries(data)) {
           if (v !== undefined && v !== null && `${v}` !== "") args.push(`=${k}=${v}`);
+        }
+      }
+
+      // For profile creation, ensure critical parameters are included
+      // Mobile app always sends starts-at='logon' (v7) / starts-when='first-auth' (v6)
+      if (action === "add") {
+        const hasStartsAt = args.some(a => a.startsWith("=starts-at=") || a.startsWith("=starts-when="));
+        if (!hasStartsAt) {
+          args.push("=starts-at=logon");
+        }
+        const hasNameForUsers = args.some(a => a.startsWith("=name-for-users="));
+        if (!hasNameForUsers && data?.name) {
+          args.push(`=name-for-users=${data.name}`);
         }
       }
 
@@ -551,12 +617,12 @@ export function useUserManagerBatchAdd() {
       if (!router) throw new Error("لم يتم إعداد بيانات الاتصال");
 
       const isRestMode = router.mode === "rest";
-      // REST mode is stateless/slower, so use smaller chunks and no concurrency.
+      // REST mode is stateless/slower, so use smaller chunks and limited concurrency.
       // API (WebSocket) mode can handle larger batches in parallel.
-      const REST_CHUNK_SIZE = 6;
-      const API_CHUNK_SIZE = 40;
-      const REST_CONCURRENCY = 1;
-      const API_CONCURRENCY = 4;
+      const REST_CHUNK_SIZE = 10;
+      const API_CHUNK_SIZE = 60;
+      const REST_CONCURRENCY = 2;
+      const API_CONCURRENCY = 6;
       const chunkSize = isRestMode ? REST_CHUNK_SIZE : API_CHUNK_SIZE;
       const concurrency = isRestMode ? REST_CONCURRENCY : API_CONCURRENCY;
 
@@ -579,25 +645,41 @@ export function useUserManagerBatchAdd() {
       };
 
       const processChunk = async (chunk: BatchAddUser[]) => {
-        const commands = chunk.map((u) => ({
-          command: "/user-manager/user/add",
-          args: [
-            `=username=${u.username}`,
-            `=password=${u.password}`,
-            `=group=${u.group}`,
-            `=owner=admin`,
-          ],
-        }));
+        // Mobile app pattern: TWO commands per user (add + activate-profile)
+        const COMMANDS_PER_USER = 2;
+        const commands = chunk.flatMap((u) => [
+          {
+            command: "/user-manager/user/add",
+            args: [
+              `=username=${u.username}`,
+              `=password=${u.password}`,
+              `=customer=admin`,
+            ],
+          },
+          {
+            command: "/user-manager/user/create-and-activate-profile",
+            args: [
+              `=numbers=${u.username}`,
+              `=profile=${u.group}`,
+              `=customer=admin`,
+            ],
+          },
+        ]);
 
         try {
           const result = await callMikrotikAction("batch", { commands });
           const errs = Array.isArray(result?.errors) ? result.errors : [];
           for (let j = 0; j < chunk.length; j++) {
-            const msg = typeof errs[j] === "string" ? errs[j].trim() : "";
-            if (!msg || isDuplicate(msg)) {
+            const addIdx = j * COMMANDS_PER_USER;
+            const activateIdx = j * COMMANDS_PER_USER + 1;
+            const addMsg = typeof errs[addIdx] === "string" ? errs[addIdx].trim() : "";
+            const activateMsg = typeof errs[activateIdx] === "string" ? errs[activateIdx].trim() : "";
+            // User creation succeeded if add succeeded or was duplicate
+            // Activation failure is non-fatal (edge function has fallback logic)
+            if (!addMsg || isDuplicate(addMsg)) {
               succeeded++;
             } else {
-              errors.push({ username: chunk[j].username, error: msg });
+              errors.push({ username: chunk[j].username, error: addMsg || activateMsg });
             }
           }
         } catch (err: any) {
@@ -720,6 +802,378 @@ export function useMikrotikCommand() {
   return useMutation({
     mutationFn: async ({ endpoint, args }: { endpoint: string; args?: string[] }) => {
       return callMikrotikApi(endpoint, args ? { args } : undefined);
+    },
+  });
+}
+
+// ─── Hotspot IP Bindings (MAC blocking) ────
+// Mobile: /ip/hotspot/ip-binding/print return .id,mac-address,address,server,type
+export function useIPBindings() {
+  const routerKey = getRouterKey();
+  return useQuery({
+    queryKey: ["mikrotik", routerKey, "hotspot", "ip-binding"],
+    queryFn: () => callMikrotikApi("/ip/hotspot/ip-binding/print", {
+      args: ["=.proplist=.id,mac-address,address,server,type,comment"],
+    }),
+    enabled: useEnabled(),
+    ...CACHE_OPTIONS,
+  });
+}
+
+// Mobile: /ip/hotspot/ip-binding/add type=blocked server=all mac-address=X
+// Mobile: /ip/hotspot/ip-binding/remove .id=X
+export function useIPBindingAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ action, id, data }: { action: string; id?: string; data?: Record<string, any> }) => {
+      const endpointMap: Record<string, string> = {
+        add: "/ip/hotspot/ip-binding/add",
+        remove: "/ip/hotspot/ip-binding/remove",
+        set: "/ip/hotspot/ip-binding/set",
+      };
+
+      const args: string[] = [];
+      if (action === "remove") {
+        if (id) args.push(`=.id=${id}`);
+      } else {
+        if (id) args.push(`=.id=${id}`);
+        if (data) {
+          for (const [k, v] of Object.entries(data)) args.push(`=${k}=${v}`);
+        }
+      }
+
+      return callMikrotikApi(endpointMap[action] || `/ip/hotspot/ip-binding/${action}`, { args });
+    },
+    onSuccess: () => {
+      const routerKey = getRouterKey();
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "hotspot", "ip-binding"] });
+      toast.success("تم تنفيذ العملية بنجاح");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "فشلت العملية");
+    },
+  });
+}
+
+// ─── Hotspot Servers ───────────────────────
+// Mobile: /ip/hotspot/print return name
+export function useHotspotServers() {
+  const routerKey = getRouterKey();
+  return useQuery({
+    queryKey: ["mikrotik", routerKey, "hotspot", "servers"],
+    queryFn: () => callMikrotikApi("/ip/hotspot/print", {
+      args: ["=.proplist=.id,name,interface,address-pool,profile,disabled"],
+    }),
+    enabled: useEnabled(),
+    staleTime: 60000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
+
+// ─── Network Neighbor Discovery ────────────
+// Mobile: /ip/neighbor/print return identity,interface,mac-address,address4
+export function useNeighbors() {
+  const routerKey = getRouterKey();
+  return useQuery({
+    queryKey: ["mikrotik", routerKey, "ip", "neighbor"],
+    queryFn: () => callMikrotikApi("/ip/neighbor/print", {
+      args: ["=.proplist=identity,interface,mac-address,address4,platform,board"],
+    }),
+    enabled: useEnabled(),
+    refetchInterval: 30000,
+    ...CACHE_OPTIONS,
+  });
+}
+
+// ─── User Manager Payments ─────────────────
+// Mobile: /user-manager/payment/print return user,price
+// Mobile: /tool/user-manager/payment/print
+export function useUserManagerPayments(options?: { enabled?: boolean }) {
+  const routerKey = getRouterKey();
+  return useQuery({
+    queryKey: ["mikrotik", routerKey, "usermanager", "payments"],
+    queryFn: () => callMikrotikApi("/user-manager/payment/print", {
+      args: ["=.proplist=.id,user,profile,price,method,transaction-id,ts"],
+      timeoutMs: 45000,
+    }),
+    enabled: (options?.enabled ?? true) && useEnabled(),
+    staleTime: 60000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
+
+// ─── User Manager Limitations ──────────────
+// Mobile: /user-manager/limitation/print
+// Mobile: /user-manager/limitation/add name="X"
+// Mobile: /user-manager/limitation/set .id=X
+export function useUserManagerLimitations(options?: { enabled?: boolean }) {
+  const routerKey = getRouterKey();
+  return useQuery({
+    queryKey: ["mikrotik", routerKey, "usermanager", "limitations"],
+    queryFn: () => callMikrotikApi("/user-manager/limitation/print", {
+      args: ["=.proplist=.id,name,rate-limit-rx,rate-limit-tx,transfer-limit,uptime-limit,download-limit,upload-limit"],
+      timeoutMs: 30000,
+    }),
+    enabled: (options?.enabled ?? true) && useEnabled(),
+    staleTime: 60000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
+
+export function useUserManagerLimitationAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ action, id, data }: { action: string; id?: string; data?: Record<string, any> }) => {
+      const endpointMap: Record<string, string> = {
+        add: "/user-manager/limitation/add",
+        set: "/user-manager/limitation/set",
+        remove: "/user-manager/limitation/remove",
+      };
+
+      const args: string[] = [];
+      if (action === "remove") {
+        if (id) args.push(`=.id=${id}`);
+      } else {
+        if (id) args.push(`=.id=${id}`);
+        if (data) {
+          for (const [k, v] of Object.entries(data)) {
+            if (v !== undefined && v !== null && `${v}` !== "") args.push(`=${k}=${v}`);
+          }
+        }
+      }
+
+      return callMikrotikApi(endpointMap[action] || `/user-manager/limitation/${action}`, { args });
+    },
+    onSuccess: () => {
+      const routerKey = getRouterKey();
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager", "limitations"] });
+      toast.success("تم حفظ القيود بنجاح");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "فشل حفظ القيود");
+    },
+  });
+}
+
+// ─── User Manager Profile-Limitation Links ─
+// Mobile: /user-manager/profile-limitation/print where profile='X'
+// Mobile: /user-manager/profile-limitation/add profile="X" limitation="X"
+export function useUserManagerProfileLimitations(profileName?: string, options?: { enabled?: boolean }) {
+  const routerKey = getRouterKey();
+  return useQuery({
+    queryKey: ["mikrotik", routerKey, "usermanager", "profile-limitations", profileName],
+    queryFn: () => {
+      const args = ["=.proplist=.id,profile,limitation"];
+      if (profileName) {
+        args.push(`?profile=${profileName}`);
+      }
+      return callMikrotikApi("/user-manager/profile-limitation/print", { args });
+    },
+    enabled: (options?.enabled ?? true) && useEnabled(),
+    staleTime: 60000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
+
+export function useUserManagerProfileLimitationAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ action, id, data }: { action: string; id?: string; data?: Record<string, any> }) => {
+      const endpointMap: Record<string, string> = {
+        add: "/user-manager/profile-limitation/add",
+        remove: "/user-manager/profile-limitation/remove",
+      };
+
+      const args: string[] = [];
+      if (action === "remove") {
+        if (id) args.push(`=.id=${id}`);
+      } else if (data) {
+        for (const [k, v] of Object.entries(data)) {
+          if (v !== undefined && v !== null && `${v}` !== "") args.push(`=${k}=${v}`);
+        }
+      }
+
+      return callMikrotikApi(endpointMap[action] || `/user-manager/profile-limitation/${action}`, { args });
+    },
+    onSuccess: () => {
+      const routerKey = getRouterKey();
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager", "profile-limitations"] });
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "usermanager", "profiles"] });
+      toast.success("تم ربط القيود بالباقة بنجاح");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "فشل ربط القيود");
+    },
+  });
+}
+
+// ─── User Manager Customers ────────────────
+// Mobile: /tool/user-manager/customer/print return login
+export function useUserManagerCustomers(options?: { enabled?: boolean }) {
+  const routerKey = getRouterKey();
+  return useQuery({
+    queryKey: ["mikrotik", routerKey, "usermanager", "customers"],
+    queryFn: () => callMikrotikApi("/user-manager/customer/print", {
+      args: ["=.proplist=.id,login,permissions,parent"],
+    }),
+    enabled: (options?.enabled ?? true) && useEnabled(),
+    staleTime: 120000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
+
+// ─── User Manager Database Operations ──────
+// Mobile: /tool/user-manager/database/save name='MUMS-date'
+// Mobile: /tool/user-manager/database/rebuild
+export function useDatabaseAction() {
+  return useMutation({
+    mutationFn: async ({ action, name }: { action: "save" | "rebuild" | "optimize-db"; name?: string }) => {
+      const endpointMap: Record<string, string> = {
+        save: "/user-manager/database/save",
+        rebuild: "/user-manager/database/rebuild",
+        "optimize-db": "/user-manager/database/optimize-db",
+      };
+
+      const args: string[] = [];
+      if (action === "save" && name) {
+        args.push(`=name=${name}`);
+      }
+
+      return callMikrotikApi(endpointMap[action], { args, timeoutMs: 60000 });
+    },
+    onSuccess: (_data, { action }) => {
+      const labels: Record<string, string> = {
+        save: "تم حفظ قاعدة البيانات بنجاح",
+        rebuild: "تمت إعادة بناء قاعدة البيانات بنجاح",
+        "optimize-db": "تم تحسين قاعدة البيانات بنجاح",
+      };
+      toast.success(labels[action] ?? "تمت العملية بنجاح");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "فشلت عملية قاعدة البيانات");
+    },
+  });
+}
+
+// ─── System Schedulers ─────────────────────
+// Mobile: /system/scheduler/print where name=ex_dis_new
+// Mobile: /system/scheduler/add interval=12:00:00 name=ex_dis_new ...
+export function useSchedulers() {
+  const routerKey = getRouterKey();
+  return useQuery({
+    queryKey: ["mikrotik", routerKey, "system", "scheduler"],
+    queryFn: () => callMikrotikApi("/system/scheduler/print", {
+      args: ["=.proplist=.id,name,interval,on-event,start-time,next-run,disabled,run-count"],
+    }),
+    enabled: useEnabled(),
+    staleTime: 60000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
+
+export function useSchedulerAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ action, id, data }: { action: string; id?: string; data?: Record<string, any> }) => {
+      const endpointMap: Record<string, string> = {
+        add: "/system/scheduler/add",
+        set: "/system/scheduler/set",
+        remove: "/system/scheduler/remove",
+      };
+
+      const args: string[] = [];
+      if (action === "remove") {
+        if (id) args.push(`=.id=${id}`);
+      } else {
+        if (id) args.push(`=.id=${id}`);
+        if (data) {
+          for (const [k, v] of Object.entries(data)) {
+            if (v !== undefined && v !== null && `${v}` !== "") args.push(`=${k}=${v}`);
+          }
+        }
+      }
+
+      return callMikrotikApi(endpointMap[action] || `/system/scheduler/${action}`, { args });
+    },
+    onSuccess: () => {
+      const routerKey = getRouterKey();
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "system", "scheduler"] });
+      toast.success("تم تنفيذ العملية بنجاح");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "فشلت العملية");
+    },
+  });
+}
+
+// ─── System Scripts ────────────────────────
+// Mobile: /system/script/print where name=ex_dis_user_new
+// Mobile: /system/script/add name=ex_dis_user_new policy=read,write source='...'
+export function useScripts() {
+  const routerKey = getRouterKey();
+  return useQuery({
+    queryKey: ["mikrotik", routerKey, "system", "script"],
+    queryFn: () => callMikrotikApi("/system/script/print", {
+      args: ["=.proplist=.id,name,source,policy,last-started,run-count"],
+    }),
+    enabled: useEnabled(),
+    staleTime: 60000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
+
+export function useScriptAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ action, id, data }: { action: string; id?: string; data?: Record<string, any> }) => {
+      const endpointMap: Record<string, string> = {
+        add: "/system/script/add",
+        set: "/system/script/set",
+        remove: "/system/script/remove",
+        run: "/system/script/run",
+      };
+
+      const args: string[] = [];
+      if (action === "remove" || action === "run") {
+        if (id) args.push(`=.id=${id}`);
+      } else {
+        if (id) args.push(`=.id=${id}`);
+        if (data) {
+          for (const [k, v] of Object.entries(data)) {
+            if (v !== undefined && v !== null && `${v}` !== "") args.push(`=${k}=${v}`);
+          }
+        }
+      }
+
+      return callMikrotikApi(endpointMap[action] || `/system/script/${action}`, { args });
+    },
+    onSuccess: (_data, { action }) => {
+      const routerKey = getRouterKey();
+      qc.invalidateQueries({ queryKey: ["mikrotik", routerKey, "system", "script"] });
+      const labels: Record<string, string> = {
+        add: "تمت إضافة السكريبت بنجاح",
+        remove: "تم حذف السكريبت",
+        run: "تم تشغيل السكريبت بنجاح",
+      };
+      toast.success(labels[action] ?? "تم تنفيذ العملية بنجاح");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "فشلت العملية");
+    },
+  });
+}
+
+// ─── System Reboot ─────────────────────────
+export function useSystemReboot() {
+  return useMutation({
+    mutationFn: async () => {
+      return callMikrotikApi("/system/reboot");
+    },
+    onSuccess: () => {
+      toast.success("تم إرسال أمر إعادة التشغيل — سيعود الراوتر خلال دقيقة");
+    },
+    onError: (err: any) => {
+      toast.error(err.message || "فشل إرسال أمر إعادة التشغيل");
     },
   });
 }

@@ -204,10 +204,23 @@ function argsToRestBody(args?: string[]): Record<string, string> | undefined {
 }
 
 // ─── Determine REST method from command ─────────────────────────────────
+const POST_COMMAND_SUFFIXES = new Set([
+  "/disable", "/enable", "/reset-counters", "/create-and-activate-profile",
+  "/save", "/rebuild", "/optimize-db",
+]);
+const POST_EXACT_COMMANDS = new Set(["/export", "/system/reboot"]);
+
 function getRestMethod(command: string): string {
   if (command.endsWith("/add")) return "PUT";
   if (command.endsWith("/set")) return "PATCH";
   if (command.endsWith("/remove")) return "DELETE";
+  let isPost = POST_EXACT_COMMANDS.has(command);
+  if (!isPost) {
+    for (const s of POST_COMMAND_SUFFIXES) {
+      if (command.endsWith(s)) { isPost = true; break; }
+    }
+  }
+  if (isPost) return "POST";
   return "GET";
 }
 
@@ -383,12 +396,22 @@ function isCompatibilityError(message: string): boolean {
   );
 }
 
+const WRITE_COMMAND_SUFFIXES = new Set([
+  "/add", "/set", "/remove", "/disable", "/enable", "/reset-counters",
+  "/create-and-activate-profile", "/save", "/rebuild", "/optimize-db",
+]);
+const WRITE_EXACT_COMMANDS = new Set(["/export", "/system/reboot"]);
+
 function isWriteCommand(command: string): boolean {
-  return command.endsWith("/add") || command.endsWith("/set") || command.endsWith("/remove");
+  if (WRITE_EXACT_COMMANDS.has(command)) return true;
+  for (const s of WRITE_COMMAND_SUFFIXES) {
+    if (command.endsWith(s)) return true;
+  }
+  return false;
 }
 
 function isUserManagerUserWriteCommand(command: string): boolean {
-  return /(?:\/tool)?\/user-manager\/user\/(add|set|remove)$/.test(command);
+  return /(?:\/tool)?\/user-manager\/user\/(add|set|remove|disable|enable|create-and-activate-profile)$/.test(command);
 }
 
 function isAlreadyExistsError(message: string): boolean {
