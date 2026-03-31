@@ -404,8 +404,34 @@ export function useUserManagerAction() {
       } else if (action === "remove") {
         // Mobile pattern: /user-manager/user/remove .id=<id>
         if (id) args.push(`=.id=${id}`);
+      } else if (action === "add" && data) {
+        // Mobile app two-step pattern for user creation:
+        // Step 1: /user-manager/user/add username=X password=Y customer=admin
+        // Step 2: /user-manager/user/create-and-activate-profile numbers=X profile=P customer=admin
+        const username = data.username || data.name || "";
+        const password = data.password || "";
+        const profile = data.group || data.profile || "";
+        const customer = data.customer || data.owner || "admin";
+
+        // Step 1: Create the user (without group — mobile doesn't use group here)
+        const addArgs = [`=username=${username}`, `=password=${password}`, `=customer=${customer}`];
+        const addResult = await callMikrotikApi("/user-manager/user/add", { args: addArgs });
+
+        // Step 2: Activate profile on the user (matching mobile exactly)
+        if (profile) {
+          try {
+            await callMikrotikApi("/user-manager/user/create-and-activate-profile", {
+              args: [`=numbers=${username}`, `=profile=${profile}`, `=customer=${customer}`],
+            });
+          } catch {
+            // Silently handle - profile activation may fail on some versions
+            // The edge function has extensive fallback logic for this
+          }
+        }
+
+        return addResult;
       } else {
-        // add — pass all data fields
+        // Other actions — pass all data fields
         if (id) args.push(`=.id=${id}`);
         if (data) {
           for (const [k, v] of Object.entries(data)) args.push(`=${k}=${v}`);
@@ -617,25 +643,47 @@ export function useUserManagerBatchAdd() {
       };
 
       const processChunk = async (chunk: BatchAddUser[]) => {
-        const commands = chunk.map((u) => ({
-          command: "/user-manager/user/add",
-          args: [
-            `=username=${u.username}`,
-            `=password=${u.password}`,
-            `=group=${u.group}`,
-            `=owner=admin`,
-          ],
-        }));
+        // Mobile app pattern: TWO commands per user
+        // Step 1: /user-manager/user/add username=X password=Y customer=admin
+        // Step 2: /user-manager/user/create-and-activate-profile numbers=X profile=P customer=admin
+        const commands = chunk.flatMap((u) => [
+          {
+            command: "/user-manager/user/add",
+            args: [
+              `=username=${u.username}`,
+              `=password=${u.password}`,
+              `=customer=admin`,
+            ],
+          },
+          {
+            command: "/user-manager/user/create-and-activate-profile",
+            args: [
+              `=numbers=${u.username}`,
+              `=profile=${u.group}`,
+              `=customer=admin`,
+            ],
+          },
+        ]);
 
         try {
           const result = await callMikrotikAction("batch", { commands });
           const errs = Array.isArray(result?.errors) ? result.errors : [];
+          // Each user produces 2 commands; check the add result (even index)
           for (let j = 0; j < chunk.length; j++) {
-            const msg = typeof errs[j] === "string" ? errs[j].trim() : "";
-            if (!msg || isDuplicate(msg)) {
+            const addIdx = j * 2;
+            const activateIdx = j * 2 + 1;
+            const addMsg = typeof errs[addIdx] === "string" ? errs[addIdx].trim() : "";
+            const activateMsg = typeof errs[activateIdx] === "string" ? errs[activateIdx].trim() : "";
+            // User creation succeeded if add succeeded or was duplicate
+            if ((!addMsg || isDuplicate(addMsg)) && !activateMsg) {
               succeeded++;
             } else {
-              errors.push({ username: chunk[j].username, error: msg });
+              const errMsg = addMsg || activateMsg || "";
+              if (isDuplicate(errMsg)) {
+                succeeded++;
+              } else {
+                errors.push({ username: chunk[j].username, error: errMsg });
+              }
             }
           }
         } catch (err: any) {

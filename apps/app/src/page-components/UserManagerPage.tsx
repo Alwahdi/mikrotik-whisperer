@@ -320,7 +320,8 @@ export default function UserManagerPage() {
       toast.error("اسم المستخدم وكلمة المرور مطلوبان");
       return;
     }
-    const data: Record<string, any> = { username: newUser.name, password: newUser.password, owner: "admin" };
+    // Mobile pattern: username, password, customer=admin, group/profile sent separately via create-and-activate-profile
+    const data: Record<string, any> = { username: newUser.name, password: newUser.password, customer: "admin" };
     if (newUser.profile) data.group = newUser.profile;
     action.mutate({ action: "add", data }, {
       onSuccess: () => {

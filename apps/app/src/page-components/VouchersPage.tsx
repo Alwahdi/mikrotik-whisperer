@@ -396,12 +396,19 @@ export default function VouchersPage() {
       logs: [{ ts: Date.now(), msg: `بدأت إضافة ${cards.length} كرت (${type}) إلى ${currentRouterHost}` }],
     });
 
-    const commandForCard = (card: VoucherCard) => {
-      // v6 user-manager uses "name" instead of "username", and "customer" instead of "owner"
-      const args: string[] = type === "hotspot"
-        ? [`=name=${card.username}`, `=password=${card.password}`, `=profile=${card.profile}`]
-        : [`=username=${card.username}`, `=password=${card.password}`, `=group=${card.profile}`, `=owner=admin`];
-      return { command: addEndpoint, args };
+    // Mobile app pattern for user-manager vouchers (TWO commands per card):
+    // Step 1: /tool/user-manager/user/add username=X password=Y customer=Z
+    // Step 2: /tool/user-manager/user/create-and-activate-profile numbers=X profile="P" customer=Z
+    // For hotspot: single /ip/hotspot/user/add with name, password, profile
+    const commandsForCard = (card: VoucherCard): { command: string; args: string[] }[] => {
+      if (type === "hotspot") {
+        return [{ command: addEndpoint, args: [`=name=${card.username}`, `=password=${card.password}`, `=profile=${card.profile}`] }];
+      }
+      // User Manager: two-step process matching mobile app exactly
+      return [
+        { command: addEndpoint, args: [`=username=${card.username}`, `=password=${card.password}`, `=customer=admin`] },
+        { command: "/user-manager/user/create-and-activate-profile", args: [`=numbers=${card.username}`, `=profile=${card.profile}`, `=customer=admin`] },
+      ];
     };
 
     // Run full batch on server-side edge background task.
@@ -414,7 +421,7 @@ export default function VouchersPage() {
     }
 
     try {
-      const commands = cards.map(commandForCard);
+      const commands = cards.flatMap(commandsForCard);
       setPushProgress(10);
       setPushMessage("تم إرسال العملية للسيرفر...");
 
