@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo, useEffect, useCallback } from "react";
+import { useState, useRef, useMemo, useEffect, useCallback, startTransition } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useHotspotProfiles, useUserManagerProfiles, useRawBatchAction } from "@repo/mikrotik";
 import { Button } from "@repo/design-system/components/ui/button";
@@ -85,6 +85,7 @@ export default function VouchersPage() {
 
   // Cards & push
   const [cards, setCards] = useState<VoucherCard[]>([]);
+  const [selectedCardIndices, setSelectedCardIndices] = useState<Set<number>>(new Set());
   const [pushing, setPushing] = useState(false);
   const [pushProgress, setPushProgress] = useState(0);
   const [pushMessage, setPushMessage] = useState("");
@@ -352,6 +353,8 @@ export default function VouchersPage() {
       newCards.push({ username, password, profile: prof, status: "pending" });
     }
     setCards(newCards);
+    // Auto-select all newly generated cards
+    setSelectedCardIndices(new Set(newCards.map((_, i) => i)));
 
     const batch: VoucherBatch = {
       id: crypto.randomUUID(),
@@ -370,7 +373,8 @@ export default function VouchersPage() {
   };
 
   const pushToRouter = async () => {
-    if (cards.length === 0 || pushingRef.current) return;
+    const cardsToPush = selectedCards.length > 0 ? selectedCards : cards;
+    if (cardsToPush.length === 0 || pushingRef.current) return;
 
     const addEndpoint = type === "hotspot" ? "/ip/hotspot/user/add" : "/user-manager/user/add";
     const jobId = `push-${Date.now()}`;
@@ -379,21 +383,21 @@ export default function VouchersPage() {
     pushingRef.current = true;
     setPushProgress(1);
     setPushMessage("تهيئة إضافة الدفعة...");
-    toast.info(`بدء إضافة ${cards.length} كرت بالخلفية`);
+    toast.info(`بدء إضافة ${cardsToPush.length} كرت بالخلفية`);
 
     addJob({
       id: jobId,
-      label: `إضافة ${cards.length} كرت (${cards[0]?.profile || ""})`,
+      label: `إضافة ${cardsToPush.length} كرت (${cardsToPush[0]?.profile || ""})`,
       type: "add",
       status: "running",
-      total: cards.length,
+      total: cardsToPush.length,
       completed: 0,
       succeeded: 0,
       failed: 0,
       rate: 0,
       startedAt: performance.now(),
       routerHost: currentRouterHost,
-      logs: [{ ts: Date.now(), msg: `بدأت إضافة ${cards.length} كرت (${type}) إلى ${currentRouterHost}` }],
+      logs: [{ ts: Date.now(), msg: `بدأت إضافة ${cardsToPush.length} كرت (${type}) إلى ${currentRouterHost}` }],
     });
 
     // Mobile app pattern for user-manager vouchers (TWO commands per card):
@@ -421,7 +425,7 @@ export default function VouchersPage() {
     }
 
     try {
-      const commands = cards.flatMap(commandsForCard);
+      const commands = cardsToPush.flatMap(commandsForCard);
       setPushProgress(10);
       setPushMessage("تم إرسال العملية للسيرفر...");
 
@@ -435,8 +439,8 @@ export default function VouchersPage() {
         commands,
         jobKey: jobId,
         userId: user.id,
-        label: `إضافة ${cards.length} كرت (${cards[0]?.profile || ""})`,
-        profileName: cards[0]?.profile || "",
+        label: `إضافة ${cardsToPush.length} كرت (${cardsToPush[0]?.profile || ""})`,
+        profileName: cardsToPush[0]?.profile || "",
         salesPoint: selectedSalesPoint,
         voucherType: type,
         unitPrice,
@@ -1028,6 +1032,7 @@ export default function VouchersPage() {
 
   const loadBatchCards = (batch: VoucherBatch) => {
     setCards(batch.cards);
+    setSelectedCardIndices(new Set(batch.cards.map((_, i) => i)));
     setType(batch.type);
     setActiveBatchId(batch.id);
     setActiveTab("generate");
@@ -1040,6 +1045,55 @@ export default function VouchersPage() {
   const successCount = cards.filter(c => c.status === "success").length;
   const errorCount = cards.filter(c => c.status === "error").length;
   const pendingCount = cards.filter(c => c.status === "pending" || !c.status).length;
+  const selectedCount = selectedCardIndices.size;
+  const allSelected = cards.length > 0 && selectedCount === cards.length;
+
+  // Memoize visible field flags once — avoids recalculating per card in render
+  const visibleFieldFlags = useMemo(() => {
+    const vf = fields.filter(f => f.visible);
+    return {
+      visibleFields: vf,
+      showPass: vf.some(f => f.type === "password"),
+      showProfile: vf.some(f => f.type === "profile"),
+      showPackageName: vf.some(f => f.type === "package_name") && !!resolvedPackageName,
+      showPrice: vf.some(f => f.type === "price") && unitPrice > 0,
+      showSP: vf.some(f => f.type === "sales_point") && !!selectedSalesPoint,
+      showDays: vf.some(f => f.type === "days") && !!resolvedValidityText,
+      showHours: vf.some(f => f.type === "hours") && !!resolvedHoursText,
+      showDataQuota: vf.some(f => f.type === "data_quota") && !!resolvedDataQuotaText,
+      showTransferLimit: vf.some(f => f.type === "transfer_limit") && !!resolvedTransferText,
+      showQr: vf.some(f => f.type === "qr"),
+      showTitle: vf.some(f => f.type === "title"),
+      showSubtitle: vf.some(f => f.type === "subtitle"),
+    };
+  }, [fields, resolvedPackageName, unitPrice, selectedSalesPoint, resolvedValidityText, resolvedHoursText, resolvedDataQuotaText, resolvedTransferText]);
+
+  // Selected cards for push/export operations
+  const selectedCards = useMemo(() => {
+    if (selectedCardIndices.size === cards.length) return cards;
+    return cards.filter((_, i) => selectedCardIndices.has(i));
+  }, [cards, selectedCardIndices]);
+
+  const toggleCardSelection = useCallback((index: number) => {
+    startTransition(() => {
+      setSelectedCardIndices(prev => {
+        const next = new Set(prev);
+        if (next.has(index)) next.delete(index);
+        else next.add(index);
+        return next;
+      });
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    startTransition(() => {
+      setSelectedCardIndices(prev =>
+        prev.size === cards.length
+          ? new Set<number>()
+          : new Set(cards.map((_, i) => i))
+      );
+    });
+  }, [cards]);
 
   return (
     <DashboardLayout>
@@ -1572,7 +1626,7 @@ export default function VouchersPage() {
                   <Plus className="h-3.5 w-3.5 ml-1" /> توليد
                 </Button>
                 {cards.length > 0 && (
-                  <Button variant="outline" size="sm" onClick={() => setCards([])}>
+                  <Button variant="outline" size="sm" onClick={() => { setCards([]); setSelectedCardIndices(new Set()); }}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 )}
@@ -1581,11 +1635,24 @@ export default function VouchersPage() {
 
             {cards.length > 0 && (
               <div className="flex flex-col gap-2">
-                <Button onClick={pushToRouter} disabled={pushing} size="sm" variant="outline" className="w-full">
+                {/* Selection controls */}
+                <div className="flex items-center justify-between text-xs">
+                  <button
+                    onClick={toggleSelectAll}
+                    className="text-primary hover:underline text-[10px] font-medium"
+                  >
+                    {allSelected ? "إلغاء تحديد الكل" : "تحديد الكل"}
+                  </button>
+                  <span className="text-muted-foreground text-[10px]">
+                    {selectedCount > 0 ? `${selectedCount} محدد` : "لم يتم التحديد"}
+                  </span>
+                </div>
+
+                <Button onClick={pushToRouter} disabled={pushing || selectedCount === 0} size="sm" variant="outline" className="w-full">
                   {pushing ? (
                     <><Loader2 className="h-3.5 w-3.5 ml-1 animate-spin" /> {pushProgress}%</>
                   ) : (
-                    <><Download className="h-3.5 w-3.5 ml-1" /> إضافة {cards.length} كرت</>
+                    <><Download className="h-3.5 w-3.5 ml-1" /> إضافة {selectedCount > 0 ? selectedCount : cards.length} كرت</>
                   )}
                 </Button>
                 {(pushing || successCount > 0 || errorCount > 0) && (
@@ -1601,13 +1668,13 @@ export default function VouchersPage() {
                     {pushing && pendingCount > 0 && <Badge variant="outline" className="gap-1">{pendingCount} معلق</Badge>}
                   </div>
                 )}
-                <Button onClick={() => handlePrint()} size="sm" variant="outline" className="w-full">
-                  <Printer className="h-3.5 w-3.5 ml-1" /> طباعة
+                <Button onClick={() => handlePrint(selectedCards.length > 0 ? selectedCards : undefined)} size="sm" variant="outline" className="w-full">
+                  <Printer className="h-3.5 w-3.5 ml-1" /> طباعة {selectedCount > 0 && selectedCount < cards.length ? `(${selectedCount})` : ""}
                 </Button>
-                <Button onClick={() => handleExportPdf()} size="sm" variant="outline" className="w-full text-primary border-primary/30 hover:bg-primary/5">
-                  <FileDown className="h-3.5 w-3.5 ml-1" /> تصدير PDF
+                <Button onClick={() => handleExportPdf(selectedCards.length > 0 ? selectedCards : undefined)} size="sm" variant="outline" className="w-full text-primary border-primary/30 hover:bg-primary/5">
+                  <FileDown className="h-3.5 w-3.5 ml-1" /> تصدير PDF {selectedCount > 0 && selectedCount < cards.length ? `(${selectedCount})` : ""}
                 </Button>
-                <Button onClick={() => handleExportCsv()} size="sm" variant="outline" className="w-full">
+                <Button onClick={() => handleExportCsv(selectedCards.length > 0 ? selectedCards : undefined)} size="sm" variant="outline" className="w-full">
                   <Download className="h-3.5 w-3.5 ml-1" /> تصدير CSV
                 </Button>
               </div>
@@ -1620,7 +1687,7 @@ export default function VouchersPage() {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-foreground text-sm flex items-center gap-2">
                   <CreditCard className="h-4 w-4 text-primary" />
-                  معاينة ({cards.length})
+                  معاينة ({cards.length}){selectedCount > 0 && selectedCount < cards.length && <span className="text-primary text-[10px]"> • {selectedCount} محدد</span>}
                 </h3>
                 {cards.length > 0 && (
                   <div className="flex items-center gap-2">
@@ -1649,22 +1716,11 @@ export default function VouchersPage() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[60dvh] overflow-y-auto pr-1">
                   {cards.slice(0, 100).map((card, i) => {
-                    const visibleF = fields.filter(f => f.visible);
-                    const showPass = visibleF.some(f => f.type === "password");
-                    const showProfile = visibleF.some(f => f.type === "profile");
-                    const showPackageName = visibleF.some(f => f.type === "package_name") && !!resolvedPackageName;
-                    const showPrice = visibleF.some(f => f.type === "price") && unitPrice > 0;
-                    const showSP = visibleF.some(f => f.type === "sales_point") && selectedSalesPoint;
-                    const showDays = visibleF.some(f => f.type === "days") && !!resolvedValidityText;
-                    const showHours = visibleF.some(f => f.type === "hours") && !!resolvedHoursText;
-                    const showDataQuota = visibleF.some(f => f.type === "data_quota") && !!resolvedDataQuotaText;
-                    const showTransferLimit = visibleF.some(f => f.type === "transfer_limit") && !!resolvedTransferText;
-                    const showQr = visibleF.some(f => f.type === "qr");
-                    const showTitle = visibleF.some(f => f.type === "title");
-                    const showSubtitle = visibleF.some(f => f.type === "subtitle");
+                    const isSelected = selectedCardIndices.has(i);
+                    const { visibleFields: visibleF, showPass, showProfile, showPackageName, showPrice, showSP, showDays, showHours, showDataQuota, showTransferLimit, showQr, showTitle, showSubtitle } = visibleFieldFlags;
 
                     return (
-                    <div key={i} className="relative">
+                    <div key={i} className={`relative cursor-pointer transition-all duration-150 ${isSelected ? "ring-2 ring-primary ring-offset-1 rounded-md" : "opacity-70 hover:opacity-100"}`} onClick={() => toggleCardSelection(i)}>
                       {bgImage ? (
                         <div className="rounded-md border border-border overflow-hidden relative" style={{ aspectRatio: CARD_ASPECT_STANDARD }}>
                           <img src={bgImage} alt="" className="w-full h-full object-fill" />
@@ -1747,6 +1803,10 @@ export default function VouchersPage() {
                           <X className="h-2.5 w-2.5 text-white" />
                         </div>
                       )}
+                      {/* Selection indicator */}
+                      <div className={`absolute top-1 right-1 h-4 w-4 rounded border flex items-center justify-center transition-colors ${isSelected ? "bg-primary border-primary" : "border-muted-foreground/30 bg-background/80"}`}>
+                        {isSelected && <Check className="h-2.5 w-2.5 text-primary-foreground" />}
+                      </div>
                     </div>
                     );
                   })}
