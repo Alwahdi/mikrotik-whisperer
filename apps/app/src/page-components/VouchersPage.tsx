@@ -90,6 +90,7 @@ export default function VouchersPage() {
   const [pushProgress, setPushProgress] = useState(0);
   const [pushMessage, setPushMessage] = useState("");
   const pushingRef = useRef(false);
+  const [previewLimit, setPreviewLimit] = useState(50);
 
   // Delete progress
   const [deleteProgress, setDeleteProgress] = useState(0);
@@ -355,6 +356,7 @@ export default function VouchersPage() {
     setCards(newCards);
     // Auto-select all newly generated cards
     setSelectedCardIndices(new Set(newCards.map((_, i) => i)));
+    setPreviewLimit(50);
 
     const batch: VoucherBatch = {
       id: crypto.randomUUID(),
@@ -1714,13 +1716,48 @@ export default function VouchersPage() {
                   <p className="text-muted-foreground text-sm">اضبط الإعدادات واضغط "توليد"</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[60dvh] overflow-y-auto pr-1">
-                  {cards.slice(0, 100).map((card, i) => {
+                <>
+                  {/* Real-time status summary bar */}
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <Badge variant="outline" className="gap-1 text-xs">
+                      <CreditCard className="h-3 w-3" /> {cards.length} كرت
+                    </Badge>
+                    {selectedCount > 0 && (
+                      <Badge variant="outline" className="gap-1 text-xs text-primary border-primary/30">
+                        <Check className="h-3 w-3" /> {selectedCount} محدد
+                      </Badge>
+                    )}
+                    {successCount > 0 && (
+                      <Badge variant="outline" className="gap-1 text-xs text-green-600 border-green-300 dark:text-green-400 dark:border-green-700">
+                        <Check className="h-3 w-3" /> {successCount} تمت إضافته
+                      </Badge>
+                    )}
+                    {errorCount > 0 && (
+                      <Badge variant="outline" className="gap-1 text-xs text-destructive border-destructive/30">
+                        <X className="h-3 w-3" /> {errorCount} فشل
+                      </Badge>
+                    )}
+                    {pendingCount > 0 && pendingCount < cards.length && (
+                      <Badge variant="outline" className="gap-1 text-xs text-amber-600 border-amber-300 dark:text-amber-400 dark:border-amber-700">
+                        {pendingCount} معلق
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[60dvh] overflow-y-auto pr-1">
+                  {cards.slice(0, previewLimit).map((card, i) => {
                     const isSelected = selectedCardIndices.has(i);
                     const { visibleFields: visibleF, showPass, showProfile, showPackageName, showPrice, showSP, showDays, showHours, showDataQuota, showTransferLimit, showQr, showTitle, showSubtitle } = visibleFieldFlags;
 
+                    // Status-based ring colors for instant visual feedback
+                    const statusRing = card.status === "success"
+                      ? "ring-green-500/70"
+                      : card.status === "error"
+                      ? "ring-destructive/70"
+                      : "";
+
                     return (
-                    <div key={i} className={`relative cursor-pointer transition-all duration-150 ${isSelected ? "ring-2 ring-primary ring-offset-1 rounded-md" : "opacity-70 hover:opacity-100"}`} onClick={() => toggleCardSelection(i)}>
+                    <div key={i} className={`relative cursor-pointer transition-all duration-150 rounded-md ${isSelected ? `ring-2 ${statusRing || "ring-primary"} ring-offset-1` : "opacity-70 hover:opacity-100"}`} onClick={() => toggleCardSelection(i)}>
                       {bgImage ? (
                         <div className="rounded-md border border-border overflow-hidden relative" style={{ aspectRatio: CARD_ASPECT_STANDARD }}>
                           <img src={bgImage} alt="" className="w-full h-full object-fill" />
@@ -1810,12 +1847,20 @@ export default function VouchersPage() {
                     </div>
                     );
                   })}
-                  {cards.length > 100 && (
-                    <div className="col-span-full text-center py-3 text-xs text-muted-foreground">
-                      عرض أول 100 كرت من {cards.length}
+                  {cards.length > previewLimit && (
+                    <div className="col-span-full text-center py-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => setPreviewLimit(prev => Math.min(prev + 50, cards.length))}
+                      >
+                        عرض المزيد ({previewLimit} من {cards.length})
+                      </Button>
                     </div>
                   )}
                 </div>
+                </>
               )}
             </div>
           </div>
