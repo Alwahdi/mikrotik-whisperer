@@ -78,14 +78,7 @@ async function invokeStep(config: RouterConfig, step: PrefetchStep) {
   }
 }
 
-// Generate a backup timestamp like the mobile app: MUMS-dd-MM-yyyy_HH-mm-ss
-function getBackupTimestamp(): string {
-  const now = new Date();
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const date = `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}`;
-  const time = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
-  return `MUMS-${date}_${time}`;
-}
+import { getBackupTimestamp } from "../lib/utils";
 
 // Run backup operations during login (blocks transition to dashboard)
 // Mobile does: /tool/user-manager/database/save and /export

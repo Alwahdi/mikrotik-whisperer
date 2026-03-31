@@ -50,7 +50,7 @@ import {
 } from "@repo/design-system/components/ui/breadcrumb";
 import Link from "next/link";
 import { toast } from "sonner";
-import { getActiveRouter } from "@repo/mikrotik";
+import { getActiveRouter, getBackupTimestamp } from "@repo/mikrotik";
 
 const PAGE_SIZE = 20;
 
@@ -996,9 +996,7 @@ export default function UserManagerPage() {
             variant="outline"
             disabled={dbAction.isPending}
             onClick={() => {
-              const now = new Date();
-              const pad = (n: number) => String(n).padStart(2, "0");
-              const name = `MUMS-${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+              const name = getBackupTimestamp();
               dbAction.mutate({ action: "save", name });
             }}
           >
