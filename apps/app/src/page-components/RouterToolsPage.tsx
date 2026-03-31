@@ -11,7 +11,7 @@ import {
   useSystemReboot,
 } from "@repo/mikrotik";
 import {
-  Network, Clock, FileCode, RotateCcw, Home, RefreshCw,
+  Network, Clock, FileCode, Home, RefreshCw,
   Trash2, Play, Plus, AlertTriangle, Loader2, Power,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
