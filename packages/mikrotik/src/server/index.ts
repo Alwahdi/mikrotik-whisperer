@@ -138,12 +138,12 @@ export async function addUser(
     if (version >= 7) {
       await api.write("/user-manager/user-profile/add", [
         `=user=${userId}`,
-        `=profile=${profile}`,
+        `=profile="${profile}"`,
       ]);
     } else {
       await api.write(umPath(version, "/user/create-and-activate-profile"), [
         `=numbers=${userId}`,
-        `=profile=${profile}`,
+        `=profile="${profile}"`,
         `=customer=${customer || "admin"}`,
       ]);
     }
@@ -224,8 +224,8 @@ export async function addProfile(
   const linkPath =
     version >= 7 ? "/profile-limitation/add" : "/profile/profile-limitation/add";
   await api.write(umPath(version, linkPath), [
-    `=profile=${name}`,
-    `=limitation=${limitName}`,
+    `=profile="${name}"`,
+    `=limitation="${limitName}"`,
   ]);
 }
 
@@ -436,7 +436,7 @@ export async function addHotspotUser(
   await api.write("/ip/hotspot/user/add", [
     `=name=${name}`,
     `=password=${password}`,
-    `=profile=${profile}`,
+    `=profile="${profile}"`,
   ]);
 }
 
@@ -699,12 +699,12 @@ export async function batchAddUsersSingle(
     if (version >= 7) {
       await api.write("/user-manager/user-profile/add", [
         `=user=${userId}`,
-        `=profile=${u.profile}`,
+        `=profile="${u.profile}"`,
       ]);
     } else {
       await api.write(umPath(version, "/user/create-and-activate-profile"), [
         `=numbers=${userId}`,
-        `=profile=${u.profile}`,
+        `=profile="${u.profile}"`,
         `=customer=${u.customer || "admin"}`,
       ]);
     }
