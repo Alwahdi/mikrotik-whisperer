@@ -6,7 +6,9 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./server": "./src/server/index.ts",
+    "./session": "./src/server/session.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit",
@@ -16,14 +18,18 @@
     "@repo/auth": "workspace:*",
     "@repo/database": "workspace:*",
     "@tanstack/react-query": "^5.83.0",
+    "iron-session": "^8.0.4",
+    "node-routeros": "^1.6.9",
     "sonner": "^1.7.4"
   },
   "peerDependencies": {
+    "next": ">=14",
     "react": "^18.3.1"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
     "@testing-library/jest-dom": "^6.6.0",
+    "@types/node": "^22.0.0",
     "@types/react": "^18.3.23",
     "jsdom": "^29.0.1",
     "typescript": "^5.8.3",
