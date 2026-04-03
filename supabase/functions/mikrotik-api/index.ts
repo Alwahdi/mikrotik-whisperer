@@ -508,6 +508,7 @@ function buildProfileActivationAttempts(
   for (const root of getUserManagerRoots(command)) {
     const activateCommand = `${root}/user/create-and-activate-profile`;
     const setCommand = `${root}/user/set`;
+    const v7ProfileAddCommand = `${root}/user-profile/add`;
 
     if (userId) {
       attempts.push({ command: activateCommand, args: objectToArgsList({ profile, customer, numbers: userId }) });
@@ -516,6 +517,8 @@ function buildProfileActivationAttempts(
       attempts.push({ command: setCommand, args: objectToArgsList({ ".id": userId, group: profile }) });
       attempts.push({ command: setCommand, args: objectToArgsList({ numbers: userId, profile }) });
       attempts.push({ command: setCommand, args: objectToArgsList({ numbers: userId, group: profile }) });
+      attempts.push({ command: v7ProfileAddCommand, args: objectToArgsList({ user: username, profile }) });
+      attempts.push({ command: v7ProfileAddCommand, args: objectToArgsList({ user: userId, profile }) });
     }
 
     attempts.push({ command: activateCommand, args: objectToArgsList({ profile, customer, username }) });
@@ -524,6 +527,7 @@ function buildProfileActivationAttempts(
     attempts.push({ command: setCommand, args: objectToArgsList({ username, profile }) });
     attempts.push({ command: setCommand, args: objectToArgsList({ username, group: profile }) });
     attempts.push({ command: setCommand, args: objectToArgsList({ name: username, profile }) });
+    attempts.push({ command: v7ProfileAddCommand, args: objectToArgsList({ user: username, profile }) });
   }
 
   return attempts;
@@ -538,7 +542,12 @@ async function activateUserManagerProfileCompatible(
 ): Promise<void> {
   const userId = await findUserManagerUserId(client, command, username);
   const attempts = buildProfileActivationAttempts(command, username, profile, customer, userId);
-  await executeCompatibilityAttempts(client, attempts);
+  try {
+    await executeCompatibilityAttempts(client, attempts);
+  } catch (err: any) {
+    if (isAlreadyExistsError(err.message)) return;
+    throw err;
+  }
 }
 
 async function executeUserManagerCompatible(
@@ -546,40 +555,39 @@ async function executeUserManagerCompatible(
   command: string,
   args?: string[],
 ): Promise<Record<string, string>[]> {
-  // Performance fast-path: execute exactly as received first.
-  // If it fails with a compatibility-style error, fallback to adaptive variants.
-  try {
-    return await client.execute(command, args);
-  } catch (err: any) {
-    const errorObj = err instanceof Error ? err : new Error(String(err));
-    if (!isCompatibilityError(errorObj.message)) throw errorObj;
-  }
-
   if (isUserManagerUserAddCommand(command)) {
     const parsed = argsListToObject(args);
     const username = parsed.username || parsed.name || parsed.user;
     const profile = parsed.profile || parsed.group;
     const customer = parsed.customer || parsed.owner || "admin";
 
-    // Fast compatibility path: try creating user with profile/group directly first
-    try {
-      const directAttempts = buildUserManagerCommandAttempts(command, args);
-      return await executeCompatibilityAttempts(client, directAttempts);
-    } catch (err: any) {
-      const errorObj = err instanceof Error ? err : new Error(String(err));
-      if (!isCompatibilityError(errorObj.message)) throw errorObj;
-    }
-
-    // Fallback path: create user first then attach profile
+    // In v7, 'group' on a user does not assign a profile. It just sets an administrative group.
+    // It's safer to always strip 'group' and 'profile' for the add command, and attach it separately
+    // to ensure compatibility with v6 'create-and-activate-profile' and v7 'user-profile/add'.
     const addArgs = omitArgsKeys(args, ["profile", "group"]);
     const addAttempts = buildUserManagerCommandAttempts(command, addArgs);
-    const addResult = await executeCompatibilityAttempts(client, addAttempts);
+    
+    let addResult;
+    try {
+      addResult = await executeCompatibilityAttempts(client, addAttempts);
+    } catch (err: any) {
+      if (!isAlreadyExistsError(err.message)) throw err;
+      addResult = [{ duplicate: "true" }];
+    }
 
     if (username && profile) {
       await activateUserManagerProfileCompatible(client, command, username, profile, customer);
     }
 
     return addResult;
+  }
+
+  // Performance fast-path for non-add commands
+  try {
+    return await client.execute(command, args);
+  } catch (err: any) {
+    const errorObj = err instanceof Error ? err : new Error(String(err));
+    if (!isCompatibilityError(errorObj.message)) throw errorObj;
   }
 
   const attempts = buildUserManagerCommandAttempts(command, args);
