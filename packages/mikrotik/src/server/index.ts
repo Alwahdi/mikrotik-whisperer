@@ -161,19 +161,11 @@ export async function removeUser(api: RouterOSAPI, version: number, id: string):
 }
 
 export async function disableUser(api: RouterOSAPI, version: number, id: string): Promise<void> {
-  if (version >= 7) {
-    await api.write(umPath(version, "/user/disable"), [`=numbers=${id}`]);
-  } else {
-    await api.write(umPath(version, "/user/disable"), [`=.id=${id}`]);
-  }
+  await api.write(umPath(version, "/user/disable"), [`=numbers=${id}`]);
 }
 
 export async function enableUser(api: RouterOSAPI, version: number, id: string): Promise<void> {
-  if (version >= 7) {
-    await api.write(umPath(version, "/user/enable"), [`=numbers=${id}`]);
-  } else {
-    await api.write(umPath(version, "/user/enable"), [`=.id=${id}`]);
-  }
+  await api.write(umPath(version, "/user/enable"), [`=numbers=${id}`]);
 }
 
 // ── User Manager: Profiles ────────────────────────────────────────────────
