@@ -1,0 +1,46 @@
+{
+  "name": "@repo/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "lint": "eslint .",
+    "type-check": "tsc --noEmit",
+    "build:android": "eas build --platform android",
+    "build:ios": "eas build --platform ios"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^14.0.4",
+    "@react-native-async-storage/async-storage": "^2.1.0",
+    "@supabase/supabase-js": "^2.49.2",
+    "@tanstack/react-query": "^5.83.0",
+    "clsx": "^2.1.1",
+    "expo": "~54.0.0",
+    "expo-constants": "~17.0.3",
+    "expo-router": "~4.0.0",
+    "expo-secure-store": "~14.0.0",
+    "expo-status-bar": "~2.0.0",
+    "nativewind": "^4.1.23",
+    "react": "18.3.1",
+    "react-native": "0.76.5",
+    "react-native-qrcode-svg": "^6.3.11",
+    "react-native-safe-area-context": "4.12.0",
+    "react-native-screens": "~4.4.0",
+    "react-native-svg": "15.8.0",
+    "@repo/auth": "workspace:*",
+    "@repo/database": "workspace:*",
+    "@repo/mikrotik": "workspace:*"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.25.2",
+    "@repo/typescript-config": "workspace:*",
+    "@types/react": "~18.3.23",
+    "eslint": "^9.32.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3"
+  }
+}
