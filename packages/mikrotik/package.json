@@ -25,8 +25,8 @@
     "@repo/typescript-config": "workspace:*",
     "@testing-library/jest-dom": "^6.6.0",
     "@types/react": "^18.3.23",
-    "jsdom": "^29.0.1",
-    "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
+    "jsdom": "^29.0.2",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.4"
   }
 }
